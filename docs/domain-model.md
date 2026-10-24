@@ -13,7 +13,7 @@ Canonical vocabulary lives in [GLOSSARY.md](../GLOSSARY.md). The behavioral cont
 - Current state follows the actual desktop runtime automatically; another reader's unloaded state does not erase live activity.
 - Finished remains until the user explicitly acknowledges a result while viewing the session. Acknowledge is available only for Finished sessions with a loaded, unacknowledged result; opening alone never acknowledges it.
 - Project regions represent actual project identity and explicit membership, independently of working folders. Where the source supports confirmed moves, dropping into a region assigns the session and dropping outside removes membership; unsupported real-source moves remain disabled.
-- Search, independently hidden attention states, and individually hidden projects combine with archive hiding and an Idle-age timeout. Lifecycle filters protect active, uncertain, and unreviewed sessions. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
+- Search, independently hidden attention states including Archived, and individually hidden projects combine with an Idle-age timeout. Archive status takes display priority even without local history; its checkbox sits above Unknown and starts unchecked. The age filter protects active, uncertain, and unreviewed non-archived sessions. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
 - Unloaded sessions with identity-verified latest terminal evidence recover Finished/Idle without opening the viewer; current desktop state takes priority. Missing local history remains Unknown with a reason. Notes show one-unit last source activity, with relative and exact time in the viewer.
 - At distant zooms, project areas replace member notes. Names are readable/truncated only when meaningful text fits; smaller areas show no text. Regions do not jump or reflow. Their areas remain draggable with all member notes, including hidden notes.
 - The top toolbar contains New Session, Fit to Content, and Full Screen. The workspace heading/tagline/header panel is removed, and the native sidebar is toggleable.
@@ -34,7 +34,7 @@ These resolve unspecified behavior for the first version; they are design choice
 | Drop target | The note's center at pointer release, in canvas coordinates; edges count as outside | Small partial overlaps do not create ambiguous membership |
 | Region editing | Move/resize regions; carry member notes on move; resize must retain member centers | Organizing a region must not become accidental mass reassignment |
 | Overview | Original project bounds, readable truncated name when it fits, otherwise area only; click to zoom, drag to move | Zoom must not reflow geometry or make small project areas immovable |
-| Visibility | Per-source hidden attention states/projects, hide archived by default, Idle timeout Never by default; transient search | Reduce clutter without altering source membership, acknowledgment, or layout; lifecycle filters protect non-Idle states |
+| Visibility | Per-source attention states/projects, Archived unchecked by default, Idle timeout Never by default; transient search | Reduce clutter without altering source membership, acknowledgment, or layout; age filtering protects non-Idle states |
 | Historical results | Latest known terminal result starts unacknowledged unless this app has an acknowledgment for it | Do not silently declare old work reviewed |
 | After acknowledgment | Neutral Idle when no work or request is pending | The note remains available for future turns |
 | Failures and stops | Finished plus an outcome label: Completed, Failed, or Stopped | A stopped turn still has an outcome to inspect |
@@ -59,14 +59,15 @@ erDiagram
 
 A session's identity survives title changes, project moves, repeated turns, and navigation. A note's position belongs to the canvas. Project membership belongs to Codex. A result belongs to a turn. Acknowledgment belongs to the user and the particular result being viewed.
 
-## The two dimensions behind note state
+## Facts behind note state
 
-Execution answers “what is Codex doing or waiting for?” Acknowledgment answers “have I explicitly reviewed the latest result?” Combining them into a single stored status would lose information.
+Archive status answers whether Codex has archived the session. Execution answers “what is Codex doing or waiting for?” Acknowledgment answers “have I explicitly reviewed the latest result?” These independent source facts derive the displayed note state; archiving never acknowledges a result.
 
 Apply the following rules in priority order:
 
 | Priority | Condition | Note state | Suggested color family |
 | --- | --- | --- | --- |
+| 0 | Codex confirms archived status | Archived | Brown, archive icon |
 | 1 | Current execution observation is unavailable or stale | Unknown, with last-known state secondary | Muted, patterned |
 | 2 | Any unresolved permission request | Permission required | Violet |
 | 3 | Any unresolved request for the user's input | Waiting for you | Amber |
@@ -94,7 +95,7 @@ stateDiagram-v2
     Finished --> Finished: open or close viewer
 ```
 
-The diagram shows the ordinary path. Unknown can supersede every displayed state. Resolved requests and out-of-order observations are reconciled against the latest authoritative session revision.
+The diagram shows the ordinary non-archived path. Confirmed Archived takes priority over execution availability and result attention until restored. Unknown can supersede every non-archived displayed state. Unarchive recalculates state from retained evidence without acknowledging a result. Resolved requests and out-of-order observations are reconciled against the latest authoritative session revision.
 
 ## Domain rules
 

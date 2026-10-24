@@ -136,6 +136,14 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 9.8 Add explicit single-session live-test scoping and a host CPU/RSS/time watchdog, verify abort/success/busy-host cleanup with mocked processes and the subscription boundary with a local socket fixture.
 - [x] 9.9 Record the newly authorized one-session ChatGPT check: one observed Running session, peak main-process CPU 19.58%, maximum RSS growth 44.36 MiB, 30.01 seconds including build, same surviving host PID and no remaining test helpers. Full-inventory, prolonged, cross-version, and real-host archive/restore UI acceptance remain open.
 
+## 10. Archived attention state
+
+- [x] 10.1 Reproduce Archived with missing history displaying Unknown; make confirmed Archived take display priority while preserving execution/result evidence and acknowledgment.
+- [x] 10.2 Move archive visibility to an Attention checkbox immediately above Unknown, unchecked by default; use the common filter/count/accessibility/overview projection and remove the duplicate toggle/badge.
+- [x] 10.3 Preserve legacy hideArchived choices through hiddenStates membership and a compatible payload codec; verify both choices, Show all, source isolation, restore, geometry, and Finished-only acknowledgment including Archived.
+- [x] 10.4 Complete offline regressions, native demo inspection of the archived session/Attention row, release/signature, strict validation, whitespace, and affected local links; update PR evidence without live desktop testing.
+- [x] 10.5 Preserve known archive metadata across legacy history reads and incomplete inventory, including cached sessions; reproduce the downgrade before fixing it and verify archive/restore/failure on the same source fixture.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

@@ -89,13 +89,11 @@ struct ContentView: View {
                             Button("Show all") { model.showAllAttentionStates() }.buttonStyle(.link).font(.caption2)
                         }
                     }.padding(.top, 24).padding(.bottom, 8).padding(.horizontal, 10)
-                    ForEach([NoteState.running, .waiting, .permission, .finished, .idle, .unknown], id: \.rawValue) { state in
+                    ForEach(NoteState.allCases, id: \.rawValue) { state in
                         attentionRow(state, count: model.stateCounts[state, default: 0])
                     }
                     VStack(alignment: .leading, spacing: 10) {
                         Text("VISIBILITY").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
-                        Toggle("Hide archived sessions", isOn: Binding(get: { model.visibility.hideArchived }, set: { model.setHideArchived($0) }))
-                            .toggleStyle(.checkbox)
                         Picker("Hide Idle after", selection: Binding(get: { model.visibility.idleTimeout }, set: { model.setIdleTimeout($0) })) {
                             ForEach(IdleTimeout.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
@@ -184,7 +182,6 @@ struct SessionViewer: View {
                         if session.updatedAt.timeIntervalSince1970 > 0 {
                             Text(session.updatedAt.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         }
-                        if session.isArchived { Label("Archived", systemImage: "archivebox").font(.caption).foregroundStyle(.secondary) }
                     }
                     Spacer()
                     Button { model.selectedSessionID = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Close viewer")
@@ -200,7 +197,14 @@ struct SessionViewer: View {
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 if model.mode == .history {
-                    Label(session.execution == .unknown ? session.unknownReason?.label ?? "Current state unavailable" : session.stateIsFromHistory ? "State from saved history" : "Live state from Codex desktop", systemImage: session.stateIsFromHistory || session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                    if session.isArchived {
+                        if let reason = session.unknownReason {
+                            Label(reason == .historyMissing ? reason.label : "Saved history is incomplete", systemImage: "clock.arrow.circlepath")
+                                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                        }
+                    } else {
+                        Label(session.execution == .unknown ? session.unknownReason?.label ?? "Current state unavailable" : session.stateIsFromHistory ? "State from saved history" : "Live state from Codex desktop", systemImage: session.stateIsFromHistory || session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ViewThatFits(in: .horizontal) {

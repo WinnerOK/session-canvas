@@ -96,11 +96,38 @@ struct ImportRegressionTests {
         #expect(archived.isArchived)
         #expect(archived.updatedAt == before.updatedAt)
         #expect(archived.projectID == before.projectID)
+        try Data().write(to: fixture.folder.appendingPathComponent("legacy-history"))
+        _ = try await source.history(sessionID: "normal", cursor: nil)
+        try Data().write(to: fixture.folder.appendingPathComponent("omit-archived"))
+        #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.state(acknowledged: []) == .archived)
         try await source.setArchived(sessionID: "normal", archived: false)
         #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.isArchived == false)
         try Data().write(to: fixture.folder.appendingPathComponent("reject-archive"))
         await #expect(throws: (any Error).self) { try await source.setArchived(sessionID: "normal", archived: true) }
         #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.isArchived == false)
+    }
+
+    @Test func cachedArchiveSurvivesHistoryMetadataForAnOmittedSession() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let database = try CanvasDatabase(path: path)
+        var cached = Workspace()
+        cached.reconcile(sessions: [Session(id: "cached", title: "Cached archive", isArchived: true)], projects: [])
+        try database.save(cached, source: "codex-local:" + fixture.folder.path)
+        let model = ApplicationModel(demo: false, storagePath: path)
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        model.setStateVisible(.archived, true)
+        try Data().write(to: fixture.folder.appendingPathComponent("legacy-history"))
+        model.openSession("cached")
+        await model.loadHistory(older: false)
+        await model.refresh()
+        let restored = try #require(model.workspace.sessions.first { $0.id == "cached" })
+        #expect(restored.isArchived)
+        #expect(model.state(restored) == .archived)
+        #expect(model.workspace.placements[restored.id] == cached.placements[restored.id])
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
@@ -193,16 +220,21 @@ private struct SourceFixture {
                     if not path.exists() or path.read_text() != content: path.write_text(content)
                     return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", path=str(path), updatedAt=2 if ident == "normal" and (home / "active").exists() else 1, **extra)
                 if request.get("params", {}).get("archived"):
-                    result = {"data": [session(ident, "cli") for ident in archived_ids], "nextCursor": None}
+                    result = {"data": [] if (home / "omit-archived").exists() else [session(ident, "cli") for ident in archived_ids], "nextCursor": None}
                 elif request.get("params", {}).get("cursor"):
                     result = {"data": [session("child", "appServer", parentThreadId="normal"), session("unassigned", "cli")], "nextCursor": None}
                 else:
                     result = {"data": [s for s in [session("normal", "cli"), session("guardian", {"subAgent": {"other": "guardian"}}), session("review", {"subAgent": "review"}), session("named-review", "appServer")] if s["id"] not in archived_ids], "nextCursor": "page2"}
             elif method == "thread/turns/list":
+                if (home / "legacy-history").exists():
+                    print(json.dumps({"id": request["id"], "error": {"code": -32601}}), flush=True)
+                    continue
                 reads += 1
                 (home / "reads").write_text(str(reads))
                 ident = request["params"]["threadId"]
                 result = {"data": [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}], "nextCursor": None}
+            elif method == "thread/read":
+                result = {"thread":{"id":request["params"]["threadId"], "name":"My work", "cwd":"/Projects/existing", "updatedAt":1, "status":{"type":"notLoaded"}, "turns":[{"id":"last", "status":"completed", "items":[]}]}}
             elif method in ["thread/archive", "thread/unarchive"]:
                 if (home / "reject-archive").exists():
                     print(json.dumps({"id": request["id"], "error": {"code": -32600}}), flush=True)

@@ -45,7 +45,7 @@ struct CanvasVisibilityTests {
         model.setStateVisible(.unknown, false)
         model.setProjectVisible("research", false)
         model.setIdleTimeout(.oneWeek)
-        model.setHideArchived(false)
+        model.setStateVisible(.archived, true)
         let expected = model.visibility
         #expect(model.workspace == original)
         model.shutdown()
@@ -56,7 +56,7 @@ struct CanvasVisibilityTests {
         let database = try CanvasDatabase(path: path)
         #expect(try database.visibility(source: "another-source") == CanvasVisibility())
         restored.showAllSessions()
-        var all = CanvasVisibility(); all.hideArchived = false
+        var all = CanvasVisibility(); all.hiddenStates = []
         #expect(try database.visibility(source: restored.sourceID) == all)
         restored.shutdown()
     }
@@ -157,17 +157,51 @@ struct CanvasVisibilityTests {
         let original = model.workspace
         await model.toggleArchive(session.id)
         #expect(model.workspace.sessions.first { $0.id == session.id }?.isArchived == true)
+        #expect(model.state(try #require(model.workspace.sessions.first { $0.id == session.id })) == .archived)
         #expect(!model.visibleSessions.contains { $0.id == session.id })
         #expect(model.workspace.placements == original.placements)
         #expect(model.workspace.regions == original.regions)
         #expect(model.selectedSessionID == nil)
-        model.setHideArchived(false)
+        model.setStateVisible(.archived, true)
         #expect(model.visibleSessions.contains { $0.id == session.id })
         await model.toggleArchive(session.id)
         #expect(model.workspace.sessions.first { $0.id == session.id }?.isArchived == false)
         #expect(model.acknowledgments[session.id]?.contains(result.id) == true)
         #expect(model.workspace.sessions.first { $0.id == session.id }?.updatedAt == session.updatedAt)
         #expect(!model.canArchive(try #require(model.workspace.sessions.first { $0.id == "demo-native" })))
+    }
+
+    @Test func archivedUnknownSessionsUseTheirOwnAttentionFilterAndPreserveResults() {
+        let model = fixture()
+        defer { model.shutdown() }
+        var archived = Session(id: "archived", title: "Old work", execution: .unknown,
+                               latestResult: SessionResult(id: "unread", outcome: .stopped, text: "Stopped"),
+                               updatedAt: Date(timeIntervalSince1970: 1), isArchived: true)
+        archived.unknownReason = .historyMissing
+        model.workspace.sessions.append(archived)
+        model.workspace.placements[archived.id] = Placement(Point(-850, 0))
+        let original = model.workspace
+        #expect(model.state(archived) == .archived)
+        #expect(model.stateCounts[.archived] == 1)
+        #expect(model.stateCounts[.unknown] == 1)
+        #expect(!model.visibleSessions.contains { $0.id == archived.id })
+        model.setStateVisible(.unknown, false)
+        model.setIdleTimeout(.oneHour)
+        model.setStateVisible(.archived, true)
+        #expect(model.visibleSessions.contains { $0.id == archived.id })
+        #expect(!model.visibleSessions.contains { $0.id == "unknown" })
+        model.openSession(archived.id)
+        model.setStateVisible(.archived, false)
+        #expect(model.selectedSessionID == nil)
+        model.showAllAttentionStates()
+        #expect(model.visibleSessions.contains { $0.id == archived.id })
+        #expect(model.workspace == original)
+        #expect(model.acknowledgments[archived.id]?.contains("unread") != true)
+        let index = model.workspace.sessions.firstIndex { $0.id == archived.id }!
+        model.workspace.sessions[index].archived = false
+        #expect(model.state(model.workspace.sessions[index]) == .unknown)
+        model.workspace.sessions[index].execution = .idle
+        #expect(model.state(model.workspace.sessions[index]) == .finished)
     }
 
     private func fixture() -> ApplicationModel {

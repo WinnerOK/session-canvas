@@ -54,7 +54,7 @@ public enum Outcome: String, Codable, Sendable {
     public var label: String { rawValue.capitalized }
 }
 public enum NoteState: String, CaseIterable, Codable, Sendable {
-    case running, waiting, permission, finished, idle, unknown
+    case running, waiting, permission, finished, idle, archived, unknown
     public var label: String {
         switch self {
         case .running: return "Running"
@@ -62,6 +62,7 @@ public enum NoteState: String, CaseIterable, Codable, Sendable {
         case .permission: return "Permission required"
         case .finished: return "Finished"
         case .idle: return "Idle"
+        case .archived: return "Archived"
         case .unknown: return "Unknown"
         }
     }
@@ -72,30 +73,38 @@ public enum NoteState: String, CaseIterable, Codable, Sendable {
         case .permission: return "hand.raised"
         case .finished: return "checkmark.circle"
         case .idle: return "moon"
+        case .archived: return "archivebox"
         case .unknown: return "questionmark.circle"
         }
     }
 }
 
 public struct CanvasVisibility: Codable, Equatable, Sendable {
-    public var hiddenStates: Set<NoteState> = []
+    public var hiddenStates: Set<NoteState> = [.archived]
     public var hiddenProjectIDs: Set<String> = []
-    public var hideArchived = true
     public var idleTimeout: IdleTimeout = .never
     public init() {}
-    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty || hideArchived || idleTimeout != .never }
+    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty || idleTimeout != .never }
     enum CodingKeys: String, CodingKey { case hiddenStates, hiddenProjectIDs, hideArchived, idleTimeout }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        hiddenStates = try c.decodeIfPresent(Set<NoteState>.self, forKey: .hiddenStates) ?? []
+        hiddenStates = try c.decodeIfPresent(Set<NoteState>.self, forKey: .hiddenStates) ?? [.archived]
         hiddenProjectIDs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenProjectIDs) ?? []
-        hideArchived = try c.decodeIfPresent(Bool.self, forKey: .hideArchived) ?? true
+        let hidden = try c.decodeIfPresent(Bool.self, forKey: .hideArchived) ?? true
+        if hidden { hiddenStates.insert(.archived) } else { hiddenStates.remove(.archived) }
         idleTimeout = try c.decodeIfPresent(IdleTimeout.self, forKey: .idleTimeout) ?? .never
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        // Keep the old payload readable; the in-memory setting has one owner, hiddenStates.
+        try c.encode(hiddenStates.subtracting([.archived]), forKey: .hiddenStates)
+        try c.encode(hiddenStates.contains(.archived), forKey: .hideArchived)
+        try c.encode(hiddenProjectIDs, forKey: .hiddenProjectIDs)
+        try c.encode(idleTimeout, forKey: .idleTimeout)
     }
     public func includesLifecycle(_ session: Session, acknowledged: Set<String>, now: Date) -> Bool {
         // Uncertain, active, and unreviewed sessions never disappear automatically.
         guard session.state(acknowledged: acknowledged) == .idle, session.unknownReason == nil else { return true }
-        if hideArchived && session.isArchived { return false }
         guard let seconds = idleTimeout.seconds, session.updatedAt.timeIntervalSince1970 > 0 else { return true }
         return now.timeIntervalSince(session.updatedAt) < seconds
     }
@@ -167,6 +176,7 @@ public struct Session: Codable, Equatable, Identifiable, Sendable {
         self.archived = isArchived; self.savedState = false
     }
     public func state(acknowledged: Set<String>) -> NoteState {
+        if isArchived { return .archived }
         guard execution != .unknown else { return .unknown }
         if requests.values.contains(.permission) { return .permission }
         if requests.values.contains(.input) { return .waiting }
