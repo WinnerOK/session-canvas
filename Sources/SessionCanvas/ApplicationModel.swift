@@ -298,6 +298,7 @@ final class ApplicationModel: ObservableObject {
         guard let source, let id = selectedSessionID else { return }
         isLoadingHistory = true; historyError = nil
         let token = generation, cursor = older ? nextHistoryCursor : nil
+        let baseline = workspace.sessions.first { $0.id == id }
         defer { if generation == token && selectedSessionID == id { isLoadingHistory = false } }
         do {
             let page = try await source.history(sessionID: id, cursor: cursor)
@@ -305,9 +306,21 @@ final class ApplicationModel: ObservableObject {
             if older { history = page.entries + history }
             else { history = page.entries }
             nextHistoryCursor = page.nextCursor
-            if !older, let result = page.entries.compactMap(\.result).last,
-               let i = workspace.sessions.firstIndex(where: { $0.id == id }) {
-                workspace.sessions[i].latestResult = result
+            if !older, let i = workspace.sessions.firstIndex(where: { $0.id == id }), workspace.sessions[i] == baseline {
+                if let observation = page.sessionObservation, observation.id == id {
+                    // Keep local geometry/membership/archive facts; current live work outranks saved history.
+                    if workspace.sessions[i].requests.isEmpty && (workspace.sessions[i].execution == .unknown || workspace.sessions[i].stateIsFromHistory) {
+                        workspace.sessions[i].execution = observation.execution
+                        workspace.sessions[i].requests = observation.requests
+                        workspace.sessions[i].savedState = observation.savedState
+                        workspace.sessions[i].unknownReason = observation.unknownReason
+                    }
+                    workspace.sessions[i].latestResult = observation.latestResult
+                    workspace.sessions[i].revision = observation.revision
+                    workspace.sessions[i].updatedAt = observation.updatedAt
+                } else if let result = page.entries.compactMap(\.result).last {
+                    workspace.sessions[i].latestResult = result
+                }
                 persist()
                 closeHiddenSelection()
             }

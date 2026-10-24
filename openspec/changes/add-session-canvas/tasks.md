@@ -150,6 +150,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 11.2 Preserve running execution, pending requests, and any known unacknowledged result even when displayed as Unknown; restore expired notes/projects without changing state, geometry, membership, or acknowledgment.
 - [x] 11.3 Complete offline regression, native demo inspection, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without desktop IPC.
 
+## 12. Latest-history state recovery
+
+- [x] 12.1 Reproduce latest Completed remaining Unknown through both paged and legacy API history when the local rollout is missing; return a validated latest-turn observation and retain it across ordinary refresh.
+- [x] 12.2 Preserve newer unfinished/unsupported turns, pending requests, live execution, and source/workspace revisions against older history; keep archive/project/geometry/acknowledgment independent and exclude older pages from recovery.
+- [x] 12.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without connecting to the installed desktop.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

@@ -14,7 +14,7 @@ Canonical vocabulary lives in [GLOSSARY.md](../GLOSSARY.md). The behavioral cont
 - Finished remains until the user explicitly acknowledges a result while viewing the session. Acknowledge is available only for Finished sessions with a loaded, unacknowledged result; opening alone never acknowledges it.
 - Project regions represent actual project identity and explicit membership, independently of working folders. Where the source supports confirmed moves, dropping into a region assigns the session and dropping outside removes membership; unsupported real-source moves remain disabled.
 - Search, independently hidden attention states including Archived, and individually hidden projects combine with an Idle-age timeout. Archive status takes display priority even without local history; its checkbox sits above Unknown and starts unchecked. Hide unknown starts checked and applies the same timeout to Unknown. The age filter protects active work, pending requests, and unreviewed results; Never disables it for both Idle and Unknown. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
-- Unloaded sessions with identity-verified latest terminal evidence recover Finished/Idle without opening the viewer; current desktop state takes priority. Missing local history remains Unknown with a reason. Notes show one-unit last source activity, with relative and exact time in the viewer.
+- Unloaded sessions with identity-verified latest terminal evidence recover Finished/Idle during discovery or when reading the latest history. Missing local history remains Unknown until another verified source establishes the latest state. A terminal latest API turn recovers Finished even without a local rollout; newer work and requests keep priority. Older results/pages alone never prove inactivity. Notes show one-unit last source activity, with relative and exact time in the viewer.
 - At distant zooms, project areas replace member notes. Names are readable/truncated only when meaningful text fits; smaller areas show no text. Regions do not jump or reflow. Their areas remain draggable with all member notes, including hidden notes.
 - The top toolbar contains New Session, Fit to Content, and Full Screen. The workspace heading/tagline/header panel is removed, and the native sidebar is toggleable.
 - Clicking a note opens that same session's read-only history, newest first. Acknowledge result, Open in Codex, Reload history, and pagination remain above the scrolling transcript.
@@ -68,7 +68,7 @@ Apply the following rules in priority order:
 | Priority | Condition | Note state | Suggested color family |
 | --- | --- | --- | --- |
 | 0 | Codex confirms archived status | Archived | Brown, archive icon |
-| 1 | Current execution observation is unavailable or stale | Unknown, with last-known state secondary | Muted, patterned |
+| 1 | Neither current execution nor verified latest history establishes the state | Unknown, with last-known state secondary | Muted, patterned |
 | 2 | Any unresolved permission request | Permission required | Violet |
 | 3 | Any unresolved request for the user's input | Waiting for you | Amber |
 | 4 | A turn is executing without either request | Running | Blue |

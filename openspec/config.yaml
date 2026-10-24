@@ -12,6 +12,7 @@ context: |
   The selected delivery is a Mac-only SwiftUI/AppKit companion with a session/result viewer and SQLite storage.
   Do not introduce a web renderer or a cross-platform shell for this application.
   The default source combines saved discovery/history with read-only live desktop observations and explicit project identities.
+  Reading the latest history page can establish saved Finished when its last turn is terminal and there is no newer work or pending request, even without a local rollout. Old pages/results alone do not establish current state; revision/file changes and live work retain priority.
   Desktop creation verifies durable history and releases child-process ownership, reveals the new session despite filters, and automatically opens it in Codex; it never starts a model turn. Keep valid clicked placement or choose the nearest valid position for visible/hidden collisions. Creation in the context's project preserves pan/zoom; only a changed chosen/confirmed project or an explicit action requests focus. Blank names and projectless folders receive explained defaults. Submission errors stay in the active dialog.
   Visibility filters and project overviews affect rendering, not source membership or canvas geometry.
   Confirmed Archived takes display priority over execution availability. Its Attention checkbox sits immediately above Unknown. Hide unknown defaults on beside Hide Idle after and applies the same age limit to Unknown; Never disables age hiding. Active work, pending requests, and unacknowledged results are protected.

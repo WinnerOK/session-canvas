@@ -85,6 +85,7 @@ final class CodexSource: SessionSource {
     private var supportsPagedHistory: Bool?
     private var savedObservations: [String: Session] = [:]
     private var savedFileRevisions: [String: String] = [:]
+    private var historyObservationVersions: [String: UUID] = [:]
     private var rolloutPaths: [String: String] = [:]
     private var codexHome: String
     private var desktopProjects: DesktopProjectCatalog?
@@ -174,26 +175,29 @@ final class CodexSource: SessionSource {
                 for await observed in group { savedObservations[observed.id] = observed }
             }
         }
-        let sessions = previous.values.map { session in
-            var session = session
-            if let saved = savedObservations[session.id], saved.revision == session.revision {
-                if session.execution == .unknown { session.execution = saved.execution; session.savedState = saved.savedState }
-                session.latestResult = saved.latestResult; session.unknownReason = saved.unknownReason
-            }
-            if let status = runtimeStatus[session.id], let live = try? CodexWire.session(.object(["id": .string(session.id), "status": status]), live: true) {
-                session.execution = live.execution; session.requests = live.requests; session.savedState = false
-            }
-            return desktop.applying(to: session)
-        }
+        let sessions = previous.values.map { applyingObservations(to: $0) }
         return (sessions.sorted { $0.updatedAt > $1.updatedAt }, desktopProjects?.projects ?? [])
     }
-    private func recoverSavedState(_ session: Session) async -> Session {
-        var fileRevision = ""
-        if let path = rolloutPaths[session.id], let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
-            fileRevision = "\((attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)/\(attributes[.size] ?? "")/\(attributes[.systemFileNumber] ?? "")"
+    private func applyingObservations(to session: Session) -> Session {
+        var session = session
+        if let saved = savedObservations[session.id], saved.revision == session.revision {
+            if session.execution == .unknown { session.execution = saved.execution; session.savedState = saved.savedState }
+            session.latestResult = saved.latestResult; session.unknownReason = saved.unknownReason
         }
+        if let status = runtimeStatus[session.id], let live = try? CodexWire.session(.object(["id": .string(session.id), "status": status]), live: true) {
+            session.execution = live.execution; session.requests = live.requests; session.savedState = false
+        }
+        return desktop.applying(to: session)
+    }
+    private func rolloutRevision(sessionID: String) -> String {
+        guard let path = rolloutPaths[sessionID], let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return "" }
+        return "\((attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)/\(attributes[.size] ?? "")/\(attributes[.systemFileNumber] ?? "")"
+    }
+    private func recoverSavedState(_ session: Session) async -> Session {
+        let fileRevision = rolloutRevision(sessionID: session.id)
+        let historyVersion = historyObservationVersions[session.id]
         if let saved = savedObservations[session.id], saved.revision == session.revision,
-           savedFileRevisions[session.id] == fileRevision, saved.stateIsFromHistory { return saved }
+           savedFileRevisions[session.id] == fileRevision { return saved }
         var observed = session
         if let path = rolloutPaths[session.id] {
             guard FileManager.default.fileExists(atPath: path) else {
@@ -205,6 +209,7 @@ final class CodexSource: SessionSource {
                 let summary = try await Task.detached(priority: .utility, operation: {
                     try RolloutReader.summary(path: path, codexHome: home, sessionID: session.id)
                 }).value
+                guard historyObservationVersions[session.id] == historyVersion else { return savedObservations[session.id] ?? session }
                 observed.execution = summary.execution
                 observed.latestResult = summary.result ?? observed.latestResult
                 observed.savedState = summary.execution == .idle
@@ -225,26 +230,29 @@ final class CodexSource: SessionSource {
         onChange?()
     }
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage {
+        let baseline = previous[sessionID]
+        let fileRevision = rolloutRevision(sessionID: sessionID)
         if supportsPagedHistory != false {
             var params: [String: JSONValue] = ["threadId": .string(sessionID), "limit": .number(12), "sortDirection": .string("desc"), "itemsView": .string("full")]
             if let cursor { params["cursor"] = .string(cursor) }
             do {
                 let value = try await rpc.request("thread/turns/list", params)
                 supportsPagedHistory = true
-                let turns = value["data"].array.reversed()
-                return HistoryPage(entries: CodexWire.history(Array(turns), sessionID: sessionID), nextCursor: value["nextCursor"].string)
+                guard case .array = value["data"] else { throw CanvasError.message("Codex returned an unsupported history format.") }
+                let turns = Array(value["data"].array.reversed())
+                let observation = cursor == nil ? observeLatestHistory(sessionID: sessionID, turns: turns, baseline: baseline, fileRevision: fileRevision) : nil
+                return HistoryPage(entries: CodexWire.history(turns, sessionID: sessionID), nextCursor: value["nextCursor"].string, sessionObservation: observation)
             } catch let error as RPCFailure where [-32600, -32601, -32603].contains(error.code) { supportsPagedHistory = false }
         }
         // CLI 0.146.1 supports only legacy thread/read history. Paginate the returned entries locally.
+        var observation: Session?
         if cursor == nil || legacyHistory[sessionID] == nil {
             do {
                 let value = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(true)])
                 let thread = value["thread"]
                 guard thread["id"].string == sessionID else { throw CanvasError.message("Codex returned history for a different session.") }
-                var session = try CodexWire.session(thread, live: mode == .shared)
-                // History metadata omits archive status; discovery owns that fact.
-                session.archived = previous[sessionID]?.archived
-                previous[sessionID] = session
+                let session = try CodexWire.session(thread, live: mode == .shared)
+                if cursor == nil { observation = observeLatestHistory(sessionID: sessionID, turns: thread["turns"].array, baseline: baseline, fileRevision: fileRevision, metadata: session) }
                 legacyHistory[sessionID] = CodexWire.history(thread["turns"].array, sessionID: sessionID)
             } catch {
                 guard let path = rolloutPaths[sessionID] else { throw error }
@@ -257,7 +265,31 @@ final class CodexSource: SessionSource {
         let entries = legacyHistory[sessionID] ?? []
         let end = min(Int(cursor ?? "") ?? entries.count, entries.count)
         let start = max(0, end - 40)
-        return HistoryPage(entries: Array(entries[start..<end]), nextCursor: start > 0 ? String(start) : nil)
+        return HistoryPage(entries: Array(entries[start..<end]), nextCursor: start > 0 ? String(start) : nil, sessionObservation: observation)
+    }
+    private func observeLatestHistory(sessionID: String, turns: [JSONValue], baseline: Session?, fileRevision: String, metadata: Session? = nil) -> Session? {
+        // A history response cannot replace source metadata/result changes received while it was in flight.
+        guard previous[sessionID] == baseline else { return previous[sessionID].map { applyingObservations(to: $0) } }
+        if let metadata, let baseline, metadata.updatedAt < baseline.updatedAt { return applyingObservations(to: baseline) }
+        historyObservationVersions[sessionID] = UUID()
+        guard rolloutRevision(sessionID: sessionID) == fileRevision else {
+            savedObservations.removeValue(forKey: sessionID)
+            savedFileRevisions.removeValue(forKey: sessionID)
+            return baseline.map { applyingObservations(to: $0) }
+        }
+        guard var session = metadata ?? baseline else { return nil }
+        session.archived = baseline?.archived
+        session.projectID = baseline?.projectID
+        session.latestResult = turns.reversed().compactMap { CodexWire.result($0, sessionID: sessionID) }.first ?? baseline?.latestResult
+        previous[sessionID] = session
+        var saved = session
+        let terminal = turns.last.flatMap { CodexWire.result($0, sessionID: sessionID) } != nil
+        saved.execution = terminal ? .idle : .unknown
+        saved.savedState = terminal
+        saved.unknownReason = terminal ? nil : .incompleteHistory
+        savedObservations[sessionID] = saved
+        savedFileRevisions[sessionID] = fileRevision
+        return applyingObservations(to: session)
     }
     func assign(sessionID: String, projectID: String?, revision: String) async throws {
         throw CanvasError.message("Moving existing sessions between projects is not enabled for this connection. Move the session in Codex, then refresh this canvas.")
