@@ -31,6 +31,7 @@ protocol SessionSource: AnyObject {
     var sourceID: String { get }
     var canAssignProject: Bool { get }
     var canCreate: Bool { get }
+    var canArchive: Bool { get }
     var creationUnavailableReason: String { get }
     var hasLiveState: Bool { get }
     var connectionStatus: String { get }
@@ -42,12 +43,15 @@ protocol SessionSource: AnyObject {
     func snapshot() async throws -> (sessions: [Session], projects: [Project])
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage
     func assign(sessionID: String, projectID: String?, revision: String) async throws
+    func setArchived(sessionID: String, archived: Bool) async throws
     func creationDirectory(projectID: String) -> String?
     func create(title: String, prompt: String, projectID: String?, cwd: String) async throws -> CreatedSession
     func close()
 }
 
 extension SessionSource {
+    var canArchive: Bool { false }
+    func setArchived(sessionID: String, archived: Bool) async throws { throw CanvasError.message("Archiving is unavailable for this source.") }
     var creationUnavailableReason: String { "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect." }
     func creationDirectory(projectID: String) -> String? { nil }
     var hiddenSessionIDs: Set<String> { [] }
@@ -60,6 +64,7 @@ final class CodexSource: SessionSource {
     let mode: SourceMode
     private(set) var sourceID: String
     let canAssignProject = false
+    let canArchive = true
     private(set) var canCreate = false
     private(set) var creationUnavailableReason = "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect."
     var onChange: (() -> Void)?
@@ -67,6 +72,7 @@ final class CodexSource: SessionSource {
     private let settings: ConnectionSettings
     private let rpc = RPCConnection()
     private let desktop = DesktopRuntime()
+    private let observeDesktop: Bool
     private var runtimeStatus: [String: JSONValue] = [:]
     private var activeTurnIDs: [String: String] = [:]
     var hasLiveState: Bool { mode == .shared || desktop.connected }
@@ -76,6 +82,8 @@ final class CodexSource: SessionSource {
     var removedSessionIDs: Set<String> { removed }
     private var legacyHistory: [String: [HistoryEntry]] = [:]
     private var supportsPagedHistory: Bool?
+    private var savedObservations: [String: Session] = [:]
+    private var savedFileRevisions: [String: String] = [:]
     private var rolloutPaths: [String: String] = [:]
     private var codexHome: String
     private var desktopProjects: DesktopProjectCatalog?
@@ -85,8 +93,9 @@ final class CodexSource: SessionSource {
     private let workingDirectoryBase: URL
     private(set) var hiddenSessionIDs: Set<String> = []
 
-    init(mode: SourceMode, settings: ConnectionSettings, workingDirectoryBase: URL? = nil) {
+    init(mode: SourceMode, settings: ConnectionSettings, workingDirectoryBase: URL? = nil, observeDesktop: Bool = true) {
         self.mode = mode; self.settings = settings
+        self.observeDesktop = observeDesktop
         self.workingDirectoryBase = workingDirectoryBase ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Session Canvas/Workspaces", isDirectory: true)
         // History and shared observations of the same local Codex store share acknowledgment/layout identity.
@@ -111,32 +120,35 @@ final class CodexSource: SessionSource {
         if mode == .history, let response = try? await rpc.request("project/list", ["limit": .number(1)]), case .array = response["data"] {
             canCreate = true
         }
-        if mode == .history { desktop.start(codexHome: codexHome) }
+        if mode == .history && observeDesktop { desktop.start(codexHome: codexHome) }
     }
     func snapshot() async throws -> (sessions: [Session], projects: [Project]) {
-        var cursor: String?, seen: Set<String> = []
         var result: [String: Session] = [:]
         var hidden: Set<String> = []
-        repeat {
-            var params: [String: JSONValue] = ["limit": .number(100), "archived": .bool(false), "useStateDbOnly": .bool(true), "sortKey": .string("updated_at"),
-                "sourceKinds": .array(["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"].map(JSONValue.string))]
-            if let cursor { params["cursor"] = .string(cursor) }
-            let response = try await rpc.request("thread/list", params)
-            guard case .array = response["data"] else { throw CanvasError.message("Codex returned an unsupported session inventory format.") }
-            for value in response["data"].array {
-                if CodexWire.isInternalSession(value), let id = value["id"].string {
-                    hidden.insert(id)
-                    continue
+        for archived in [false, true] {
+            var cursor: String?, seen: Set<String> = []
+            repeat {
+                var params: [String: JSONValue] = ["limit": .number(100), "archived": .bool(archived), "useStateDbOnly": .bool(true), "sortKey": .string("updated_at"),
+                    "sourceKinds": .array(["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview", "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"].map(JSONValue.string))]
+                if let cursor { params["cursor"] = .string(cursor) }
+                let response = try await rpc.request("thread/list", params)
+                guard case .array = response["data"] else { throw CanvasError.message("Codex returned an unsupported session inventory format.") }
+                for value in response["data"].array {
+                    if CodexWire.isInternalSession(value), let id = value["id"].string {
+                        hidden.insert(id)
+                        continue
+                    }
+                    var session = try CodexWire.session(value, live: mode == .shared)
+                    session.archived = archived
+                    serverProjectsBySession[session.id] = value["projectId"].string
+                    if let path = value["path"].string { rolloutPaths[session.id] = path }
+                    session.latestResult = previous[session.id]?.latestResult
+                    result[session.id] = session
                 }
-                var session = try CodexWire.session(value, live: mode == .shared)
-                serverProjectsBySession[session.id] = value["projectId"].string
-                if let path = value["path"].string { rolloutPaths[session.id] = path }
-                session.latestResult = previous[session.id]?.latestResult
-                result[session.id] = session
-            }
-            cursor = response["nextCursor"].string
-            if let cursor, !seen.insert(cursor).inserted { throw CanvasError.message("Codex repeated an inventory cursor. Existing notes were retained.") }
-        } while cursor != nil
+                cursor = response["nextCursor"].string
+                if let cursor, !seen.insert(cursor).inserted { throw CanvasError.message("Codex repeated an inventory cursor. Existing notes were retained.") }
+            } while cursor != nil
+        }
         // Read only the connected home's exact metadata file; project identity is independent of cwd.
         if let catalog = try DesktopProjectCatalog.read(codexHome: codexHome) { desktopProjects = catalog }
         for id in result.keys { result[id]?.projectID = desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id]) }
@@ -146,14 +158,68 @@ final class CodexSource: SessionSource {
         // Reapply assignments for retained sessions too, including external project moves/removals.
         for id in previous.keys { previous[id]?.projectID = desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id]) }
         desktop.observe(Set(previous.keys))
+        // Bound parallel metadata reads; unchanged source revisions reuse saved evidence.
+        let candidates = previous.values.filter {
+            let current = desktop.applying(to: $0)
+            return current.execution != .running && current.requests.isEmpty
+        }
+        for offset in stride(from: 0, to: candidates.count, by: 8) {
+            await withTaskGroup(of: Session.self) { group in
+                for candidate in candidates[offset..<min(offset + 8, candidates.count)] {
+                    group.addTask { @MainActor in await self.recoverSavedState(candidate) }
+                }
+                for await observed in group { savedObservations[observed.id] = observed }
+            }
+        }
         let sessions = previous.values.map { session in
             var session = session
+            if let saved = savedObservations[session.id], saved.revision == session.revision {
+                if session.execution == .unknown { session.execution = saved.execution; session.savedState = saved.savedState }
+                session.latestResult = saved.latestResult; session.unknownReason = saved.unknownReason
+            }
             if let status = runtimeStatus[session.id], let live = try? CodexWire.session(.object(["id": .string(session.id), "status": status]), live: true) {
-                session.execution = live.execution; session.requests = live.requests
+                session.execution = live.execution; session.requests = live.requests; session.savedState = false
             }
             return desktop.applying(to: session)
         }
         return (sessions.sorted { $0.updatedAt > $1.updatedAt }, desktopProjects?.projects ?? [])
+    }
+    private func recoverSavedState(_ session: Session) async -> Session {
+        var fileRevision = ""
+        if let path = rolloutPaths[session.id], let attributes = try? FileManager.default.attributesOfItem(atPath: path) {
+            fileRevision = "\((attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)/\(attributes[.size] ?? "")/\(attributes[.systemFileNumber] ?? "")"
+        }
+        if let saved = savedObservations[session.id], saved.revision == session.revision,
+           savedFileRevisions[session.id] == fileRevision, saved.stateIsFromHistory { return saved }
+        var observed = session
+        if let path = rolloutPaths[session.id] {
+            guard FileManager.default.fileExists(atPath: path) else {
+                observed.unknownReason = .historyMissing
+                return observed
+            }
+            let home = codexHome
+            do {
+                let summary = try await Task.detached(priority: .utility, operation: {
+                    try RolloutReader.summary(path: path, codexHome: home, sessionID: session.id)
+                }).value
+                observed.execution = summary.execution
+                observed.latestResult = summary.result ?? observed.latestResult
+                observed.savedState = summary.execution == .idle
+                observed.unknownReason = summary.execution == .unknown ? .incompleteHistory : nil
+                savedFileRevisions[session.id] = fileRevision
+                return observed
+            } catch { observed.unknownReason = .incompleteHistory }
+            // Missing, unsafe, or ambiguous exact-file evidence must stay visible as Unknown.
+            return observed
+        }
+        observed.unknownReason = .historyMissing
+        return observed
+    }
+    func setArchived(sessionID: String, archived: Bool) async throws {
+        _ = try await rpc.request(archived ? "thread/archive" : "thread/unarchive", ["threadId": .string(sessionID)])
+        previous[sessionID]?.archived = archived
+        removed.remove(sessionID)
+        onChange?()
     }
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage {
         if supportsPagedHistory != false {
@@ -306,8 +372,11 @@ final class CodexSource: SessionSource {
             activeTurnIDs.removeValue(forKey: id)
             runtimeStatus[id] = .object(["type": .string("idle")])
         }
-        if method == "thread/archived" || method == "thread/deleted", let id { removed.insert(id); previous.removeValue(forKey: id) }
-        if method == "thread/unarchived", let id = params["thread"]["id"].string { removed.remove(id) }
+        if method == "thread/deleted", let id { removed.insert(id); previous.removeValue(forKey: id) }
+        if method == "thread/archived", let id { previous[id]?.archived = true }
+        if method == "thread/unarchived", let restoredID = id ?? params["thread"]["id"].string {
+            removed.remove(restoredID); previous[restoredID]?.archived = false
+        }
         if method == "thread/name/updated", let id, let title = params["threadName"].string { previous[id]?.title = title }
         if method == "turn/completed", let id, let result = CodexWire.result(params["turn"], sessionID: id) {
             previous[id]?.latestResult = result
@@ -324,6 +393,7 @@ final class DemoSource: SessionSource {
     let sourceID = "demo-v1"
     let canAssignProject = true
     let canCreate = true
+    let canArchive = true
     let removedSessionIDs: Set<String> = []
     var onChange: (() -> Void)?
     var onDisconnect: (() -> Void)?
@@ -331,6 +401,10 @@ final class DemoSource: SessionSource {
     private let projects = [Project(id: "canvas", name: "Session Canvas"), Project(id: "research", name: "Research")]
     init(restored: [Session]) { sessions = restored.isEmpty ? Self.seed : restored }
     func connect() async throws {}
+    func setArchived(sessionID: String, archived: Bool) async throws {
+        guard let i = sessions.firstIndex(where: { $0.id == sessionID }) else { throw CanvasError.message("Session is unavailable.") }
+        sessions[i].archived = archived
+    }
     func snapshot() async throws -> (sessions: [Session], projects: [Project]) { (sessions, projects) }
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage {
         guard let session = sessions.first(where: { $0.id == sessionID }) else { throw CanvasError.message("Session is unavailable.") }

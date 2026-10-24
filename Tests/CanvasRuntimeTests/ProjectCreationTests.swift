@@ -463,6 +463,17 @@ struct ProjectCreationTests {
         #expect(modelResume["id"].string == selected.id)
         #expect(modelResume["name"].string == "Isolated dialog session")
         #expect(modelResume["turns"].array.isEmpty)
+        await rpc.stopAndWait()
+        // Archive only isolated test data; never mutate the user's existing sessions.
+        try await source.setArchived(sessionID: created.session.id, archived: true)
+        #expect(try await source.snapshot().sessions.first { $0.id == created.session.id }?.isArchived == true)
+        try await connectProbe()
+        let archivedRead = try await rpc.request("thread/read", ["threadId": .string(created.session.id), "includeTurns": .bool(false)])["thread"]
+        #expect(archivedRead["id"].string == created.session.id)
+        #expect(archivedRead["path"].string?.contains("/archived_sessions/") == true)
+        await rpc.stopAndWait()
+        try await source.setArchived(sessionID: created.session.id, archived: false)
+        #expect(try await source.snapshot().sessions.first { $0.id == created.session.id }?.isArchived == false)
     }
 }
 
@@ -490,7 +501,7 @@ private struct CreationFixture {
             if method == "initialize": result = {"codexHome": str(home)}
             elif method == "project/list": result = {"data": []}
             elif method == "project/read": result = {"project": {"id": "server-project", "roots": [{"path": str(home)}]}}
-            elif method == "thread/list": result = {"data": [thread] if (home / "publish").exists() else []}
+            elif method == "thread/list": result = {"data": [thread] if (home / "publish").exists() and not request.get("params", {}).get("archived") else []}
             elif method == "thread/start":
                 thread.update(projectId=params.get("projectId"), cwd=params["cwd"])
                 (home / "thread.json").write_text(json.dumps(thread))

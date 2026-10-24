@@ -36,3 +36,18 @@ The launcher SHALL propagate build/test/process failures and bound native captur
 #### Scenario: App exits without rendering
 - **WHEN** the app exits successfully but produces no new capture or leaves an old image untouched
 - **THEN** the launcher reports failed verification
+
+### Requirement: Protect the running desktop during verification
+Routine checks SHALL use fixtures and demo captures. Saved-inventory tests SHALL disable desktop observation. Live desktop checks SHALL require separate per-run user authorization and an explicit, single-test launcher option. Inherited environment switches SHALL NOT enable them. Build concurrency SHALL default to two jobs. Failed or hung live checks SHALL NOT be automatically repeated; cleanup SHALL target only proven test-owned processes.
+
+#### Scenario: Enable installed-source checks
+- **WHEN** the launcher runs test --real-source without --live-desktop
+- **THEN** saved inventory and isolated-server checks can run while the installed desktop observer remains disabled
+
+#### Scenario: Attempt a broad live test
+- **WHEN** --live-desktop is supplied without the exact installedDesktopFeedsLiveStateIntoTheApplication filter and --real-source
+- **THEN** the launcher rejects the command before starting subprocesses
+
+#### Scenario: A live check overloads the host
+- **WHEN** the user reports excessive CPU or an application failure during a live check
+- **THEN** further verification uses fixtures/demo and the real-host gate remains explicitly open until a separately authorized bounded check succeeds

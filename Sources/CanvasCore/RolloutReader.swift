@@ -3,6 +3,30 @@ import Foundation
 /// Compatibility reader for a local rollout explicitly identified by Codex's inventory.
 /// It reads stored dialogue and terminal evidence only; it never infers live state.
 public enum RolloutReader {
+    /// Read only identity plus a bounded tail for discovery, without loading full transcripts.
+    public static func summary(path: String, codexHome: String, sessionID: String) throws -> (execution: Execution, result: SessionResult?) {
+        let file = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
+        let home = URL(fileURLWithPath: codexHome).resolvingSymlinksInPath().standardizedFileURL
+        guard ["sessions", "archived_sessions"].contains(where: { file.path.hasPrefix(home.appendingPathComponent($0).path + "/") }), file.pathExtension == "jsonl" else {
+            throw CanvasError.message("The history file is outside the connected source's session directories.")
+        }
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        let head = try handle.read(upToCount: 64 * 1024) ?? Data()
+        guard let newline = head.firstIndex(of: 10) else { throw CanvasError.message("Saved session identity is unavailable.") }
+        var parser = Parser(sessionID: sessionID)
+        try parser.consume(Data(head.prefix(upTo: newline)))
+        guard parser.verifiedIdentity else { throw CanvasError.message("Saved session identity is unavailable.") }
+        let end = try handle.seekToEnd(), start = end > 256 * 1024 ? end - 256 * 1024 : 0
+        try handle.seek(toOffset: start)
+        let tail = try handle.read(upToCount: 256 * 1024) ?? Data()
+        var lines = tail.split(separator: 10, omittingEmptySubsequences: false)
+        if start > 0, !lines.isEmpty { lines.removeFirst() }
+        // Ignore a possibly incomplete writer append, even when it is valid JSON.
+        if !lines.isEmpty { lines.removeLast() }
+        for line in lines { try parser.consume(Data(line)) }
+        return (tail.last == 10 ? parser.execution : .unknown, parser.entries.compactMap(\.result).last)
+    }
     public static func read(path: String, codexHome: String, sessionID: String) throws -> [HistoryEntry] {
         let file = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL
         let home = URL(fileURLWithPath: codexHome).resolvingSymlinksInPath().standardizedFileURL
@@ -34,6 +58,7 @@ public enum RolloutReader {
         private let sessionID: String
         public private(set) var entries: [HistoryEntry] = []
         public private(set) var verifiedIdentity = false
+        public private(set) var execution: Execution = .unknown
         private var turnID: String?
         private var lineNumber = 0
         public init(sessionID: String) { self.sessionID = sessionID }
@@ -49,17 +74,20 @@ public enum RolloutReader {
             guard verifiedIdentity else { return }
             if value["type"].string == "event_msg" {
                 switch payload["type"].string {
-                case "task_started": turnID = payload["turn_id"].string
+                case "task_started": turnID = payload["turn_id"].string; execution = .unknown
+                case "user_message": execution = .unknown
                 case "task_complete", "turn_aborted", "task_failed":
                     guard let id = payload["turn_id"].string ?? turnID else { return }
                     let outcome: Outcome = payload["type"].string == "task_complete" ? .completed : payload["type"].string == "task_failed" ? .failed : .stopped
                     let text = payload["last_agent_message"].string ?? "This turn \(outcome.label.lowercased())."
                     let result = SessionResult(id: "\(sessionID)/\(id)/\(outcome.rawValue)", outcome: outcome, text: text)
+                    execution = .idle
                     if entries.last?.role == "Codex" && entries.last?.text == text { entries.removeLast() }
                     if !entries.contains(where: { $0.result?.id == result.id }) { entries.append(HistoryEntry(id: result.id, role: outcome.label, text: text, result: result)) }
                 default: break
                 }
             } else if value["type"].string == "response_item" {
+                execution = .unknown
                 let type = payload["type"].string
                 guard type == "message" || type == "agent_message" else { return }
                 let role = type == "agent_message" ? "assistant" : payload["role"].string

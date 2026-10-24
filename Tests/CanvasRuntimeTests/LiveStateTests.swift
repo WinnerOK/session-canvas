@@ -5,6 +5,46 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct LiveStateTests {
+    @Test func subscriptionsArePacedOnAnIsolatedSocket() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let observer = DesktopRuntime()
+        defer { observer.stop() }
+        observer.start(codexHome: fixture.folder.path)
+        observer.observe(Set(["live"] + (0..<40).map { "spare-\($0)" }))
+        let log = fixture.folder.appendingPathComponent("subscription-times")
+        #expect(await eventually {
+            ((try? String(contentsOf: log, encoding: .utf8).split(separator: "\n").count) ?? 0) >= 3
+        })
+        let times = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").compactMap { Double($0) }
+        #expect(times.count >= 3)
+        for (a, b) in zip(times, times.dropFirst()) { #expect(b - a >= 0.08) }
+    }
+    @Test func savedInventoryDoesNotSubscribeToDesktopWhenObservationIsDisabled() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        _ = try await source.snapshot()
+        #expect(!source.hasLiveState)
+        #expect(!FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("follows").path))
+    }
+    @Test(arguments: [false, true]) func desktopFollowerDoesNotEchoItsOwnSubscription(echoOther: Bool) async throws {
+        let fixture = try LiveFixture(echoOther: echoOther)
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        #expect(await eventually { model.workspace.sessions.first?.execution == .running })
+        try await Task.sleep(for: .milliseconds(200))
+        let follows = try String(contentsOf: fixture.folder.appendingPathComponent("follows"), encoding: .utf8)
+        #expect(Int(follows) == (echoOther ? 2 : 1))
+    }
     @Test func desktopRuntimeOverridesUnloadedInventoryAndUpdatesWithoutManualRefresh() async throws {
         let fixture = try LiveFixture()
         defer { fixture.remove() }
@@ -33,15 +73,15 @@ struct LiveStateTests {
         #expect(model.hasLiveState)
     }
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_LIVE_DESKTOP"] == "1"))
     func installedDesktopFeedsLiveStateIntoTheApplication() async throws {
         let model = ApplicationModel(demo: false, storagePath: ":memory:")
         model.settings = .defaults
         defer { model.shutdown() }
         await model.connect()
         #expect(await eventually { model.hasLiveState && model.workspace.sessions.contains { $0.execution == .running } })
-        let live = model.workspace.sessions.filter { $0.execution != .unknown }
-        print("Verified desktop feed: \(live.count) live sessions, \(live.filter { $0.execution == .running }.count) running.")
+        let live = model.workspace.sessions.filter { $0.execution != .unknown && !$0.stateIsFromHistory }
+        print("Desktop feed: \(model.connectionStatus), live connection \(model.hasLiveState), \(live.count) observed sessions, \(live.filter { $0.execution == .running }.count) running.")
     }
 
     @Test func canonicalDesktopTurnsKeepTerminalIdentityAndPendingRequests() throws {
@@ -76,9 +116,10 @@ struct LiveStateTests {
     let folder: URL
     let settings: ConnectionSettings
     private(set) var server = Process()
-    init() throws {
+    init(echoOther: Bool = false) throws {
         folder = URL(fileURLWithPath: "/private/tmp/live-" + String(UUID().uuidString.prefix(8)))
         try FileManager.default.createDirectory(at: folder.appendingPathComponent("ipc"), withIntermediateDirectories: true)
+        if echoOther { try Data().write(to: folder.appendingPathComponent("echo-other")) }
         let executable = folder.appendingPathComponent("codex-fixture")
         settings = ConnectionSettings(executable: executable.path, socket: "", nativeURLTemplate: "codex://threads/{id}")
         let cli = #"""
@@ -87,7 +128,7 @@ struct LiveStateTests {
         for line in sys.stdin:
             m=json.loads(line)
             if "id" not in m: continue
-            result={"codexHome":str(pathlib.Path(__file__).parent)} if m["method"]=="initialize" else {"data":[{"id":"live","name":"Current session","source":"appServer","status":{"type":"notLoaded"}}],"nextCursor":None}
+            result={"codexHome":str(pathlib.Path(__file__).parent)} if m["method"]=="initialize" else {"data":[] if m.get("params",{}).get("archived") else [{"id":"live","name":"Current session","source":"appServer","status":{"type":"notLoaded"}}],"nextCursor":None} if m["method"] == "thread/list" else {}
             print(json.dumps({"id":m["id"],"result":result}),flush=True)
         """#
         try cli.write(to: executable, atomically: true, encoding: .utf8)
@@ -141,16 +182,24 @@ struct LiveStateTests {
         phase=(home/"state").read_text()
         flags={"approval":["waitingOnApproval"],"input":["waitingOnUserInput"]}.get(phase,[])
         return {"id":"live","title":"Current session","threadRuntimeStatus":{"type":"idle" if phase=="completed" else "active","activeFlags":flags},"requests":[],"turns":[{"turnId":"turn","status":"completed" if phase=="completed" else "inProgress","items":[]}]}
-    revision=0; following=False; last=None
+    revision=0; following=False; last=None; follows=0
     while True:
         ready,_,_=select.select([conn],[],[],.03)
         if ready:
             m=json.loads(read(struct.unpack("<I",read(4))[0]))
+            if m.get("method")=="thread-stream-following-changed":
+                with (home/"subscription-times").open("a") as log: log.write(str(time.monotonic())+"\n")
             if m.get("method")=="initialize":
                 send({"type":"response","method":"initialize","requestId":m["requestId"],"resultType":"success","result":{"clientId":"observer"}})
             if m.get("method")=="thread-stream-following-changed" and m.get("params",{}).get("conversationId")=="live":
                 following=m["params"]["following"]
-                if following: last=None
+                if following:
+                    last=None
+                    follows+=1
+                    (home/"follows").write_text(str(follows))
+                    if follows<=20:
+                        send(m)
+                        if (home/"echo-other").exists(): send(dict(m, sourceClientId="other-observer"))
         current=state()
         if following and current!=last:
             change={"type":"snapshot","revision":revision,"conversationState":current} if last is None else {"type":"patches","baseRevision":revision-1,"revision":revision,"patches":[{"op":"replace","path":[k],"value":current[k]} for k in current if current[k]!=last[k]]}

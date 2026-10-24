@@ -6,6 +6,28 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct ImportRegressionTests {
+    @Test func unloadedSessionsRecoverTerminalStateBeforeOpeningViewer() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        let source = CodexSource(mode: .history, settings: fixture.settings)
+        defer { source.close() }
+        try await source.connect()
+        let snapshot = try await source.snapshot()
+        let session = try #require(snapshot.sessions.first { $0.id == "normal" })
+        #expect(session.state(acknowledged: []) == .finished)
+        #expect(session.latestResult?.id == "normal/last/completed")
+        #expect(session.state(acknowledged: ["normal/last/completed"]) == .idle)
+        #expect(snapshot.sessions.first { $0.id == "unassigned" }?.execution == .unknown)
+        _ = try await source.snapshot()
+        #expect(!FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("reads").path))
+        try Data().write(to: fixture.folder.appendingPathComponent("file-only"))
+        let changedFile = try await source.snapshot()
+        #expect(changedFile.sessions.first { $0.id == "normal" }?.execution == .unknown)
+        #expect(changedFile.sessions.first { $0.id == "normal" }?.revision == session.revision)
+        try Data().write(to: fixture.folder.appendingPathComponent("active"))
+        let next = try await source.snapshot()
+        #expect(next.sessions.first { $0.id == "normal" }?.execution == .unknown)
+    }
     @Test func inventoryHidesInternalAgentsAndImportsExactProjectMembership() async throws {
         let fixture = try SourceFixture()
         defer { fixture.remove() }
@@ -13,13 +35,12 @@ struct ImportRegressionTests {
         defer { source.close() }
         try await source.connect()
         let snapshot = try await source.snapshot()
-        #expect(Set(snapshot.sessions.map(\.id)) == ["normal", "named-review", "unassigned"])
+        #expect(Set(snapshot.sessions.map(\.id)) == ["normal", "named-review", "unassigned", "archived"])
         #expect(snapshot.projects == [Project(id: "p", name: "Existing project"), Project(id: "empty", name: "Empty project")])
         #expect(snapshot.sessions.first { $0.id == "normal" }?.projectID == "p")
         // Same directory and even a Guardian title do not imply membership or an internal agent.
         #expect(snapshot.sessions.first { $0.id == "named-review" }?.projectID == nil)
         #expect(snapshot.sessions.first { $0.id == "unassigned" }?.projectID == nil)
-        #expect(snapshot.sessions.allSatisfy { $0.execution == .unknown })
         #expect(!source.canAssignProject)
     }
 
@@ -41,7 +62,9 @@ struct ImportRegressionTests {
         let retained = model.workspace
         try Data("{".utf8).write(to: fixture.folder.appendingPathComponent(".codex-global-state.json"))
         await model.refresh()
-        #expect(model.workspace == retained)
+        var stale = retained
+        for i in stale.sessions.indices { stale.sessions[i].execution = .unknown }
+        #expect(model.workspace == stale)
         #expect(model.errorMessage != nil)
         model.shutdown()
         #expect(!(try database.load(source: model.sourceID)).sessions.contains { $0.id == "guardian" })
@@ -61,9 +84,28 @@ struct ImportRegressionTests {
         #expect(snapshot.sessions.first { $0.id == "normal" }?.projectID == nil)
     }
 
+    @Test func sourceArchiveRoundTripAndFailureKeepTheSameSession() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        let source = CodexSource(mode: .history, settings: fixture.settings)
+        defer { source.close() }
+        try await source.connect()
+        let before = try #require(try await source.snapshot().sessions.first { $0.id == "normal" })
+        try await source.setArchived(sessionID: "normal", archived: true)
+        let archived = try #require(try await source.snapshot().sessions.first { $0.id == "normal" })
+        #expect(archived.isArchived)
+        #expect(archived.updatedAt == before.updatedAt)
+        #expect(archived.projectID == before.projectID)
+        try await source.setArchived(sessionID: "normal", archived: false)
+        #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.isArchived == false)
+        try Data().write(to: fixture.folder.appendingPathComponent("reject-archive"))
+        await #expect(throws: (any Error).self) { try await source.setArchived(sessionID: "normal", archived: true) }
+        #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.isArchived == false)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
     func installedCodexInventoryAndDesktopProjects() async throws {
-        let source = CodexSource(mode: .history, settings: .defaults)
+        let source = CodexSource(mode: .history, settings: .defaults, observeDesktop: false)
         defer { source.close() }
         try await source.connect()
         let snapshot = try await source.snapshot()
@@ -72,7 +114,10 @@ struct ImportRegressionTests {
         #expect(!source.hiddenSessionIDs.isEmpty)
         #expect(Set(snapshot.sessions.map(\.id)).isDisjoint(with: source.hiddenSessionIDs))
         #expect(snapshot.sessions.contains { $0.projectID != nil })
+        #expect(snapshot.sessions.contains { $0.stateIsFromHistory && $0.execution == .idle })
         print("Verified installed source: \(snapshot.sessions.count) sessions, \(source.hiddenSessionIDs.count) hidden internal sessions, \(snapshot.projects.count) projects, \(snapshot.sessions.filter { $0.projectID != nil }.count) assigned sessions.")
+        print("Saved terminal/empty state: \(snapshot.sessions.filter { $0.stateIsFromHistory && $0.execution == .idle }.count); Unknown: \(snapshot.sessions.filter { $0.execution == .unknown }.count); archived: \(snapshot.sessions.filter(\.isArchived).count).")
+        print("Unavailable local history: \(snapshot.sessions.filter { $0.unknownReason == .historyMissing }.count); incomplete evidence: \(snapshot.sessions.filter { $0.unknownReason == .incompleteHistory }.count).")
     }
 
     @Test(arguments: [-60.0, 130.0])
@@ -129,6 +174,8 @@ private struct SourceFixture {
         #!/usr/bin/python3
         import json, pathlib, sys
         home = pathlib.Path(__file__).parent
+        archived_ids = {"archived"}
+        reads = 0
         for line in sys.stdin:
             request = json.loads(line)
             if "id" not in request:
@@ -138,11 +185,32 @@ private struct SourceFixture {
                 result = {"codexHome": str(home)}
             elif method == "thread/list":
                 def session(ident, source, **extra):
-                    return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", updatedAt=1, **extra)
-                if request.get("params", {}).get("cursor"):
+                    path = home / "sessions" / (ident + ".jsonl")
+                    path.parent.mkdir(exist_ok=True)
+                    active = ident == "unassigned" or ident == "normal" and ((home / "active").exists() or (home / "file-only").exists())
+                    records = [{"type":"session_meta", "payload":{"id":ident}}, {"type":"event_msg", "payload":{"type":"task_started" if active else "task_complete", "turn_id":"last"}}]
+                    content = "".join(json.dumps(v) + "\n" for v in records)
+                    if not path.exists() or path.read_text() != content: path.write_text(content)
+                    return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", path=str(path), updatedAt=2 if ident == "normal" and (home / "active").exists() else 1, **extra)
+                if request.get("params", {}).get("archived"):
+                    result = {"data": [session(ident, "cli") for ident in archived_ids], "nextCursor": None}
+                elif request.get("params", {}).get("cursor"):
                     result = {"data": [session("child", "appServer", parentThreadId="normal"), session("unassigned", "cli")], "nextCursor": None}
                 else:
-                    result = {"data": [session("normal", "cli"), session("guardian", {"subAgent": {"other": "guardian"}}), session("review", {"subAgent": "review"}), session("named-review", "appServer")], "nextCursor": "page2"}
+                    result = {"data": [s for s in [session("normal", "cli"), session("guardian", {"subAgent": {"other": "guardian"}}), session("review", {"subAgent": "review"}), session("named-review", "appServer")] if s["id"] not in archived_ids], "nextCursor": "page2"}
+            elif method == "thread/turns/list":
+                reads += 1
+                (home / "reads").write_text(str(reads))
+                ident = request["params"]["threadId"]
+                result = {"data": [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}], "nextCursor": None}
+            elif method in ["thread/archive", "thread/unarchive"]:
+                if (home / "reject-archive").exists():
+                    print(json.dumps({"id": request["id"], "error": {"code": -32600}}), flush=True)
+                    continue
+                ident = request["params"]["threadId"]
+                if method == "thread/archive": archived_ids.add(ident)
+                else: archived_ids.discard(ident)
+                result = {}
             else:
                 result = {}
             print(json.dumps({"id": request["id"], "result": result}), flush=True)

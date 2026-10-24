@@ -39,6 +39,15 @@ public struct Viewport: Codable, Equatable, Sendable {
 }
 
 public enum Execution: String, Codable, Sendable { case unknown, idle, running }
+public enum UnknownReason: String, Codable, Sendable {
+    case historyMissing, incompleteHistory
+    public var label: String {
+        switch self {
+        case .historyMissing: return "Saved history is not available on this Mac"
+        case .incompleteHistory: return "Saved history does not establish the current state"
+        }
+    }
+}
 public enum RequestKind: String, Codable, Sendable { case input, permission }
 public enum Outcome: String, Codable, Sendable {
     case completed, failed, stopped
@@ -71,8 +80,60 @@ public enum NoteState: String, CaseIterable, Codable, Sendable {
 public struct CanvasVisibility: Codable, Equatable, Sendable {
     public var hiddenStates: Set<NoteState> = []
     public var hiddenProjectIDs: Set<String> = []
+    public var hideArchived = true
+    public var idleTimeout: IdleTimeout = .never
     public init() {}
-    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty }
+    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty || hideArchived || idleTimeout != .never }
+    enum CodingKeys: String, CodingKey { case hiddenStates, hiddenProjectIDs, hideArchived, idleTimeout }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hiddenStates = try c.decodeIfPresent(Set<NoteState>.self, forKey: .hiddenStates) ?? []
+        hiddenProjectIDs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenProjectIDs) ?? []
+        hideArchived = try c.decodeIfPresent(Bool.self, forKey: .hideArchived) ?? true
+        idleTimeout = try c.decodeIfPresent(IdleTimeout.self, forKey: .idleTimeout) ?? .never
+    }
+    public func includesLifecycle(_ session: Session, acknowledged: Set<String>, now: Date) -> Bool {
+        // Uncertain, active, and unreviewed sessions never disappear automatically.
+        guard session.state(acknowledged: acknowledged) == .idle, session.unknownReason == nil else { return true }
+        if hideArchived && session.isArchived { return false }
+        guard let seconds = idleTimeout.seconds, session.updatedAt.timeIntervalSince1970 > 0 else { return true }
+        return now.timeIntervalSince(session.updatedAt) < seconds
+    }
+}
+
+public enum IdleTimeout: String, CaseIterable, Codable, Sendable {
+    case never, fifteenMinutes, oneHour, oneDay, oneWeek, oneMonth
+    public var seconds: TimeInterval? {
+        switch self {
+        case .never: return nil
+        case .fifteenMinutes: return 900
+        case .oneHour: return 3600
+        case .oneDay: return 86400
+        case .oneWeek: return 604800
+        case .oneMonth: return 2592000
+        }
+    }
+    public var label: String {
+        switch self {
+        case .never: return "Never"
+        case .fifteenMinutes: return "15 minutes"
+        case .oneHour: return "1 hour"
+        case .oneDay: return "1 day"
+        case .oneWeek: return "1 week"
+        case .oneMonth: return "1 month"
+        }
+    }
+}
+
+public enum ActivityTime {
+    public static func label(_ date: Date, now: Date = Date()) -> String {
+        guard date.timeIntervalSince1970 > 0 else { return "Activity unavailable" }
+        let age = max(0, now.timeIntervalSince(date))
+        if age >= 2592000 { return "1 month ago" }
+        if age >= 86400 { return "\(Int(age / 86400))d ago" }
+        if age >= 3600 { return "\(Int(age / 3600))h ago" }
+        return "\(Int(age / 60))m ago"
+    }
 }
 
 public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
@@ -92,11 +153,18 @@ public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var latestResult: SessionResult?
     public var updatedAt: Date
     public var revision: String
+    // Optional storage fields preserve decoding of existing workspace snapshots.
+    public var archived: Bool?
+    public var savedState: Bool?
+    public var unknownReason: UnknownReason?
+    public var isArchived: Bool { archived == true }
+    public var stateIsFromHistory: Bool { savedState == true }
     public init(id: String, title: String, projectID: String? = nil, cwd: String = "", execution: Execution = .unknown,
-                requests: [String: RequestKind] = [:], latestResult: SessionResult? = nil, updatedAt: Date = Date(), revision: String = "0") {
+                requests: [String: RequestKind] = [:], latestResult: SessionResult? = nil, updatedAt: Date = Date(), revision: String = "0", isArchived: Bool = false) {
         self.id = id; self.title = title.isEmpty ? "Untitled session" : title
         self.projectID = projectID; self.cwd = cwd; self.execution = execution; self.requests = requests
         self.latestResult = latestResult; self.updatedAt = updatedAt; self.revision = revision
+        self.archived = isArchived; self.savedState = false
     }
     public func state(acknowledged: Set<String>) -> NoteState {
         guard execution != .unknown else { return .unknown }

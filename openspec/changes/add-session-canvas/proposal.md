@@ -6,7 +6,8 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 
 ## What Changes
 
-- Display one persistent pan/zoom canvas of non-archived user sessions. Exclude Guardian/internal agents by source/parent metadata without deleting them.
+- Display one persistent pan/zoom canvas of user sessions, including optional archive visibility. Exclude Guardian/internal agents by source/parent metadata without deleting them.
+- Recover saved terminal state before opening a viewer; current desktop observations take priority. Show single-unit last activity on notes and relative plus exact activity time in the viewer. Offer archive/restore and persisted idle-age hiding, keeping active, uncertain, and unreviewed sessions visible under these lifecycle filters.
 - Clip drawing to the canvas. Put New Session/Fit/Full Screen in the top toolbar, remove the workspace heading/tagline/header panel, and make the native sidebar toggleable.
 - Use project overviews at distant zoom. Keep original geometry and drag behavior; show readable truncated names when they fit, otherwise omit text. Zoom must not shift or reflow regions.
 - Combine search, independent attention visibility, and individual project hiding. Omit projects without visible sessions; persist per-source visibility and offer restore actions.

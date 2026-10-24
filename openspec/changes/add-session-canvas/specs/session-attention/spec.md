@@ -123,11 +123,23 @@ Starting a later turn SHALL give current execution or requests display priority 
 ### Requirement: Missing execution evidence is Unknown
 When execution state is stale or unavailable, the note SHALL show Unknown and indicate its last-known state separately. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
 
+#### Scenario: Recover saved terminal state during discovery
+- **WHEN** an unloaded session has identity-verified saved evidence whose latest work is terminal
+- **THEN** discovery loads its stable result identity before opening the viewer and displays Finished until explicit acknowledgment, then Idle
+- **AND** the viewer identifies saved-history provenance and a current desktop observation overrides it
+- **AND** a later start, ambiguous tail, incomplete terminal append, missing history, or unsupported evidence remains Unknown
+- **AND** bulk file reads are bounded, cache invalidates on file changes as well as source revision, and no turn is resumed or submitted
+
 #### Scenario: Observe the active desktop runtime
 - **WHEN** an existing session runs or changes its pending requests in Codex desktop
 - **THEN** the default connection follows that runtime's snapshots and incremental changes automatically
 - **AND** a saved-inventory response of `notLoaded` from a separate reader does not erase current live observations
 - **AND** observation does not claim thread ownership, resume a thread, submit a turn, or answer a request
+
+#### Scenario: Desktop echoes subscriptions
+- **WHEN** the desktop echoes this observer's subscription or another observer repeats its following announcement
+- **THEN** this observer ignores its own echo and refollows at most once per other owner until that owner disconnects or stops following
+- **AND** socket writes do not block the main UI thread
 
 #### Scenario: Reconnect to the desktop feed
 - **WHEN** the desktop observation socket closes or a revision gap is detected

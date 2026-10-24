@@ -14,6 +14,7 @@ final class ApplicationModel: ObservableObject {
     @Published var selectedSessionID: String?
     @Published var search = "" { didSet { revealedCreationID = nil; closeHiddenSelection() } }
     @Published private(set) var visibility = CanvasVisibility()
+    @Published private(set) var activityNow = Date()
     @Published var history: [HistoryEntry] = []
     @Published var nextHistoryCursor: String?
     @Published var isLoadingHistory = false
@@ -38,6 +39,7 @@ final class ApplicationModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var generation = UUID()
     private var saveTask: Task<Void, Never>?
+    private var activityTask: Task<Void, Never>?
     private let nativeOpener: ((URL) -> Void)?
 
     struct CreationContext: Identifiable {
@@ -50,6 +52,13 @@ final class ApplicationModel: ObservableObject {
         self.nativeOpener = nativeOpener
         mode = demo ? .demo : .history
         settings = UserDefaults.standard.data(forKey: "connectionSettings").flatMap { try? JSONDecoder().decode(ConnectionSettings.self, from: $0) } ?? .defaults
+        activityTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self else { return }
+                self.updateActivityTime()
+            }
+        }
         do {
             let path: String
             if let storagePath { path = storagePath }
@@ -77,8 +86,13 @@ final class ApplicationModel: ObservableObject {
     }
     private func matchesVisibility(_ session: Session) -> Bool {
         matchesSearch(session) && !visibility.hiddenStates.contains(state(session)) &&
-            !visibility.hiddenProjectIDs.contains(session.projectID ?? "")
+            !visibility.hiddenProjectIDs.contains(session.projectID ?? "") && matchesLifecycle(session)
     }
+    private func matchesLifecycle(_ session: Session) -> Bool {
+        visibility.includesLifecycle(session, acknowledged: acknowledgments[session.id] ?? [], now: activityNow)
+    }
+    func updateActivityTime(now: Date = Date()) { activityNow = now; closeHiddenSelection() }
+    func activityLabel(_ session: Session) -> String { ActivityTime.label(session.updatedAt, now: activityNow) }
     var creationIsOutsideFilters: Bool {
         guard let session = workspace.sessions.first(where: { $0.id == revealedCreationID }) else { return false }
         return !matchesVisibility(session)
@@ -94,7 +108,7 @@ final class ApplicationModel: ObservableObject {
     }
     var hiddenProjects: [Project] { workspace.projects.filter { visibility.hiddenProjectIDs.contains($0.id) } }
     var stateCounts: [NoteState: Int] {
-        Dictionary(grouping: workspace.sessions.filter { $0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "") }, by: state).mapValues(\.count)
+        Dictionary(grouping: workspace.sessions.filter { $0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "") && matchesLifecycle($0) }, by: state).mapValues(\.count)
     }
     func visibleProject(at point: Point) -> String? {
         visibleProjects.first { workspace.regions[$0.id]?.contains(point) == true }?.id
@@ -116,7 +130,29 @@ final class ApplicationModel: ObservableObject {
     func showAllProjects() {
         var next = visibility; next.hiddenProjectIDs = []; setVisibility(next)
     }
-    func showAllSessions() { search = ""; setVisibility(CanvasVisibility()) }
+    func setHideArchived(_ hidden: Bool) { var next = visibility; next.hideArchived = hidden; setVisibility(next) }
+    func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
+    func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hideArchived = false; setVisibility(next) }
+    func canArchive(_ session: Session) -> Bool {
+        archiveEligible(session) && !pendingSessions.contains(session.id) && !isRefreshing
+    }
+    private func archiveEligible(_ session: Session) -> Bool { connected && source?.canArchive == true && (session.isArchived || state(session) == .idle && session.unknownReason == nil) }
+    func toggleArchive(_ id: String) async {
+        guard let source, let session = workspace.sessions.first(where: { $0.id == id }), canArchive(session) else { return }
+        let token = generation
+        pendingSessions.insert(id)
+        defer { if token == generation { pendingSessions.remove(id) } }
+        await refresh()
+        guard token == generation, let current = workspace.sessions.first(where: { $0.id == id }),
+              current.revision == session.revision, current.isArchived == session.isArchived, archiveEligible(current) else { return }
+        do {
+            try await source.setArchived(sessionID: id, archived: !session.isArchived)
+            guard token == generation else { return }
+            if let i = workspace.sessions.firstIndex(where: { $0.id == id }) { workspace.sessions[i].archived = !session.isArchived }
+            persist(); closeHiddenSelection()
+            await refresh()
+        } catch { if token == generation { errorMessage = "Archive change failed. \(error.localizedDescription)" } }
+    }
     private func setVisibility(_ next: CanvasVisibility) {
         do {
             if let source {
@@ -405,7 +441,7 @@ final class ApplicationModel: ObservableObject {
     }
     func shutdown() {
         persist(); generation = UUID(); connected = false; hasLiveState = false
-        changeTask?.cancel(); changeTask = nil; refreshTask?.cancel(); loadTask?.cancel(); saveTask?.cancel()
+        changeTask?.cancel(); changeTask = nil; refreshTask?.cancel(); loadTask?.cancel(); saveTask?.cancel(); activityTask?.cancel()
         source?.close()
     }
 }

@@ -27,9 +27,11 @@ def parser():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--standard-toolchain", action="store_true", help="Use Swift directly instead of this machine's manifest workaround")
     common.add_argument("--configuration", choices=("debug", "release"), default="debug")
+    common.add_argument("--jobs", type=int, choices=range(1, 9), default=2, help="Maximum parallel Swift build jobs (default: 2)")
     commands.add_parser("build", parents=[common], help="Build and sign the local app bundle")
     tests = commands.add_parser("test", parents=[common], help="Run Swift Testing, with optional installed-source checks")
     tests.add_argument("--real-source", action="store_true")
+    tests.add_argument("--live-desktop", action="store_true", help="Connect one live desktop observer; requires separate user authorization and the exact live test filter")
     tests.add_argument("--filter", help="Swift Testing name filter")
     preview = commands.add_parser("preview", parents=[common], help="Build, capture a native window, then exit")
     preview.add_argument("--source", choices=("demo", "desktop"), default="demo")
@@ -43,12 +45,15 @@ def parser():
     return cli
 
 
-def environment(real_source=False):
+def environment(real_source=False, live_desktop=False):
     task_env = os.environ.copy()
     task_env.pop("SESSION_CANVAS_TEST_REAL_SOURCE", None)
+    task_env.pop("SESSION_CANVAS_TEST_LIVE_DESKTOP", None)
     task_env.pop("SESSION_CANVAS_TEST_CAPTURE_CREATION", None)
     if real_source:
         task_env["SESSION_CANVAS_TEST_REAL_SOURCE"] = "1"
+    if live_desktop:
+        task_env["SESSION_CANVAS_TEST_LIVE_DESKTOP"] = "1"
     cache = str(ROOT / ".build/compiler-cache")
     task_env["CLANG_MODULE_CACHE_PATH"] = cache
     task_env["SWIFT_MODULECACHE_PATH"] = cache
@@ -58,6 +63,7 @@ def environment(real_source=False):
 def swift_command(args, action):
     runner = ["swift"] if args.standard_toolchain else [sys.executable, str(ROOT / "scripts/swift-local.py")]
     return runner + [action, "-c", args.configuration,
+                     "--jobs", str(args.jobs),
                      "--cache-path", str(OUTPUT / "swiftpm-cache"), "--manifest-cache", "local",
                      "-Xswiftc", "-module-cache-path", "-Xswiftc", str(ROOT / ".build/compiler-cache")]
 
@@ -98,6 +104,8 @@ def capture_window(args, task_env, storage, capture):
 def main(argv=None):
     cli = parser()
     args = cli.parse_args(argv)
+    if getattr(args, "live_desktop", False) and (not args.real_source or args.filter != "installedDesktopFeedsLiveStateIntoTheApplication"):
+        cli.error("--live-desktop requires --real-source --filter installedDesktopFeedsLiveStateIntoTheApplication; authorize that single live run separately")
     # Validate outputs before building or launching anything.
     storage = output_path(args.storage, ".sqlite") if getattr(args, "storage", None) else None
     capture = output_path(args.capture, ".png") if getattr(args, "capture", None) else None
@@ -105,7 +113,7 @@ def main(argv=None):
         cli.error("--created-session-preview requires --show-session")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (ROOT / ".build/compiler-cache").mkdir(parents=True, exist_ok=True)
-    task_env = environment(getattr(args, "real_source", False))
+    task_env = environment(getattr(args, "real_source", False), getattr(args, "live_desktop", False))
     if args.command == "test":
         command = swift_command(args, "test") + ["--disable-xctest"]
         if args.filter:
