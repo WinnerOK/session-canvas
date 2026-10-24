@@ -30,6 +30,12 @@ public enum JSONValue: Codable, Equatable, Sendable {
 }
 
 public enum CodexWire {
+    public static func isInternalSession(_ value: JSONValue) -> Bool {
+        value["source"]["subAgent"] != .null ||
+            value["source"].string?.lowercased().hasPrefix("subagent") == true ||
+            !(value["parentThreadId"].string ?? "").isEmpty
+    }
+
     public static func session(_ value: JSONValue, live: Bool) throws -> Session {
         guard let id = value["id"].string else { throw CanvasError.message("Codex returned a session without an identity.") }
         var execution: Execution = .unknown

@@ -6,13 +6,18 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 
 ## What Changes
 
-- Add one persistent, pannable and zoomable canvas of existing non-archived Codex sessions, each represented by a movable sticky note showing its title and state.
+- Display one persistent pan/zoom canvas of non-archived user sessions. Exclude Guardian/internal agents by source/parent metadata without deleting them.
+- Clip drawing to the canvas. Put New Session/Fit/Full Screen in the top toolbar, remove the workspace heading/tagline/header panel, and make the native sidebar toggleable.
+- Use project overviews at distant zoom. Keep original geometry and drag behavior; show readable truncated names when they fit, otherwise omit text. Zoom must not shift or reflow regions.
+- Combine search, independent attention visibility, and individual project hiding. Omit projects without visible sessions; persist per-source visibility and offer restore actions.
 - Derive note color and label from live execution, pending requests, and explicit acknowledgment of the latest terminal result: Running, Waiting for you, Permission required, Finished, Idle, or Unknown.
-- Keep Finished until the user explicitly acknowledges a displayed result in the session viewer. Opening alone does not acknowledge it.
-- Represent actual Codex projects as regions. A note drop assigns, reassigns, or removes project membership after source confirmation.
-- Open the same session in a local result/history viewer on note click, with Acknowledge and Open in Codex actions.
-- Start a session from a context menu at the clicked canvas location, inheriting the region's project when applicable.
+- Keep Finished until explicit acknowledgment of a displayed result. Enable Acknowledge only for Finished sessions; opening never acknowledges.
+- Import actual projects and explicit memberships independently of working directories. Note-drop mutations require capable sources and confirmation; current real existing-session moves remain disabled.
+- Show newest-first read-only history with fixed, wrapping Acknowledge/Open in Codex/Reload controls. Session menus start with Open in Codex and omit Open session.
+- Create from background or project areas at every zoom: confirm server project/roots, create an empty durable session, retain its note before inventory publication, and automatically open Codex for the instruction. Default blank names and projectless working folders, verify saved-history resume independently, and release creation ownership before continuation. Start no turn.
+- Reveal the latest created session despite existing filters, show its viewer and continuation notice, and preserve saved visibility choices. Keep valid clicked placement, choose the nearest valid location for collisions including hidden notes, and preserve viewport pan/zoom for creation in the context's project. Focus only for a changed project or explicit focus requests. Show submission errors inside the active creation dialog.
 - Deliver a native Mac-only companion using SwiftUI/AppKit, with the in-app alternatives retained as historical research. Verify source capabilities and expose unsupported desktop operations explicitly.
+- Provide a stable local build/test/preview launcher with one user-authorized Codex prefix rule, local caches, and isolated captures so changing verification parameters does not repeat approval prompts.
 
 ## Capabilities
 
@@ -22,14 +27,15 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 - `session-attention`: Observable execution/request states, terminal outcomes, and explicit result acknowledgment.
 - `project-regions`: Project geometry and confirmed project membership through note placement.
 - `session-actions`: Session/result viewing, native Codex navigation, and contextual session creation.
+- `local-verification`: Bounded agent-driven build/test/native-preview commands and reusable local permission.
 
 ### Modified Capabilities
 
-None. This is a new project with no existing OpenSpec capabilities or application implementation.
+None. These capabilities originated in this change and have not yet been archived into main specifications. Their requirements now include the subsequent implementation corrections.
 
 ## Impact
 
-Introduces a native SwiftUI/AppKit canvas UI, a local SQLite store, and an integration boundary to the user's existing Codex source. The user selected a Mac-only application. Protocol support for live desktop sessions, actual projects, and native navigation remains an explicit feasibility gate, not a claim of completed integration. See docs/integration-compatibility.md for the implemented subset and verification evidence.
+Introduces a native SwiftUI/AppKit canvas UI, local SQLite storage, and an integration boundary to the user's existing Codex source. The selected Mac-only companion combines CLI inventory/history, validated saved project metadata, and a read-only revisioned desktop runtime feed with automatic reconnection. The newer bundled CLI supports empty-session creation with confirmed project identity. Existing-session membership mutations and full native workflow acceptance remain open gates. See [verification.md](verification.md) for correction-to-requirement coverage and [integration compatibility](../../../docs/integration-compatibility.md) for observed capabilities and limits.
 
 Initial scope is one user, one local source, and one canvas. Collaboration, drawing tools, multiple boards, session archive/delete controls, in-view replies, and permission approval are deferred. The viewer delegates continuing work and resolving requests to Codex desktop.
 

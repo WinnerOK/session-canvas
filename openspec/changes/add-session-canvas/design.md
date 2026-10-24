@@ -4,7 +4,9 @@
 
 See [proposal.md](proposal.md) for product scope, [the domain model](../../../docs/domain-model.md) for state and membership rules, and [delivery-options.md](../../../docs/delivery-options.md) for the investigated integration surfaces and their limits. The user selected native Swift on macOS; the implementation now uses SwiftUI/AppKit and SQLite. [The native guide](../../../docs/native-application.md) describes its concrete modules.
 
-The user confirmed explicit acknowledgment and accepted a session/result viewer with Acknowledge and Open in Codex. Saved-session discovery and a native read-only history reader are verified. The shared desktop control socket was unavailable, and no independent application's access to the agent tools in this chat is assumed. See [the compatibility report](../../../docs/integration-compatibility.md).
+The user confirmed explicit acknowledgment and accepted a session/result viewer with Acknowledge and Open in Codex. Subsequent corrections add canvas clipping, semantic zoom without project reflow, visibility controls, native toolbar/sidebar behavior, live desktop state, newest-first history with fixed controls, and creation from project areas. These are mapped to requirements and verification in [verification.md](verification.md).
+
+The default app now combines CLI inventory/history, validated saved project metadata, and read-only observations from the desktop's existing coordination socket. Empty-session creation with real project identity is verified against the newer bundled server in an isolated home. The default shared control proxy remains unavailable on the tested installation; it is distinct from the working desktop observation socket. No independent application's access to agent tools in this chat is assumed. See [the compatibility report](../../../docs/integration-compatibility.md).
 
 ## Goals / Non-Goals
 
@@ -30,9 +32,13 @@ The earlier Electron/Tauri recommendation is retained as research history. The u
 
 ### 2. Prove each integration capability before enabling it
 
-The full integration gate requires the six demonstrations in delivery-options.md against existing desktop sessions. The native implementation enables verified saved-session discovery/history and keeps unavailable mutations disabled. Record target CLI/app versions, endpoint, capability evidence, commands, and failures without secrets or transcript dumps.
+The full integration gate requires the six demonstrations in delivery-options.md against existing desktop sessions. Enable capabilities individually from observed evidence: inventory/history, actual project discovery, live desktop observation, and empty-session creation are available; existing-session membership mutations and shared-mode creation stay disabled. Record target CLI/app versions, endpoint, capability evidence, commands, and failures without secrets or transcript dumps. The partial gate must remain visible in tasks and verification rather than presenting every requirement as implemented.
 
-The existing desktop socket was unavailable. The installed CLI supplies metadata discovery; incompatible newer histories use an identity-checked local reader on the exact inventory-provided rollout paths. A supported shared source/control transport remains preferred for live execution and mutations. The full integration track remains incomplete while essential capabilities are unavailable; the native UI can be evaluated separately in labeled demo mode. Projects are never redefined as local labels.
+Use the desktop-bundled CLI by default. A separate stdio server can list saved sessions but reports desktop-active threads as `notLoaded`; that is not execution evidence. The read-only `DesktopRuntime` follows the existing local coordination socket's version-11 snapshots and patches. Validate socket/peer ownership, owner/revision identity, and frame size; request a fresh snapshot on a revision gap and reconnect automatically. Missing or unsupported feeds clear live observations to Unknown. Observation never claims ownership, resumes a thread, submits a turn, or answers a request. A history refresh cannot erase a newer live observation.
+
+Filter Guardian/sub-agent sessions by structured source/parent metadata, including cached notes. Read projects and explicit assignments from the connected home's exact `.codex-global-state.json`; validate its shape and bound the read. Explicit unassignment and remote/unknown exclusions take precedence. Resolve the connected home's legacy-to-server project mapping for creation and newly reported server memberships. Never infer project identity from `cwd`, mutate source metadata files, or replace actual projects with local labels. Invalid metadata retains the last confirmed workspace and reports an error.
+
+For history, negotiate paginated APIs, then legacy reading, then an identity-checked local reader on exact inventory-provided rollout paths. Bound the fallback and its records; do not render arbitrary tool payloads or hidden reasoning. Projects and desktop IPC remain private compatibility formats. Keep their limits separate from public server API support and from the isolated demo's simulated mutations.
 
 Conceptual operations required from the integration boundary:
 
@@ -42,7 +48,7 @@ Conceptual operations required from the integration boundary:
 | Observe current session | Execution evidence, pending request identities, active turn identity, freshness, and authoritative terminal results |
 | Read session history | Paginated read-only content with stable turn/result identities |
 | Change membership | Assign project or null against expected membership revision; return confirmed state or explicit rejection |
-| Create session/submit initial instruction | Persist an operation identity; recover ambiguous outcomes; identify an already-created session if turn submission fails |
+| Create empty session | Confirm server project identity/roots, create a durable thread, retain its identity, and hand off the initial instruction to Codex; never automatically retry an uncertain start |
 | Open native session | Request navigation to the same source session ID and report dispatch failure |
 
 These names describe product needs, not existing Codex RPC method names. Unsupported operations must be surfaced explicitly. Session discovery must include the desktop-relevant source kinds, rather than relying on filters that expose only another client's threads.
@@ -72,12 +78,13 @@ flowchart LR
 | Note placement | Canvas ID + source/session identity; canvas-owned | Canvas-coordinate position and stacking order |
 | Project region | Canvas ID + source/project identity; canvas-owned geometry | Bounds; name comes from source |
 | Viewport | Canvas ID; canvas-owned | Pan offset and zoom |
+| Visibility | Source ID; canvas-owned | Independently hidden attention states and project IDs; search is transient |
 | Acknowledgment | User + source/session + result identity; canvas-owned | Explicitly acknowledged result and local recording time |
-| Pending operation | Client operation ID; canvas-owned | Target/source identity, expected revision, intended mutation, last confirmed state, resolution state |
+| Pending operation (remaining design target) | Client operation ID; canvas-owned | Durable correlation/recovery for uncertain mutations; not yet implemented across application restarts |
 
 Normalize source IDs at the boundary. Titles and timestamps are never deduplication keys. Do not derive project identity from a working-directory path. Do not store a single mutable `finished` boolean as a substitute for result identity.
 
-Persist layout, acknowledgments, pending operations, and the minimum source evidence needed for recovery. Fetch transcript pages for the viewer on demand; do not create a second durable full-history store by default. Restored execution observations are stale until refreshed, so notes initially show Unknown with their last-known state.
+The current SQLite schema stores workspace geometry/viewport, the narrow session/result cache, explicit acknowledgments, and source-qualified visibility (schema version 2). Search and sidebar presentation are view state. Fetch transcript pages on demand rather than creating a second durable full-history store. Restored execution observations are stale until refreshed and initially show Unknown. Durable pending-operation records and separate last-known execution presentation remain acceptance work, tracked in tasks and verification; the current cache is not evidence that those requirements are complete.
 
 ### 4. Derive attention from evidence
 
@@ -87,11 +94,13 @@ Track multiple pending request identities. Clear only the request the source res
 
 On connection loss, invalid observation, or failed freshness verification, mark the relevant state unavailable. Establish freshness from connection/heartbeat/reconciliation evidence, not the time since the assistant last emitted text. After reconnecting, obtain authoritative current state before accepting incremental observations. When ordering is uncertain, re-read instead of comparing wall-clock timestamps.
 
-The viewer retains the displayed result identity. If another result arrives, advertise View latest without retargeting an existing Acknowledge action. Commit acknowledgment durably before clearing its visual attention. A repeated terminal observation cannot invalidate an existing acknowledgment of the same result.
+The viewer retains the displayed result identity. If another result arrives, advertise View latest without retargeting an existing Acknowledge action. Enable the action only while the selected session's current derived state is Finished and its target result is loaded and unacknowledged. UI availability and the command share one eligibility predicate; the command rechecks the current session before writing. A new turn, unresolved request, or lost live evidence disables acknowledgment even when an older result remains loaded. Commit an eligible acknowledgment durably before clearing visual attention. Repeated terminal observations do not invalidate prior acknowledgments.
 
 ### 5. Treat spatial changes as explicit commands
 
 Store positions and bounds in world/canvas coordinates, independently from screen coordinates. Distinguish pointer clicks from drags using an interaction threshold; suppress click after a drag or cancellation. Hit-test a note's center only when the drop commits, with the same calculation used for preview. Region borders count as unassigned space.
+
+The real adapter currently allows local geometry edits and rejects cross-membership moves; it never substitutes local grouping for a source mutation. The labeled demo exercises confirmation and stale-command behavior. The following conditional-mutation and durable recovery protocol is the design target for enabling real membership moves, not a claim that those operations or their pending records are implemented.
 
 Within the current membership area, a move is a local layout operation. Across membership boundaries, persist a pending command and submit a conditional membership change. Show a pending placement, serialize membership changes for that session, and commit the desired layout after confirmed success. On rejection, restore confirmed placement; if newer external membership exists, reconcile to that newer state instead.
 
@@ -101,18 +110,55 @@ Region interiors do not overlap. Move member notes together with their region. R
 
 ### 6. Creation and navigation retain the same conversation
 
-Capture project ID and canvas location when the context menu opens. Before submission, verify that the region/project still exists and resolve the source execution context; do not choose an unrelated working directory. Persist a client operation identity before submitting. Use source idempotency when available, otherwise require a reliable correlation/recovery mechanism before permitting a retry.
+Capture project ID and world-coordinate location from canvas background or a project area, including the distant overview. Preselect the project in the creation sheet. The desktop form accepts an optional name and creates an empty session; entering and executing the instruction belongs to Codex. The demo alone accepts a simulated initial prompt. For a projectless session, an explicit working folder must exist; leaving it blank creates a unique workspace under `Application Support/Session Canvas/Workspaces`. Blank names become New session. Explain these defaults in the form. After verified creation and ownership release, select/reveal the new note and viewer and automatically request native opening of that exact identity. Retain Open in Codex for retries. A creation warning prevents automatic navigation. The injectable native URL opener lets tests verify dispatch without opening synthetic fixture identities in the user's desktop.
 
-If session creation succeeds but initial-turn submission fails, keep the returned session identity and retry only submission after reconciliation. Deduplicate the later inventory event by the same session identity. The viewer is read-only for continuing work: Open in Codex uses the integration-gate-proven navigation mechanism. No speculative deep-link scheme is hard-coded into this specification.
+A source-level create result is not sufficient UI acceptance: the new empty note is normally Unknown, and saved Unknown/search/project filters can hide it before the viewer opens. Keep one transient `revealedCreationID` outside persisted visibility. Include that exact session in rendering, project visibility, and counts and open its viewer. If placement at the clicked world coordinate satisfies membership/collision rules, retain that position. Otherwise search positions aligned with the requested coordinate, note edges, and project-center boundaries and choose the closest valid position by squared world distance; include hidden geometry and exclude the newly created note's provisional placement. Do not retain the origin-based discovery-grid fallback after a collision. Use the refreshed session's confirmed membership. For creation in the context's project, preserve pan/zoom even after collision adjustment. Only a changed chosen/confirmed project or an explicit focus action centers it at detail zoom. Explain any filter exception and provide Apply filters. Preserve saved filters and search. Refresh keeps the exception; explicit search/visibility changes, Apply filters, another creation, and reconnect clear it. Closing the viewer alone does not change the reveal. Creation errors belong inside the active sheet, with inputs retained, rather than in a covered parent's alert.
+
+SwiftUI can resize the canvas after an explicit focus request or focus for a changed project when the viewer appears. Only when that focus was requested and the creation note is still at the previous viewport center, adjust the origin by half the size delta to preserve its center in the remaining canvas. A note placed at or near the click must not trigger this adjustment merely because it happens to be centered. Once the user pans away, resizing must not recenter it. Native-event regressions cover both click preservation and explicit-focus resize behavior.
+
+The tested bundled server omits an empty saved session from `thread/list`, even though exact-ID read/resume and native loading work. Show a successful creation notice and direct Open in Codex rather than requiring discovery through the desktop's list. Do not inject placeholder user messages or start a turn merely to populate that list. A native mouse-event test presses the actual SwiftUI creation button; model/real-server tests separately verify visibility, ownership release, and continuation identity.
+
+Negotiate the newer server's project APIs before enabling desktop creation. Re-read the connected home's project identity mapping and use `project/read` to confirm the backend project and roots before `thread/start(projectId:, ephemeral: false)`. Do not infer membership from the folder or override model/approval settings. Use a dedicated short-lived child process initialized against the same Codex home, separate from the inventory/history connection. Always set a name, including the generated default: the bundled server does not persist a resumable empty rollout from `thread/start` alone. Stop and await this creator, then initialize an independent verifier and call `thread/resume(excludeTurns: true)` for the exact identity; verify saved identity/membership and stop/await the verifier before returning. No turn is submitted. Empty durable threads can be omitted from inventory until their first message; retain confirmed source identity and membership in the canvas cache without inventing execution evidence.
+
+The isolated reproduction established that `thread/read` can return metadata while no rollout exists, and `thread/unsubscribe` leaves the creator's thread lock held. Process exit releases the lock. Merely unsubscribing or reconnecting a reader is therefore insufficient. Await only Canvas-owned children asynchronously, with a bounded graceful termination period before forcing that child to exit; never terminate the desktop or an unrelated server.
+
+Never repeat an uncertain `thread/start`, which has no idempotency key. The dedicated stdio connection can recover a lost reply from its `thread/started` notification. Without confirmation, disable further creation and require checking Codex before reconnecting. After a confirmed start, naming, metadata-check, or navigation failure retains the existing note and reports the failure rather than creating a replacement. Cross-restart recovery of an unconfirmed start is still open work; no durable creation-operation journal currently exists.
+
+Open in Codex dispatches the exact session ID through the configured `codex://threads/{id}` route after checking the scheme and registered handler. Dispatch failure is visible and retryable. Registration and dispatch are verified separately from full native host route acceptance. Neither creation nor viewing submits a turn, resumes work, grants permission, or acknowledges a result.
+
+For real session notes, Open in Codex is the first context-menu item. Omit the duplicate Open session item: primary click and the keyboard open action already open the local viewer. Demo notes keep native navigation unavailable because their identities are synthetic.
 
 ### 7. Local state is independent of the rendered component
 
 Keep durable state in the local service/application rather than in a mounted plugin iframe or ephemeral view. This allows the canvas to survive viewer navigation and supports a later plugin shell. Keep bridge access local and narrowly scoped, and preserve existing Codex authentication, execution, and approval policies. Reading or acknowledging must never submit an instruction or approval.
 
+### 8. Render a stable, filterable canvas at every zoom
+
+Clip notes, project areas, labels, dots, and shadows to the AppKit canvas bounds. The native top toolbar owns New Session, Fit to Content, and Full Screen; no workspace heading, tagline, or gray header panel sits above the canvas. A native `NavigationSplitView` sidebar toggles through its toolbar control or Shift + Command + S without resetting canvas state.
+
+Use one derived visible set: search, independently enabled attention states, and hidden project IDs all apply. Omit projects with no visible sessions from the sidebar, canvas, overview, accessibility targets, and fit bounds. Hidden projects have individual/all restore controls. Changes of session state or acknowledgment reevaluate filters; close the viewer if its session becomes hidden. Persist attention/project visibility per source while retaining all underlying layout and membership, including hidden members.
+
+At distant zooms, render a project overview instead of its member notes. Project areas and hit targets use exactly the viewport projection of saved world bounds. Never enlarge, rearrange, or clamp areas to keep labels on screen. Lay out a readable, tail-truncated project name only when a meaningful prefix plus ellipsis and a complete line fit; otherwise draw only the area. Counts and attention dots require additional room. At closer zooms, note text also uses complete lines rather than vertically clipped glyphs.
+
+A project area stays interactive even without text. A click zooms into its sessions at a readable scale; dragging any part moves the region and all members, including hidden notes, by the same world displacement. Preview uses the same transform as commit, with no viewport change. Escape cancels, Space + drag pans, and collision/membership-preservation rules remain active. The project context menu provides creation, zoom, and hiding at every zoom.
+
+### 9. Keep viewer history and controls predictable
+
+Keep source history chronological internally and render it in reverse, newest at the top. Opening or reloading positions the transcript at its newest entry. Loading older pages inserts older content below the newer entries without scrolling to the bottom. A fixed panel above the scrolling transcript holds Acknowledge result, Open in Codex, Reload history, and pagination; use a wrapping layout for narrow viewers.
+
+The header's acknowledgment targets the newest loaded terminal result. A newer unloaded result offers View latest result without retargeting the existing action. Keep acknowledgment disabled outside Finished, while history loads, or for an already acknowledged or unloaded result; reading, reloading, scrolling, opening natively, and closing remain independent of acknowledgment.
+
+### 10. Stable local verification permission
+
+Use `scripts/verify-local.py` as the single build/test/native-preview entry point. Codex invokes its absolute path directly, and a general command-prefix allow rule in the user's `default.rules` authorizes that script outside the sandbox after the user's setup request. Argument changes do not change the prefix. Other scripts receive no permission from this rule; the workspace sandbox and unrelated rules remain in force. Moving the checkout requires a new absolute-path rule. Rule files load at Codex startup; existing chats and already-visible approval dialogs can retain the previous policy. An explicit `execpolicy check --rules` result verifies the supplied files, not runtime policy reload or absence of prompts.
+
+The launcher executes fixed subprocess argument lists, directs SwiftPM/module caches under `.build`, and exposes explicit installed-source opt-in. Preview rebuilds/signs the bundle and defaults to a fresh demo database and PNG under `.build/verification`. Resolve explicit SQLite/PNG outputs against verification, temporary, and Codex visualization roots before starting any subprocess. Preserve the real application database. A bounded capture must produce a fresh PNG and a successful process exit; stale files are not verification evidence. This development permission is independent of permission requests displayed by the product's session viewer.
+
 ## Risks / Trade-offs
 
-- [Desktop execution is owned by another process or host] → Prove shared-source observation; a new isolated server's state is insufficient.
-- [Actual project APIs or native navigation are unavailable] → Fail the integration gate and reassess delivery; do not silently reduce the behavior.
+- [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
+- [Desktop IPC or project metadata changes format] → Validate versions/shape, clear unsupported live evidence, retain confirmed layout, and report the capability loss.
+- [Actual membership mutations or native navigation are unavailable] → Keep the remaining integration gate open and actions unavailable or retryable; do not invent local membership or claim full native acceptance.
 - [A plugin surface differs between ChatGPT and the target Codex view] → Compatibility-test the exact installation before pursuing the optional shell.
 - [Old inactive sessions create many Finished notes on first import] → Preserve the explicit-review contract; consider a separately specified onboarding review policy later.
 - [Source revision or request semantics vary by version] → Version the adapter and record fixtures for verified supported versions; display Unknown for unsupported evidence.
@@ -121,6 +167,6 @@ Keep durable state in the local service/application rather than in a mounted plu
 
 ## Migration Plan
 
-There is no existing application data to migrate. Start with a versioned local-state format and stable source-qualified IDs. First load discovers actual projects and non-archived sessions, creates regions and placements, and imports the latest terminal result without implicit acknowledgment.
+Retain existing canvas data and stable source-qualified IDs. SQLite schema version 2 adds a separate visibility table without resetting the workspace or acknowledgments. Cached internal-agent notes are removed from the canvas after structured source identification; underlying Codex sessions are untouched. Source titles, project membership, and live state reconcile without reordering unrelated geometry. First load discovers actual projects and non-archived user sessions without implicit acknowledgment.
 
 Validate domain behavior with source fixtures after the integration contract is proven, then run end-to-end checks against the same desktop source. A later plugin shell must consume the same domain core and persisted data rather than create a second canvas. Rollback closes/disables the companion; it must not delete source sessions or rewrite project memberships. Membership changes deliberately made by the user remain real source changes.

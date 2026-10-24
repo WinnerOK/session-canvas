@@ -15,11 +15,16 @@ parser.add_argument("--read-first", action="store_true")
 parser.add_argument("--read-index", type=int, default=0)
 parser.add_argument("--paged", action="store_true")
 parser.add_argument("--experimental", action="store_true")
+parser.add_argument("--executable", default=shutil.which("codex") or "codex")
+parser.add_argument("--socket", help="Existing shared app-server control socket")
+parser.add_argument("--expect-running", help="Assert this existing desktop thread has active runtime state")
 parser.add_argument("--inspect-rollout-structure", action="store_true")
 parser.add_argument("--native-reader", help="Path to the built SessionCanvasProbe; prints only native-parser counts")
 args = parser.parse_args()
-command = [shutil.which("codex") or "codex", "app-server"]
+command = [args.executable, "app-server"]
 command += ["--listen", "stdio://"] if args.history else ["proxy"]
+if args.socket and not args.history:
+    command += ["--sock", args.socket]
 proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 selector = selectors.DefaultSelector()
 selector.register(proc.stdout, selectors.EVENT_READ)
@@ -80,6 +85,13 @@ try:
     evidence = {"connected": True, "mode": "history" if args.history else "shared", "sample_count": len(rows), "pages": pages,
                 "has_more": cursor is not None, "unique_id_count": len({r["id"] for r in rows}),
                 "runtime_state_types": sorted({str(r.get("status", {}).get("type")) for r in rows}), "initialize_fields": sorted(initialized.keys())}
+    if args.expect_running:
+        ident += 1
+        thread = request(ident, "thread/read", {"threadId": args.expect_running, "includeTurns": False}).get("thread", {})
+        status = thread.get("status", {}).get("type")
+        if status != "active":
+            raise RuntimeError("running desktop session reported " + str(status) + "; expected active")
+        evidence["running_thread_verified"] = True
     if args.native_reader and rows:
         selected = rows[args.read_index]
         parsed = subprocess.run([args.native_reader, selected["path"], initialized["codexHome"], selected["id"]], capture_output=True, text=True)

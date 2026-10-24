@@ -2,7 +2,9 @@
 
 A free-roam canvas for existing Codex sessions: movable session notes, project regions, live attention states, and explicit result acknowledgment.
 
-The application is implemented in SwiftUI/AppKit for macOS 14 and later, with SQLite persistence and no third-party package dependencies. Real saved-session discovery/history work through the installed Codex source. Live desktop state, actual project mutations, and desktop session creation remain limited by the available host interfaces; a clearly labeled, isolated demo exercises those canvas interactions.
+Creating a session at a free clicked location keeps that position and the current canvas pan and zoom. If another note occupies the point, the new note uses the nearest free position instead of jumping to the grid near the origin.
+
+The application is implemented in SwiftUI/AppKit for macOS 14 and later, with SQLite persistence and no third-party package dependencies. Saved-session discovery/history work through the installed Codex source, with Guardian and other internal agent sessions hidden. Existing local projects and explicit memberships are imported from saved desktop metadata. The default connection follows live execution and attention state from the running Codex desktop, with automatic reconnection and saved-history fallback. Right-click a project area to create a saved empty session in that project and open it automatically in Codex. Names and projectless working folders are optional; creation verifies resumable history and releases its ownership before continuation. The new note/viewer stay visible despite filters, with Open in Codex for retry. Creation requires the newer desktop-bundled CLI; moves between existing projects remain unavailable. An isolated demo exercises simulated execution and project moves.
 
 ```sh
 swift run SessionCanvas
@@ -13,6 +15,8 @@ python3 scripts/build-app.py
 
 The local app bundle is written to `dist/Session Canvas.app`. See the [native app guide](docs/native-application.md) for controls, packaging, and the opt-in workaround for this machine's SwiftPM installation.
 
+Codex uses a [stable verification launcher](docs/native-application.md#codex-verification-launcher) for builds, tests, and native captures. One saved permission covers the launcher with different filters, session IDs, and capture paths.
+
 - [Domain glossary](GLOSSARY.md)
 - [Native application and build instructions](docs/native-application.md)
 - [Verified Codex integration and remaining limits](docs/integration-compatibility.md)
@@ -22,6 +26,7 @@ The local app bundle is written to `dist/Session Canvas.app`. See the [native ap
 - [OpenSpec proposal](openspec/changes/add-session-canvas/proposal.md)
 - [Design and integration gate](openspec/changes/add-session-canvas/design.md)
 - [Implementation tasks](openspec/changes/add-session-canvas/tasks.md)
+- [Correction coverage and verification evidence](openspec/changes/add-session-canvas/verification.md)
 
 The selected delivery is a native Mac-only companion with a session/result viewer, Acknowledge, and Open in Codex. The remaining desktop integration gate is tracked explicitly; demo interactions are not presented as verified desktop mutations.
 

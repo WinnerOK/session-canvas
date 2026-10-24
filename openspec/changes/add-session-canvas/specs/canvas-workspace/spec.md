@@ -13,6 +13,14 @@ The application SHALL use native SwiftUI/AppKit interfaces on macOS 14 or later,
 - **WHEN** the user launches the packaged Session Canvas application on a supported Mac
 - **THEN** a native window presents the canvas, sidebar, and session viewer without a web renderer
 
+### Requirement: Canvas-first window controls
+The application SHALL place New Session, Fit to Content, and Full Screen controls in the top window toolbar. The canvas SHALL begin directly below that toolbar without a workspace heading, tagline, or header panel. The left sidebar SHALL be collapsible through the native toolbar toggle and Shift + Command + S.
+
+#### Scenario: Collapse and restore the sidebar
+- **WHEN** the user toggles the sidebar through the toolbar or keyboard shortcut
+- **THEN** the sidebar hides or reappears and the canvas uses the available window space
+- **AND** the canvas viewport, note positions, project regions, visibility filters, and open session remain unchanged
+
 ### Requirement: Free-roam navigation
 The canvas SHALL support panning in every direction, zooming around a focal point, and fitting all visible notes and regions into view. Viewport changes SHALL preserve note and region positions in canvas coordinates.
 
@@ -25,8 +33,25 @@ The canvas SHALL support panning in every direction, zooming around a focal poin
 - **WHEN** the user invokes Fit to content after panning away
 - **THEN** all visible notes and project regions fit within the viewport
 
+#### Scenario: Content crosses a viewport edge
+- **WHEN** panning or zooming places notes or regions partly outside the canvas
+- **THEN** their drawing and shadows are clipped to the canvas without covering the window toolbar, sidebar, or footer
+
+#### Scenario: Zoom out to projects
+- **WHEN** the user zooms out until individual project sessions are too small to read
+- **THEN** their original project regions replace individual notes, with readable names truncated to fit within those regions
+- **AND** visible session counts and attention colors are shown only when additional space is available
+- **AND** if even a meaningful truncated name or a full line's height cannot fit, the region is shown without any text
+- **AND** project regions and hit areas follow the viewport transform without enlargement, reflow, displacement, or clamping to viewport edges
+- **AND** text boxes fit whole lines without clipping letters vertically
+
+#### Scenario: Open a project from the overview
+- **WHEN** the user clicks a project area, including one without text, or activates it with the keyboard or assistive technology
+- **THEN** the canvas zooms into that project's sessions at a readable scale, even when its region is too tall to fit entirely
+- **AND** hidden member notes are not independently clickable in the overview
+
 ### Requirement: Existing sessions appear once
-The system SHALL display exactly one note for each non-archived session in the connected local source's supported inventory. It SHALL identify notes by stable session identity, show the session's current title and note state, and use Untitled session when no title is available.
+At session-detail zoom, the system SHALL display exactly one note for each eligible non-archived user session matching the current filters or temporarily revealed after creation. It SHALL use stable source identity, show the current title and note state, and use Untitled session when no title is available.
 
 #### Scenario: Multiple pages and repeated observations
 - **WHEN** discovery returns several pages and later repeats a previously discovered session
@@ -40,6 +65,17 @@ The system SHALL display exactly one note for each non-archived session in the c
 - **WHEN** a session is discovered without a title
 - **THEN** its note displays Untitled session until a title becomes available
 
+### Requirement: Internal agent sessions are excluded without source deletion
+Guardian reviews and other internal agent sessions SHALL be excluded using structured source/parent metadata, including previously cached internal notes. A title alone SHALL NOT classify a session as internal. Exclusion SHALL NOT archive or delete the underlying Codex session.
+
+#### Scenario: Remove internal-session clutter from an existing canvas
+- **WHEN** discovery identifies a cached note as a Guardian review or another internal sub-agent session
+- **THEN** its note and active placement are removed from the canvas without modifying the source session
+
+#### Scenario: An ordinary session has a Guardian title
+- **WHEN** a user session has a Guardian review title but no internal source or parent metadata
+- **THEN** it remains eligible under the normal visibility filters
+
 ### Requirement: Notes can be repositioned
 The user SHALL be able to drag a note to a new canvas position. A completed drag SHALL NOT open the session. Crossing a project boundary SHALL use the membership behavior defined by project-regions; movement within the same membership area SHALL only change layout.
 
@@ -50,6 +86,34 @@ The user SHALL be able to drag a note to a new canvas position. A completed drag
 #### Scenario: Cancel a drag
 - **WHEN** the user cancels a note drag before releasing it
 - **THEN** its last confirmed position and membership are restored without a source mutation
+
+### Requirement: Visibility filters combine and persist
+The user SHALL be able to independently show or hide each attention state and hide or restore individual projects. Search, attention-state visibility, and project visibility SHALL combine. Visibility choices SHALL persist per source without changing source sessions, memberships, acknowledgments, or note positions. A temporary creation reveal SHALL follow session-actions without changing these saved choices.
+
+#### Scenario: Hide multiple attention states
+- **WHEN** the user unchecks Running and Finished
+- **THEN** sessions in either state are hidden while sessions in other enabled states remain eligible
+- **AND** subsequent state changes reevaluate visibility using the current derived note state
+
+#### Scenario: A project has no visible sessions
+- **WHEN** no session in a project matches the current search and visibility choices
+- **THEN** the project is omitted from the sidebar, canvas, overview, accessibility navigation, and Fit to Content bounds
+
+#### Scenario: Hide and restore one project
+- **WHEN** the user hides a project
+- **THEN** its sessions and region disappear from the workspace
+- **AND** the Hidden projects menu offers an individual restore action
+- **AND** restoration retains its original geometry and still respects search and attention filters
+
+#### Scenario: Everything is filtered out
+- **WHEN** the current filters hide all known sessions and no creation reveal is active
+- **THEN** an explicit empty view offers Show all sessions to reset visibility and search
+- **AND** an open viewer for a hidden session is closed
+
+#### Scenario: Reopen a filtered workspace
+- **WHEN** the app reopens the same connected source
+- **THEN** saved attention and project visibility choices are restored
+- **AND** another source's choices remain independent
 
 ### Requirement: Layout survives reopening
 The system SHALL persist note positions, project-region bounds, and viewport for this user's canvas. Reopening the app SHALL restore that layout without resetting it to source listing order. A failed layout save SHALL be visible and offer a retry.
@@ -83,7 +147,7 @@ Session title, execution, and acknowledgment updates SHALL refresh the existing 
 - **THEN** its existing note updates its title and state at the same position
 
 ### Requirement: Inventory gaps do not remove notes
-The system SHALL retain known notes during disconnects, incomplete discovery, or unavailable inventory pages. It SHALL hide a note only on authoritative evidence that its session is archived or removed, preserving layout for sessions that later return.
+The system SHALL retain known notes during disconnects, incomplete discovery, or unavailable inventory pages. It SHALL hide a note only on authoritative evidence that its session is archived, removed, or an excluded internal agent session, preserving layout for archived sessions that later return.
 
 #### Scenario: Refresh fails partway through discovery
 - **WHEN** the source disconnects before the final inventory page is read

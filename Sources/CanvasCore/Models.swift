@@ -44,7 +44,7 @@ public enum Outcome: String, Codable, Sendable {
     case completed, failed, stopped
     public var label: String { rawValue.capitalized }
 }
-public enum NoteState: String, CaseIterable, Sendable {
+public enum NoteState: String, CaseIterable, Codable, Sendable {
     case running, waiting, permission, finished, idle, unknown
     public var label: String {
         switch self {
@@ -66,6 +66,13 @@ public enum NoteState: String, CaseIterable, Sendable {
         case .unknown: return "questionmark.circle"
         }
     }
+}
+
+public struct CanvasVisibility: Codable, Equatable, Sendable {
+    public var hiddenStates: Set<NoteState> = []
+    public var hiddenProjectIDs: Set<String> = []
+    public init() {}
+    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty }
 }
 
 public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
@@ -142,8 +149,11 @@ public struct Workspace: Codable, Equatable, Sendable {
             }
         }
     }
-    public mutating func vacantPlacement(projectID: String?, excluding: String? = nil) -> Placement {
+    public mutating func vacantPlacement(projectID: String?, excluding: String? = nil, near point: Point? = nil) -> Placement {
         let occupied = placements.filter { $0.key != excluding }.map(\.value.rect)
+        if let point, let placement = nearestPlacement(to: point, projectID: projectID, occupied: occupied) {
+            return placement
+        }
         if let id = projectID, var region = regions[id] {
             for index in 0..<300 {
                 let column = index % 3, row = index / 3
@@ -177,6 +187,44 @@ public struct Workspace: Codable, Equatable, Sendable {
             if !occupied.contains(where: { candidate.rect.intersects($0) }) && project(at: candidate.center) == nil { return candidate }
         }
         return Placement(Point(left, 10000000))
+    }
+    private func nearestPlacement(to point: Point, projectID: String?, occupied: [Rect]) -> Placement? {
+        if let projectID, regions[projectID] == nil { return nil }
+        func valid(_ placement: Placement) -> Bool {
+            project(at: placement.center) == projectID && !occupied.contains { placement.rect.intersects($0) }
+        }
+        let requested = Placement(point)
+        if valid(requested) { return requested }
+
+        // A closest non-overlapping rectangle aligns with the requested coordinate or
+        // an obstacle edge on each axis. Search these boundaries instead of the origin grid.
+        var xs: Set<Double> = [point.x], ys: Set<Double> = [point.y]
+        for rect in occupied {
+            xs.formUnion([rect.x - Placement.width, rect.x + rect.width])
+            ys.formUnion([rect.y - Placement.height, rect.y + rect.height])
+        }
+        for (id, rect) in regions {
+            let inset = id == projectID ? 1.0 : 0.0
+            xs.formUnion([rect.x - Placement.width / 2 + inset, rect.x + rect.width - Placement.width / 2 - inset])
+            ys.formUnion([rect.y - Placement.height / 2 + inset, rect.y + rect.height - Placement.height / 2 - inset])
+        }
+        let orderedX = xs.sorted { abs($0 - point.x) == abs($1 - point.x) ? $0 < $1 : abs($0 - point.x) < abs($1 - point.x) }
+        let orderedY = ys.sorted { abs($0 - point.y) == abs($1 - point.y) ? $0 < $1 : abs($0 - point.y) < abs($1 - point.y) }
+        var best: Placement?, distance = Double.infinity
+        for x in orderedX {
+            let dx = x - point.x
+            if dx * dx > distance { break }
+            for y in orderedY {
+                let dy = y - point.y, squaredDistance = dx * dx + dy * dy
+                if squaredDistance >= distance { break }
+                let candidate = Placement(Point(x, y))
+                if valid(candidate) {
+                    best = candidate; distance = squaredDistance
+                    break
+                }
+            }
+        }
+        return best
     }
     public func validateRegion(id: String, rect: Rect, memberPositions: [String: Placement]) -> Bool {
         guard rect.width >= 300, rect.height >= 240 else { return false }

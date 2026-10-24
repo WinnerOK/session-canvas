@@ -75,15 +75,27 @@ The Acknowledge action SHALL record only the identity of the terminal result dis
 - **THEN** no enabled Acknowledge action is offered
 
 ### Requirement: Acknowledgment preserves live attention
-Acknowledging a result SHALL clear Finished only when the latest result is acknowledged and no higher-priority state applies. It SHALL NOT change execution, answer an input request, grant permission, or dismiss another unacknowledged result.
+An accepted acknowledgment SHALL clear Finished only when the latest result is acknowledged. It SHALL NOT change execution, answer an input request, grant permission, or dismiss another unacknowledged result. Existing stored acknowledgments SHALL remain independent of later execution and request states.
 
 #### Scenario: A new turn starts while an older result is viewed
-- **WHEN** the user acknowledges the displayed older result while a newer turn is running
-- **THEN** the acknowledgment is recorded and the note remains Running
+- **WHEN** a newer turn starts while an older result is displayed and an acknowledgment is attempted
+- **THEN** the action is unavailable, no new acknowledgment is recorded, and the note remains Running
 
 #### Scenario: A permission request remains pending
-- **WHEN** the user acknowledges an older result while a permission request is unresolved
-- **THEN** the note remains Permission required and no approval is sent
+- **WHEN** acknowledgment of an older result is attempted while a permission request is unresolved
+- **THEN** no acknowledgment or approval is sent and the note remains Permission required
+
+### Requirement: Acknowledgment is available only for Finished sessions
+The Acknowledge action SHALL be enabled and accepted only while the selected session's current derived note state is Finished and the targeted result is loaded and unacknowledged. Running, Waiting for you, Permission required, Idle, and Unknown SHALL disable it. The command SHALL recheck eligibility before any acknowledgment write so a state change after rendering cannot bypass this rule.
+
+#### Scenario: An older result remains loaded in another state
+- **WHEN** a result remains loaded while the session is Running, Waiting for you, Permission required, Idle, or Unknown
+- **THEN** Acknowledge is disabled and invoking its command does not record an acknowledgment
+- **AND** the current session state and pending requests are preserved
+
+#### Scenario: Return to Finished
+- **WHEN** a session returns to Finished with a loaded unacknowledged result
+- **THEN** Acknowledge becomes available again after history loading completes
 
 ### Requirement: Acknowledgment is durable and repeatable
 The system SHALL persist acknowledgment per user, session, and result identity. Repeated acknowledgment of the same result SHALL have no additional effect. A failed save SHALL retain the unacknowledged state and show a retryable error.
@@ -110,6 +122,18 @@ Starting a later turn SHALL give current execution or requests display priority 
 
 ### Requirement: Missing execution evidence is Unknown
 When execution state is stale or unavailable, the note SHALL show Unknown and indicate its last-known state separately. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
+
+#### Scenario: Observe the active desktop runtime
+- **WHEN** an existing session runs or changes its pending requests in Codex desktop
+- **THEN** the default connection follows that runtime's snapshots and incremental changes automatically
+- **AND** a saved-inventory response of `notLoaded` from a separate reader does not erase current live observations
+- **AND** observation does not claim thread ownership, resume a thread, submit a turn, or answer a request
+
+#### Scenario: Reconnect to the desktop feed
+- **WHEN** the desktop observation socket closes or a revision gap is detected
+- **THEN** affected sessions become Unknown until a fresh authoritative snapshot is received
+- **AND** reconnection happens automatically while saved history remains available
+- **AND** unsupported desktop stream versions are not treated as live-state evidence
 
 #### Scenario: Lose the source during execution
 - **WHEN** observation is lost while a note is Running

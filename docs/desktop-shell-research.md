@@ -1,8 +1,10 @@
 # Desktop shell research
 
-Investigated on 2026-10-24 against official framework documentation and first-party release information. This is research for a decision, not an accepted stack selection. Requirements come from [the domain model](domain-model.md) and [delivery comparison](delivery-options.md). No application was implemented and no session bridge was exercised during this investigation.
+Initial investigation on 2026-10-24 against official framework documentation and first-party release information. The framework facts and recommendation below describe that research stage; no application or session bridge was exercised during that investigation.
 
-## Recommendation
+Subsequent decision: the user selected native Swift for a Mac-only application, now implemented with SwiftUI/AppKit and SQLite. This document is retained as research history. See the [native guide](native-application.md), [current integration evidence](integration-compatibility.md), and [correction coverage](../openspec/changes/add-session-canvas/verification.md) for the implemented design and remaining gates.
+
+## Initial recommendation
 
 **Project-specific inference:** Electron with React and TypeScript is the lowest-complexity first-release choice if the team is comfortable with web development. One language can cover the canvas, domain rules, typed bridge, and protocol client; Chromium behavior is controlled by the application release. Tauri 2 with the same frontend and a thin Rust backend is the strongest alternative when avoiding a bundled browser matters enough to accept a second language and platform webview testing.
 

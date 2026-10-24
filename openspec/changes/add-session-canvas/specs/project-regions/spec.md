@@ -7,16 +7,32 @@ Represent real Codex projects as spatial regions and let the user change session
 ## ADDED Requirements
 
 ### Requirement: Regions represent actual projects
-The canvas SHALL display one labeled region per project exposed by the connected source, using stable project identity and the current project name. Each session SHALL belong to zero or one project. Unassigned sessions SHALL appear outside every region.
+The canvas SHALL display one region per visible source project, using stable project identity and the current name when text fits under canvas-workspace's zoom rules. Project visibility SHALL follow combined search, attention, and individual-project filters; projects with no visible sessions SHALL be omitted. Each session SHALL belong to zero or one project. Visible unassigned sessions SHALL appear outside every region.
 
 #### Scenario: Discover existing membership
 - **WHEN** initial synchronization discovers projects and their sessions
-- **THEN** every project's region is shown and each assigned session's note is placed within its region
-- **AND** sessions with no project are placed in unassigned space
+- **THEN** every project with visible sessions has a region and each visible assigned session's note is placed within its region at session-detail zoom
+- **AND** visible sessions with no project are placed in unassigned space
 
 #### Scenario: A project is renamed
 - **WHEN** the source changes a project's name
 - **THEN** the existing region's label changes without creating another region or resetting its bounds
+
+### Requirement: Project discovery uses explicit source identity
+Projects and memberships SHALL come from source identities or validated desktop metadata, never from matching working directories or names. Explicit unassignment and remote/unknown exclusions SHALL take precedence over fallback mappings. Unsupported metadata SHALL retain confirmed canvas state and report an error. Mapping between desktop and server project IDs SHALL use only the connected local home's identity mapping.
+
+#### Scenario: A session shares a project's working folder
+- **WHEN** a session has the same working folder as a project but no explicit membership, or is explicitly projectless
+- **THEN** it remains unassigned rather than being grouped by its folder
+
+#### Scenario: New server membership precedes saved desktop assignment
+- **WHEN** the server confirms a session's project ID and the connected home's mapping resolves it to an existing desktop project
+- **THEN** the session uses that existing canvas project identity without creating a duplicate region
+- **AND** another home's mapping cannot assign it to that project
+
+#### Scenario: Saved project metadata is malformed
+- **WHEN** project metadata cannot be validated during refresh
+- **THEN** existing confirmed canvas data is retained and the failure is shown
 
 ### Requirement: Region geometry has one drop target
 Regions SHALL be rectangular with non-overlapping interiors and no nesting. A note's target SHALL be the region whose interior contains its center at pointer release in canvas coordinates. A center on a boundary or outside every region SHALL target unassigned space. The UI SHALL preview the target during dragging.
@@ -34,7 +50,7 @@ Regions SHALL be rectangular with non-overlapping interiors and no nesting. A no
 - **THEN** the preview and final target both indicate unassigned space
 
 ### Requirement: Dropping assigns or removes actual membership
-A completed drop into a different region SHALL request reassignment to that actual Codex project. A drop outside all regions SHALL request removal of project membership. The app SHALL NOT substitute a canvas-only grouping when actual membership cannot be changed.
+On a source supporting confirmed membership changes, a completed drop into a different region SHALL request reassignment to that actual Codex project, and a drop outside all regions SHALL request removal of membership. The app SHALL NOT substitute a canvas-only grouping when actual membership cannot be changed.
 
 #### Scenario: Assign an unassigned session
 - **WHEN** the user drops an unassigned note into project A's region and the source confirms assignment
@@ -47,6 +63,14 @@ A completed drop into a different region SHALL request reassignment to that actu
 #### Scenario: Remove a session's project
 - **WHEN** the user drops an assigned note into unassigned space and the source confirms removal
 - **THEN** the session has no project in Codex and its note remains outside every region
+
+### Requirement: Unsupported membership changes do not alter grouping
+When a connection cannot confirm actual membership mutations, move-to-project controls SHALL be disabled and cross-membership drops SHALL preserve confirmed placement with an explanation. Local movement within the same membership area and region geometry editing SHALL remain available.
+
+#### Scenario: Cross a project boundary with an unsupported source
+- **WHEN** a user drops a note across a membership boundary on a connection without verified move support
+- **THEN** the note keeps its confirmed membership and position and the app explains the unavailable action
+- **AND** no source mutation or canvas-only reassignment is submitted
 
 ### Requirement: Membership requires confirmation
 While a membership change is pending, the UI SHALL distinguish the proposed placement from confirmed membership and prevent another membership change for that session. On success it SHALL commit the placement. On rejection it SHALL restore the last confirmed placement and explain the failure.
@@ -85,6 +109,14 @@ The user SHALL be able to move and resize regions. Moving a region SHALL carry i
 #### Scenario: Move an entire region
 - **WHEN** the user moves a region to a nonconflicting position
 - **THEN** all its member notes move by the same displacement with no project membership changes
+
+#### Scenario: Move a project while zoomed out
+- **WHEN** the user drags any part of a project area in the overview, including an area too small for a label
+- **THEN** its area and label preview the movement and the region commits on release
+- **AND** all member notes move by the same canvas-coordinate displacement, including hidden members
+- **AND** the viewport and unrelated projects remain unchanged
+- **AND** clicking without dragging still zooms into the project, Escape cancels the drag, and Space + drag pans the canvas
+- **AND** existing region collision and membership-preservation rules still apply
 
 #### Scenario: Resize past a member
 - **WHEN** the user attempts to shrink a region so that a member-note center would be outside it

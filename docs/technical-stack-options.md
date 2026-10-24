@@ -4,7 +4,7 @@ Research date: 2026-10-24. This is a comparison and recommendation for the [spec
 
 Subsequent decision: the user selected a native Swift, Mac-only application. The comparison below is retained as research history; the implementation uses SwiftUI/AppKit and SQLite. See [native-application.md](native-application.md).
 
-## Recommendation
+## Initial recommendation
 
 For a first release, use **Electron + React + TypeScript + Vite + React Flow + SQLite**. Keep the Codex adapter and database in the local backend, with a narrow typed interface to the renderer.
 

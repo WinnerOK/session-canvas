@@ -26,8 +26,10 @@ struct SessionCanvasApp: App {
                 Button("Refresh Sessions") { Task { await model.refresh() } }.keyboardShortcut("r")
             }
             CommandGroup(after: .sidebar) {
+                Button("Toggle Sidebar") { model.toggleSidebar() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
                 Button("Fit to Content") { model.fitRequest += 1 }.keyboardShortcut("0")
-                Button("Show All Sessions") { model.stateFilter = nil; model.search = "" }.keyboardShortcut("1")
+                Button("Show All Sessions") { model.showAllSessions() }.keyboardShortcut("1")
             }
         }
     }
@@ -41,8 +43,13 @@ struct SessionCanvasApp: App {
                 await model.loadHistory(older: false)
                 model.fitRequest += 1
             }
+            if let index = args.firstIndex(of: "--show-session"), index + 1 < args.count {
+                if args.contains("--created-session-preview") { model.revealCreatedSession(args[index + 1]) }
+                else { model.openSession(args[index + 1]) }
+            }
+            if args.contains("--hide-sidebar") { model.toggleSidebar() }
             try? await Task.sleep(for: .seconds(2))
-            guard let window = NSApp.windows.first(where: { $0.title == "Session Canvas" }), let view = window.contentView,
+            guard let window = NSApp.windows.first(where: { $0.title == "Session Canvas" }), let view = window.contentView?.superview,
                   let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { NSApp.terminate(nil); return }
             view.cacheDisplay(in: view.bounds, to: bitmap)
             if let data = bitmap.representation(using: .png, properties: [:]) { try? data.write(to: URL(fileURLWithPath: path)) }

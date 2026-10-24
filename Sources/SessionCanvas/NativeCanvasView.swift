@@ -32,13 +32,15 @@ final class CanvasNSView: NSView {
     private var moved = false
     private var contextPoint = Point(0, 0)
     private var contextSession: String?
-    private var focusedSession: String?
+    private enum Focus: Equatable { case session(String), project(String) }
+    private var focusedItem: Focus?
+    private var contextProject: String?
     private var spaceDown = false
     private var regionHover: String?
     private var tracking: NSTrackingArea?
     private enum Drag {
         case note(id: String, position: Point, revision: String)
-        case region(id: String, bounds: Rect)
+        case region(id: String, bounds: Rect, zoomOnClick: Bool)
         case resize(id: String, bounds: Rect)
         case pan(origin: Point)
     }
@@ -46,22 +48,60 @@ final class CanvasNSView: NSView {
         self.model = model
         super.init(frame: .zero)
         wantsLayer = true
+        layer?.masksToBounds = true
         setAccessibilityRole(.group)
         setAccessibilityLabel("Session canvas")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
+    override var wantsDefaultClipping: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     private var viewport: Viewport { localViewport ?? model.workspace.viewport }
+    override func setFrameSize(_ newSize: NSSize) {
+        let oldSize = bounds.size
+        super.setFrameSize(newSize)
+        guard oldSize.width > 0, oldSize.height > 0, newSize != oldSize, localViewport == nil,
+              let id = model.revealedCreationID, model.selectedSessionID == id, model.focusedSessionID == id,
+              let placement = model.workspace.placements[id] else { return }
+        let center = viewport.screen(placement.center)
+        // SwiftUI can size the viewer after the initial focus request. Preserve
+        // that center through layout, but don't undo a subsequent user pan.
+        guard abs(center.x - oldSize.width / 2) < 0.5, abs(center.y - oldSize.height / 2) < 0.5 else { return }
+        var next = viewport
+        next.origin = next.origin + Point((newSize.width - oldSize.width) / 2, (newSize.height - oldSize.height) / 2)
+        model.setViewport(next)
+    }
+    private var showsProjectOverview: Bool { viewport.zoom < CanvasOverview.zoomThreshold }
+    private var renderedSessions: [Session] {
+        model.visibleSessions.filter { !showsProjectOverview || $0.projectID == nil }
+    }
+    private var projectOverviews: [ProjectOverview] {
+        model.visibleProjects.compactMap { project in
+            guard let region = renderedRegion(project.id) else { return nil }
+            let rect = screen(region)
+            guard rect.intersects(bounds) else { return nil }
+            let members = model.visibleSessions.filter { $0.projectID == project.id }
+            let states = Set(members.map { model.state($0) })
+            let state = [NoteState.permission, .waiting, .running, .finished, .unknown, .idle].first { states.contains($0) } ?? .idle
+            return ProjectOverview(project: project, region: rect, count: members.count, state: state)
+        }
+    }
     func update() {
         if fitVersion != model.fitRequest && bounds.width > 0 {
             fitVersion = model.fitRequest
             if fitVersion > 0 { fitContent() }
         }
-        if focusVersion != model.focusRequest, let id = model.focusedProjectID, let rect = model.workspace.regions[id], bounds.width > 0 {
+        if focusVersion != model.focusRequest, let id = model.focusedProjectID, let rect = model.visibleRegions[id], bounds.width > 0 {
             focusVersion = model.focusRequest
-            let scale = min(1, min((bounds.width - 80) / rect.width, (bounds.height - 80) / rect.height))
-            model.setViewport(Viewport(origin: Point((bounds.width - rect.width * scale) / 2 - rect.x * scale, (bounds.height - rect.height * scale) / 2 - rect.y * scale), zoom: scale))
+            let scale = max(0.75, min(1, min((bounds.width - 80) / rect.width, (bounds.height - 80) / rect.height)))
+            let top = rect.height * scale > bounds.height - 80 ? 40 : (bounds.height - rect.height * scale) / 2
+            model.setViewport(Viewport(origin: Point((bounds.width - rect.width * scale) / 2 - rect.x * scale, top - rect.y * scale), zoom: scale))
+        } else if focusVersion != model.focusRequest, let id = model.focusedSessionID,
+                  let placement = model.workspace.placements[id], bounds.width > 0 {
+            focusVersion = model.focusRequest
+            let scale = max(0.75, min(1, viewport.zoom))
+            model.setViewport(Viewport(origin: Point(bounds.width / 2 - placement.center.x * scale,
+                bounds.height / 2 - placement.center.y * scale), zoom: scale))
         }
         needsDisplay = true
         rebuildAccessibility()
@@ -90,10 +130,8 @@ final class CanvasNSView: NSView {
         NSColor.controlBackgroundColor.setFill(); bounds.fill()
         drawGrid()
         let scale = viewport.zoom
-        for project in model.workspace.projects {
-            guard var region = model.workspace.regions[project.id] else { continue }
-            if case .region(let id, let original) = drag, id == project.id, moved { region = previewRegion(original) }
-            if case .resize(let id, let original) = drag, id == project.id, moved { region = previewResize(original) }
+        for project in model.visibleProjects {
+            guard let region = renderedRegion(project.id) else { continue }
             let rect = screen(region)
             guard rect.intersects(bounds) else { continue }
             let highlighted = regionHover == project.id
@@ -101,10 +139,15 @@ final class CanvasNSView: NSView {
             let path = NSBezierPath(roundedRect: rect, xRadius: 18 * scale, yRadius: 18 * scale); path.fill()
             NSColor.controlAccentColor.withAlphaComponent(highlighted ? 0.7 : 0.18).setStroke()
             path.lineWidth = highlighted ? 2 : 1; path.stroke()
-            let count = model.workspace.sessions.filter { $0.projectID == project.id }.count
-            text(project.name, in: NSRect(x: rect.minX + 20 * scale, y: rect.minY + 17 * scale, width: rect.width - 100 * scale, height: 24 * scale), font: .systemFont(ofSize: max(9, 14 * scale), weight: .semibold), color: .labelColor)
-            text("\(count) sessions", in: NSRect(x: rect.maxX - 100 * scale, y: rect.minY + 19 * scale, width: 85 * scale, height: 20 * scale), font: .systemFont(ofSize: max(8, 11 * scale)), color: .secondaryLabelColor)
-            if scale > 0.35 {
+            if !showsProjectOverview {
+                let count = model.visibleSessions.filter { $0.projectID == project.id }.count
+                let titleFont = NSFont.systemFont(ofSize: max(12, 14 * scale), weight: .semibold)
+                let countFont = NSFont.systemFont(ofSize: max(10, 11 * scale))
+                let countText = "\(count) sessions"
+                let countWidth = ceil((countText as NSString).size(withAttributes: [.font: countFont]).width)
+                let inset = max(10, 20 * scale)
+                text(project.name, in: NSRect(x: rect.minX + inset, y: rect.minY + 12 * scale, width: max(0, rect.width - inset * 3 - countWidth), height: lineHeight(titleFont)), font: titleFont, color: .labelColor)
+                text(countText, in: NSRect(x: rect.maxX - inset - countWidth, y: rect.minY + 14 * scale, width: countWidth + 1, height: lineHeight(countFont)), font: countFont, color: .secondaryLabelColor)
                 let grip = NSBezierPath()
                 for i in 0..<3 {
                     let inset = Double(i) * 4 + 8
@@ -114,14 +157,36 @@ final class CanvasNSView: NSView {
                 NSColor.tertiaryLabelColor.setStroke(); grip.lineWidth = 1; grip.stroke()
             }
         }
-        for session in model.visibleSessions {
+        for session in renderedSessions {
             guard var placement = model.workspace.placements[session.id] else { continue }
             if case .note(let id, let original, _) = drag, id == session.id, moved { placement.position = original + dragDelta }
-            if case .region(let id, _) = drag, session.projectID == id, moved { placement.position = placement.position + dragDelta }
+            if case .region(let id, _, _) = drag, session.projectID == id, moved { placement.position = placement.position + dragDelta }
             let rect = screen(placement.rect)
             guard rect.intersects(bounds.insetBy(dx: -20, dy: -20)) else { continue }
             drawNote(session, rect: rect, scale: scale)
         }
+        if showsProjectOverview {
+            for item in projectOverviews { drawOverview(item) }
+        }
+    }
+    private func lineHeight(_ font: NSFont) -> CGFloat { ceil(font.ascender - font.descender + font.leading) + 2 }
+    private func drawOverview(_ item: ProjectOverview) {
+        let rect = item.region
+        if focusedItem == .project(item.project.id) {
+            let path = NSBezierPath(roundedRect: rect, xRadius: 18 * viewport.zoom, yRadius: 18 * viewport.zoom)
+            NSColor.controlAccentColor.setStroke(); path.lineWidth = 2; path.stroke()
+        }
+        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        guard let titleFrame = CanvasOverview.titleFrame(for: item.project.name, in: rect, font: font) else { return }
+        text(item.project.name, in: titleFrame, font: font, color: .labelColor)
+        let countFont = NSFont.systemFont(ofSize: 11)
+        let count = "\(item.count) \(item.count == 1 ? "session" : "sessions")"
+        let countFrame = NSRect(x: titleFrame.minX + 14, y: titleFrame.maxY + 4, width: titleFrame.width - 14, height: lineHeight(countFont))
+        guard countFrame.maxY <= rect.maxY - 8,
+              countFrame.width >= ceil((count as NSString).size(withAttributes: [.font: countFont]).width) else { return }
+        item.state.color.setFill()
+        NSBezierPath(ovalIn: NSRect(x: titleFrame.minX, y: countFrame.midY - 3, width: 6, height: 6)).fill()
+        text(count, in: countFrame, font: countFont, color: .secondaryLabelColor)
     }
     private func drawGrid() {
         let step = 28 * viewport.zoom
@@ -145,10 +210,20 @@ final class CanvasNSView: NSView {
         shadow.shadowBlurRadius = 12 * scale; shadow.shadowOffset = NSSize(width: 0, height: -3 * scale); shadow.set()
         fill.setFill(); path.fill()
         NSGraphicsContext.restoreGraphicsState()
-        let selected = model.selectedSessionID == session.id || focusedSession == session.id
+        let selected = model.selectedSessionID == session.id || focusedItem == .session(session.id)
         (selected ? NSColor.controlAccentColor : state.color.withAlphaComponent(0.22)).setStroke()
         path.lineWidth = selected ? 2 : 1; path.stroke()
         if scale < 0.25 { return }
+        if scale < 0.85 {
+            let inset = max(7, 12 * scale)
+            let titleFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+            let titleHeight = min(lineHeight(titleFont) * 2, rect.height - inset * 2 - 18)
+            guard titleHeight >= lineHeight(titleFont) else { return }
+            text(session.title, in: NSRect(x: rect.minX + inset, y: rect.minY + inset, width: rect.width - inset * 2, height: titleHeight), font: titleFont, color: .labelColor, lines: .byWordWrapping)
+            let stateFont = NSFont.systemFont(ofSize: 10)
+            text(state.label, in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
+            return
+        }
         let inset = 16 * scale
         NSColor.labelColor.setFill()
         text(session.title, in: NSRect(x: rect.minX + inset, y: rect.minY + 17 * scale, width: rect.width - inset * 2, height: 48 * scale), font: .systemFont(ofSize: max(9, 14 * scale), weight: .semibold), color: .labelColor, lines: .byWordWrapping)
@@ -172,31 +247,44 @@ final class CanvasNSView: NSView {
     private var dragDelta: Point { Point((currentPoint.x - mouseDownPoint.x) / viewport.zoom, (currentPoint.y - mouseDownPoint.y) / viewport.zoom) }
     private func previewRegion(_ rect: Rect) -> Rect { rect.translated(dragDelta) }
     private func previewResize(_ rect: Rect) -> Rect { Rect(rect.x, rect.y, max(300, rect.width + dragDelta.x), max(240, rect.height + dragDelta.y)) }
+    private func renderedRegion(_ id: String) -> Rect? {
+        guard let rect = model.workspace.regions[id] else { return nil }
+        if moved {
+            if case .region(let selected, let original, _) = drag, selected == id { return previewRegion(original) }
+            if case .resize(let selected, let original) = drag, selected == id { return previewResize(original) }
+        }
+        return rect
+    }
     private func hitNote(_ point: Point) -> Session? {
-        model.visibleSessions.reversed().first { model.workspace.placements[$0.id]?.rect.contains(point) == true }
+        renderedSessions.reversed().first { model.workspace.placements[$0.id]?.rect.contains(point) == true }
     }
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         mouseDownPoint = point(event); currentPoint = mouseDownPoint; moved = false
         let world = viewport.world(mouseDownPoint)
-        if !spaceDown, let session = hitNote(world), let placement = model.workspace.placements[session.id] {
-            focusedSession = session.id
+        if !spaceDown, showsProjectOverview, let item = projectOverviews.reversed().first(where: { $0.frame.contains(NSPoint(x: mouseDownPoint.x, y: mouseDownPoint.y)) }) {
+            focusedItem = .project(item.project.id)
+            if let rect = model.workspace.regions[item.project.id] { drag = .region(id: item.project.id, bounds: rect, zoomOnClick: true) }
+        } else if !spaceDown, let session = hitNote(world), let placement = model.workspace.placements[session.id] {
+            focusedItem = .session(session.id)
             drag = .note(id: session.id, position: placement.position, revision: session.revision)
-        } else if !spaceDown, let id = model.workspace.project(at: world), let rect = model.workspace.regions[id], world.x > rect.x + rect.width - 24 && world.y > rect.y + rect.height - 24 {
+        } else if !spaceDown, !showsProjectOverview, let id = model.visibleProject(at: world), let rect = model.workspace.regions[id], world.x > rect.x + rect.width - 24 && world.y > rect.y + rect.height - 24 {
             drag = .resize(id: id, bounds: rect)
-        } else if !spaceDown, let id = model.workspace.project(at: world), let rect = model.workspace.regions[id], world.y < rect.y + 48 {
-            drag = .region(id: id, bounds: rect)
+        } else if !spaceDown, !showsProjectOverview, let id = model.visibleProject(at: world), let rect = model.workspace.regions[id], world.y < rect.y + 48 {
+            drag = .region(id: id, bounds: rect, zoomOnClick: false)
         } else { drag = .pan(origin: viewport.origin) }
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
         currentPoint = point(event)
         if hypot(currentPoint.x - mouseDownPoint.x, currentPoint.y - mouseDownPoint.y) > 4 { moved = true }
-        if case .pan(let origin) = drag {
+        switch drag {
+        case .pan(let origin):
             var value = viewport; value.origin = origin + (currentPoint - mouseDownPoint)
             localViewport = value
-        } else if case .note(_, let original, _) = drag {
-            regionHover = model.workspace.project(at: Placement(original + dragDelta).center)
+        case .note(_, let original, _):
+            regionHover = model.visibleProject(at: Placement(original + dragDelta).center)
+        default: break
         }
         needsDisplay = true
     }
@@ -206,7 +294,9 @@ final class CanvasNSView: NSView {
         case .note(let id, let original, let revision):
             if moved { model.moveNote(id: id, position: original + dragDelta, expectedRevision: revision) }
             else { model.openSession(id) }
-        case .region(let id, let original): if moved { model.editRegion(id: id, rect: previewRegion(original)) }
+        case .region(let id, let original, let zoomOnClick):
+            if moved { model.editRegion(id: id, rect: previewRegion(original)) }
+            else if zoomOnClick { focusProject(id) }
         case .resize(let id, let original): if moved { model.editRegion(id: id, rect: previewResize(original)) }
         case .pan: if let value = localViewport { model.setViewport(value) }
         case nil: break
@@ -231,13 +321,18 @@ final class CanvasNSView: NSView {
         switch event.keyCode {
         case 53: drag = nil; localViewport = nil; regionHover = nil; needsDisplay = true
         case 49: spaceDown = true; NSCursor.openHand.set()
-        case 36, 76: if let focusedSession { model.openSession(focusedSession) }
+        case 36, 76:
+            switch focusedItem {
+            case .session(let id): model.openSession(id)
+            case .project(let id): focusProject(id)
+            case nil: break
+            }
         case 48:
-            let ids = model.visibleSessions.map(\.id)
-            guard !ids.isEmpty else { return }
+            let items = (showsProjectOverview ? projectOverviews.map { Focus.project($0.project.id) } : []) + renderedSessions.map { Focus.session($0.id) }
+            guard !items.isEmpty else { return }
             let step = event.modifierFlags.contains(.shift) ? -1 : 1
-            let current = ids.firstIndex(of: focusedSession ?? "") ?? (step > 0 ? -1 : 0)
-            focusedSession = ids[(current + step + ids.count) % ids.count]
+            let current = items.firstIndex(where: { $0 == focusedItem }) ?? (step > 0 ? -1 : 0)
+            focusedItem = items[(current + step + items.count) % items.count]
             needsDisplay = true
         default: super.keyDown(with: event)
         }
@@ -245,35 +340,51 @@ final class CanvasNSView: NSView {
     override func keyUp(with event: NSEvent) { if event.keyCode == 49 { spaceDown = false } else { super.keyUp(with: event) } }
     override func menu(for event: NSEvent) -> NSMenu? {
         contextPoint = viewport.world(point(event)); contextSession = hitNote(contextPoint)?.id
+        let location = point(event)
+        contextProject = showsProjectOverview ? projectOverviews.reversed().first { $0.frame.contains(NSPoint(x: location.x, y: location.y)) }?.project.id : (contextSession == nil ? model.visibleProject(at: contextPoint) : nil)
         let menu = NSMenu()
         menu.autoenablesItems = false
-        if let id = contextSession {
-            let open = NSMenuItem(title: "Open session", action: #selector(openContext), keyEquivalent: ""); open.target = self; menu.addItem(open)
+        if contextProject != nil {
+            let create = NSMenuItem(title: "New session in project…", action: #selector(createContext), keyEquivalent: "")
+            create.target = self; menu.addItem(create)
+            menu.addItem(.separator())
+            let zoom = NSMenuItem(title: "Zoom into project", action: #selector(zoomContextProject), keyEquivalent: "")
+            zoom.target = self; menu.addItem(zoom)
+            let hide = NSMenuItem(title: "Hide project", action: #selector(hideContextProject), keyEquivalent: "")
+            hide.target = self; menu.addItem(hide)
+        } else if let id = contextSession {
+            if model.mode != .demo {
+                let native = NSMenuItem(title: "Open in Codex", action: #selector(openNativeContext), keyEquivalent: ""); native.target = self; native.representedObject = id; menu.addItem(native)
+            }
             let move = NSMenu(title: "Move to project")
             move.autoenablesItems = false
-            for project in model.workspace.projects {
+            for project in model.visibleProjects {
                 let item = NSMenuItem(title: project.name, action: #selector(moveContext(_:)), keyEquivalent: "")
                 item.representedObject = project.id; item.target = self; item.isEnabled = model.canAssignProject; move.addItem(item)
             }
             let remove = NSMenuItem(title: "Remove from project", action: #selector(moveContext(_:)), keyEquivalent: "")
             remove.target = self; remove.isEnabled = model.canAssignProject; move.addItem(remove)
             let parent = NSMenuItem(title: "Move to project", action: nil, keyEquivalent: ""); parent.submenu = move; menu.addItem(parent)
-            if model.mode != .demo {
-                let native = NSMenuItem(title: "Open in Codex", action: #selector(openNativeContext), keyEquivalent: ""); native.target = self; native.representedObject = id; menu.addItem(native)
-            }
         } else {
             let create = NSMenuItem(title: "New session here…", action: #selector(createContext), keyEquivalent: ""); create.target = self; menu.addItem(create)
             let fit = NSMenuItem(title: "Fit to content", action: #selector(fitAction), keyEquivalent: ""); fit.target = self; menu.addItem(fit)
         }
         return menu
     }
-    @objc private func openContext() { if let id = contextSession { model.openSession(id) } }
     @objc private func moveContext(_ sender: NSMenuItem) { if let id = contextSession { model.moveToProject(id: id, projectID: sender.representedObject as? String) } }
     @objc private func openNativeContext() { if let session = model.workspace.sessions.first(where: { $0.id == contextSession }) { model.openInCodex(session) } }
     @objc private func createContext() { model.beginCreation(at: contextPoint) }
     @objc private func fitAction() { fitContent() }
+    @objc private func zoomContextProject() { if let id = contextProject { focusProject(id) } }
+    @objc private func hideContextProject() { if let id = contextProject { model.setProjectVisible(id, false) } }
+    private func focusProject(_ id: String) {
+        guard model.visibleProjects.contains(where: { $0.id == id }) else { return }
+        model.focusedProjectID = id
+        model.focusRequest += 1
+        update()
+    }
     func fitContent() {
-        let rects = model.visibleSessions.compactMap { model.workspace.placements[$0.id]?.rect } + Array(model.workspace.regions.values)
+        let rects = model.visibleSessions.compactMap { model.workspace.placements[$0.id]?.rect } + Array(model.visibleRegions.values)
         guard let first = rects.first, bounds.width > 0, bounds.height > 0 else { return }
         let minX = rects.map(\.x).min() ?? first.x, minY = rects.map(\.y).min() ?? first.y
         let maxX = rects.map { $0.x + $0.width }.max() ?? first.x + first.width
@@ -284,9 +395,21 @@ final class CanvasNSView: NSView {
         needsDisplay = true
     }
     private func rebuildAccessibility() {
-        setAccessibilityChildren(model.visibleSessions.compactMap { session -> NoteAccessibilityElement? in
+        var elements: [CanvasAccessibilityElement] = []
+        if showsProjectOverview {
+            elements = projectOverviews.map { item in
+                let element = CanvasAccessibilityElement()
+                element.setAccessibilityRole(.button)
+                element.setAccessibilityParent(self)
+                element.setAccessibilityLabel("\(item.project.name), \(item.count) sessions, zoom into project")
+                if let window { element.setAccessibilityFrame(window.convertToScreen(convert(item.frame, to: nil))) }
+                element.press = { [weak self] in self?.focusProject(item.project.id) }
+                return element
+            }
+        }
+        elements += renderedSessions.compactMap { session -> CanvasAccessibilityElement? in
             guard let placement = model.workspace.placements[session.id] else { return nil }
-            let element = NoteAccessibilityElement()
+            let element = CanvasAccessibilityElement()
             element.setAccessibilityRole(.button)
             element.setAccessibilityParent(self)
             element.setAccessibilityLabel(session.title + ", " + model.state(session).label)
@@ -296,12 +419,13 @@ final class CanvasNSView: NSView {
             }
             element.press = { [weak model] in model?.openSession(session.id) }
             return element
-        })
+        }
+        setAccessibilityChildren(elements)
     }
 }
 
 @MainActor
-final class NoteAccessibilityElement: NSAccessibilityElement {
+final class CanvasAccessibilityElement: NSAccessibilityElement {
     var press: (() -> Void)?
     override func accessibilityPerformPress() -> Bool { press?(); return true }
 }

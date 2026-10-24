@@ -2,7 +2,9 @@
 
 Investigated on 2026-10-24. This repository initially contained only a README; no desktop application source or session integration was present.
 
-## Recommendation
+This comparison records the initial investigation. The subsequent selected delivery is a native Mac-only SwiftUI/AppKit companion. Current implementation evidence is in [integration-compatibility.md](integration-compatibility.md), with correction coverage in [verification.md](../openspec/changes/add-session-canvas/verification.md). The six demonstrations below remain full acceptance gates; the later implementation and partial verification do not retroactively turn these initial research observations into full integration proof.
+
+## Initial recommendation
 
 Start with a **separate local companion app**, using the accepted session/result viewer with explicit Acknowledge and Open in Codex actions. Keep the canvas and domain model independent of its shell so an in-app plugin can reuse them later.
 
@@ -10,7 +12,7 @@ This is a delivery recommendation, not evidence that the required desktop-sessio
 
 The local option gives us control of the canvas, durable acknowledgment, and viewer together. It avoids making custom host UI support a prerequisite. The trade-off is a second application and a session viewer to maintain.
 
-## What is verified
+## What was verified during the initial investigation
 
 - The installed CLI exposes `app-server`, schema generation, a proxy to a running control socket, and daemon management. Only help commands were run; no daemon was started, stopped, or attached to.
 - App Server documents stored-thread listing/reading and runtime notifications for loaded threads. Its thread metadata update example covers pinning and Git metadata, which does not establish project assignment support. [App Server documentation](https://learn.chatgpt.com/docs/app-server).

@@ -102,6 +102,25 @@ struct CanvasCoreTests {
         expectNil(workspace.project(at: workspace.placements["a"]!.center))
         expectEqual(workspace.placements["b"], bPosition)
     }
+    @Test func testNearestPlacementKeepsMembershipAtProjectBoundaries() {
+        var workspace = Workspace()
+        workspace.regions["p"] = Rect(0, 0, 760, 580)
+        let unassigned = workspace.vacantPlacement(projectID: nil, near: Point(0, 0))
+        expectEqual(unassigned.position, Point(0, -75))
+        expectNil(workspace.project(at: unassigned.center))
+        let member = workspace.vacantPlacement(projectID: "p", near: Point(700, 100))
+        expectEqual(member.position, Point(643, 100))
+        expectEqual(workspace.project(at: member.center), "p")
+    }
+    @Test func testNearestPlacementAvoidsMultipleObstaclesWithoutMovingThem() {
+        var workspace = Workspace()
+        workspace.placements = ["a": Placement(Point(-8080, -4530)), "b": Placement(Point(-8200, -4380))]
+        let original = workspace.placements
+        let placement = workspace.vacantPlacement(projectID: nil, near: Point(-8000, -4500))
+        expectEqual(placement.position, Point(-7968, -4380))
+        expectFalse(workspace.placements.values.contains { $0.rect.intersects(placement.rect) })
+        expectEqual(workspace.placements, original)
+    }
     @Test func testLargeProjectGrowsWithoutMisclassifyingMembers() {
         var workspace = Workspace()
         let projects = [Project(id: "p", name: "Project")]

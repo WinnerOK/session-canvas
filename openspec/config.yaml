@@ -7,10 +7,15 @@ context: |
   Session Canvas is a personal spatial workspace over existing Codex sessions.
   Use GLOSSARY.md for canonical domain language and docs/domain-model.md for the model.
   Opening a session never acknowledges its result; acknowledgment is explicit in the viewer.
+  Enable and accept acknowledgment only for Finished sessions with a loaded, unacknowledged result; recheck the current state before saving.
   Project regions represent actual Codex project membership, not canvas-only tags or working directories.
   The selected delivery is a Mac-only SwiftUI/AppKit companion with a session/result viewer and SQLite storage.
   Do not introduce a web renderer or a cross-platform shell for this application.
-  See docs/integration-compatibility.md for verified saved-session support and unresolved desktop capabilities.
+  The default source combines saved discovery/history with read-only live desktop observations and explicit project identities.
+  Desktop creation verifies durable history and releases child-process ownership, reveals the new session despite filters, and automatically opens it in Codex; it never starts a model turn. Keep valid clicked placement or choose the nearest valid position for visible/hidden collisions. Creation in the context's project preserves pan/zoom; only a changed chosen/confirmed project or an explicit action requests focus. Blank names and projectless folders receive explained defaults. Submission errors stay in the active dialog.
+  Visibility filters and project overviews affect rendering, not source membership or canvas geometry.
+  See docs/integration-compatibility.md for verified capabilities and unresolved desktop gates.
+  See openspec/changes/add-session-canvas/verification.md for correction-to-requirement and test coverage.
   Read docs/delivery-options.md before making claims about integration support.
 
 # Per-artifact rules (optional)

@@ -9,6 +9,7 @@ public final class CanvasDatabase {
         guard sqlite3_open(path, &db) == SQLITE_OK else { throw CanvasError.message("Could not open canvas storage.") }
         try execute("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;")
         try execute("CREATE TABLE IF NOT EXISTS workspace (source TEXT PRIMARY KEY, payload BLOB NOT NULL); CREATE TABLE IF NOT EXISTS acknowledgments (source TEXT NOT NULL, session TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(source,session,result)); PRAGMA user_version=1;")
+        try execute("CREATE TABLE IF NOT EXISTS canvas_visibility (source TEXT PRIMARY KEY, payload BLOB NOT NULL); PRAGMA user_version=2;")
     }
     deinit { sqlite3_close(db) }
     private func execute(_ sql: String) throws {
@@ -42,6 +43,23 @@ public final class CanvasDatabase {
         defer { sqlite3_finalize(stmt) }
         for (index, value) in [source, session, result].enumerated() { sqlite3_bind_text(stmt, Int32(index + 1), value, -1, transient) }
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }
+    }
+    public func saveVisibility(_ visibility: CanvasVisibility, source: String) throws {
+        let data = try JSONEncoder().encode(visibility)
+        let stmt = try statement("INSERT INTO canvas_visibility(source,payload) VALUES(?,?) ON CONFLICT(source) DO UPDATE SET payload=excluded.payload")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, source, -1, transient)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(stmt, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }
+    }
+    public func visibility(source: String) throws -> CanvasVisibility {
+        let stmt = try statement("SELECT payload FROM canvas_visibility WHERE source=?")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, source, -1, transient)
+        let status = sqlite3_step(stmt)
+        if status == SQLITE_DONE { return CanvasVisibility() }
+        guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(stmt, 0) else { throw failure() }
+        return try JSONDecoder().decode(CanvasVisibility.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0))))
     }
     public func acknowledgments(source: String) throws -> [String: Set<String>] {
         let stmt = try statement("SELECT session,result FROM acknowledgments WHERE source=?")

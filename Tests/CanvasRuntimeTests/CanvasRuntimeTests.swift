@@ -16,8 +16,10 @@ struct CanvasRuntimeTests {
         await model.loadHistory(older: false)
         #expect(model.state(session) == .finished)
         let result = try #require(model.history.compactMap(\.result).last)
+        #expect(model.canAcknowledge(result, sessionID: session.id))
         model.acknowledge(result, sessionID: session.id)
         #expect(model.state(session) == .idle)
+        #expect(!model.canAcknowledge(result, sessionID: session.id))
         model.shutdown()
 
         let restored = ApplicationModel(demo: true, storagePath: path)
@@ -42,6 +44,39 @@ struct CanvasRuntimeTests {
         #expect(model.state(model.workspace.sessions[index]) == .finished)
         model.shutdown()
     }
+    @Test(arguments: [NoteState.running, .waiting, .permission, .idle, .unknown])
+    func acknowledgmentIsRejectedOutsideFinished(state: NoteState) async throws {
+        let path = temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let model = ApplicationModel(demo: true, storagePath: path)
+        await model.connect()
+        defer { model.shutdown() }
+        model.openSession("demo-state")
+        await model.loadHistory(older: false)
+        let result = try #require(model.history.compactMap(\.result).last)
+        let index = try #require(model.workspace.sessions.firstIndex { $0.id == "demo-state" })
+        #expect(model.state(model.workspace.sessions[index]) == .finished)
+        // The result stays loaded while live state changes, as in the reported running-session viewer.
+        switch state {
+        case .running: model.workspace.sessions[index].execution = .running
+        case .waiting: model.workspace.sessions[index].requests = ["input": .input]
+        case .permission: model.workspace.sessions[index].requests = ["approval": .permission]
+        case .idle: model.workspace.sessions[index].latestResult = nil
+        case .unknown: model.workspace.sessions[index].execution = .unknown
+        case .finished: Issue.record("This regression must use a non-Finished state")
+        }
+        #expect(model.state(model.workspace.sessions[index]) == state)
+        #expect(!model.canAcknowledge(result, sessionID: "demo-state"))
+        model.acknowledge(result, sessionID: "demo-state")
+        #expect(model.acknowledgments["demo-state"]?.contains(result.id) != true)
+        #expect(try CanvasDatabase(path: path).acknowledgments(source: model.sourceID)["demo-state"]?.contains(result.id) != true)
+        #expect(model.state(model.workspace.sessions[index]) == state)
+        model.workspace.sessions[index].execution = .idle
+        model.workspace.sessions[index].requests = [:]
+        model.workspace.sessions[index].latestResult = result
+        #expect(model.state(model.workspace.sessions[index]) == .finished)
+        #expect(model.canAcknowledge(result, sessionID: "demo-state"))
+    }
     @Test func projectDropCommitsAfterSourceConfirmationAndPreservesExecution() async throws {
         let path = temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -52,7 +87,10 @@ struct CanvasRuntimeTests {
         model.moveNote(id: session.id, position: destination, expectedRevision: session.revision)
         #expect(model.pendingSessions.contains(session.id))
         #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == "canvas")
-        try await Task.sleep(for: .milliseconds(400))
+        for _ in 0..<100 {
+            if !model.pendingSessions.contains(session.id) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
         let moved = try #require(model.workspace.sessions.first { $0.id == session.id })
         #expect(moved.projectID == "research")
         #expect(moved.execution == .running)

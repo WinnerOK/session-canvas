@@ -1,5 +1,6 @@
 import Foundation
 import CanvasCore
+import Darwin
 
 struct RPCFailure: LocalizedError {
     var code: Int
@@ -87,5 +88,17 @@ final class RPCConnection {
         if process?.isRunning == true { process?.terminate() }
         process = nil; input = nil; output = nil; diagnostics = nil; buffer.removeAll()
         failAll(CanvasError.message("Codex connection was closed."))
+    }
+    /// A creator owns its thread lock until the process exits, even after unsubscribe.
+    /// Wait without blocking the UI; only terminate the child this connection started.
+    func stopAndWait() async {
+        guard let child = process else { return }
+        stop()
+        let deadline = Date().addingTimeInterval(3)
+        while child.isRunning, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        if child.isRunning { kill(child.processIdentifier, SIGKILL) }
+        await Task.detached { child.waitUntilExit() }.value
     }
 }
