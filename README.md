@@ -17,8 +17,11 @@ The local app bundle is written to `dist/Session Canvas.app`. See the [native ap
 
 Codex uses a [stable verification launcher](docs/native-application.md#codex-verification-launcher) for builds, tests, and native captures. One saved permission covers the launcher with different filters, session IDs, and capture paths.
 
+GitHub Actions runs application/tooling tests and release builds for Apple Silicon and Intel on every pull request. To prepare a release, open **Actions → Release → Run workflow** and enter a tag such as `v0.2.0`; after verification, review and publish the generated draft with app ZIPs and SHA-256 files. Version-tag pushes also trigger releases. See the [CI/CD guide](docs/ci-cd.md) for setup, retries, and signing limitations.
+
 - [Domain glossary](GLOSSARY.md)
 - [Native application and build instructions](docs/native-application.md)
+- [GitHub checks and app releases](docs/ci-cd.md)
 - [Verified Codex integration and remaining limits](docs/integration-compatibility.md)
 - [Domain model, state rules, and edge cases](docs/domain-model.md)
 - [Separate local app vs. in-app Codex view](docs/delivery-options.md)
@@ -30,7 +33,7 @@ Codex uses a [stable verification launcher](docs/native-application.md#codex-ver
 
 The selected delivery is a native Mac-only companion with a session/result viewer, Acknowledge, and Open in Codex. The remaining desktop integration gate is tracked explicitly; demo interactions are not presented as verified desktop mutations.
 
-The behavioral specifications are [canvas-workspace](openspec/changes/add-session-canvas/specs/canvas-workspace/spec.md), [session-attention](openspec/changes/add-session-canvas/specs/session-attention/spec.md), [project-regions](openspec/changes/add-session-canvas/specs/project-regions/spec.md), and [session-actions](openspec/changes/add-session-canvas/specs/session-actions/spec.md).
+The behavioral specifications are [canvas-workspace](openspec/changes/add-session-canvas/specs/canvas-workspace/spec.md), [session-attention](openspec/changes/add-session-canvas/specs/session-attention/spec.md), [project-regions](openspec/changes/add-session-canvas/specs/project-regions/spec.md), [session-actions](openspec/changes/add-session-canvas/specs/session-actions/spec.md), [local-verification](openspec/changes/add-session-canvas/specs/local-verification/spec.md), and [release-automation](openspec/changes/add-session-canvas/specs/release-automation/spec.md).
 
 Validate the proposal with OpenSpec 1.15.0:
 

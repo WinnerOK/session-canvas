@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      release_tag:
+        description: vMAJOR.MINOR.PATCH version to package
+        type: string
+        default: ''
+      source_ref:
+        description: Exact source revision for release verification
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ inputs.release_tag || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !inputs.release_tag }}
+
+jobs:
+  macos:
+    name: Test and build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      SESSION_CANVAS_TEST_REAL_SOURCE: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Toolchain
+        run: swift --version
+      - name: Packaging and verification script tests
+        run: python3 -B -m unittest discover -s scripts/tests -v
+      - name: Application tests
+        run: swift test --disable-xctest
+      - name: Release build and bundle verification
+        if: ${{ !inputs.release_tag }}
+        run: |
+          python3 scripts/build-app.py
+          codesign --verify --deep --strict 'dist/Session Canvas.app'
+      - name: Package release
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: python3 scripts/package-release.py --tag "$RELEASE_TAG" --build-number "$GITHUB_RUN_NUMBER" --arch "$RELEASE_ARCH"
+      - name: Save release assets
+        if: ${{ inputs.release_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  specification:
+    name: OpenSpec
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes @fission-ai/openspec@1.15.0 validate --all --strict

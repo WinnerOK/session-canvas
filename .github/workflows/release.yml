@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag (vMAJOR.MINOR.PATCH, for example v0.2.0); created if absent
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve release version and commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version and resolve source
+        id: source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo 'Use a version tag such as v0.2.0.' >&2
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            source_sha=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")
+          else
+            source_sha=$(git rev-parse HEAD)
+          fi
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      release_tag: ${{ needs.prepare.outputs.tag }}
+      source_ref: ${{ needs.prepare.outputs.sha }}
+
+  draft:
+    name: Create draft release
+    needs: [prepare, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      SOURCE_SHA: ${{ needs.prepare.outputs.sha }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Create or update draft with verified assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd assets
+          shasum -a 256 -c ./*.sha256
+          draft_exists=false
+          if gh release view "$RELEASE_TAG" --json isDraft > release.json; then
+            if ! jq -e '.isDraft == true' release.json > /dev/null; then
+              echo 'Refusing to replace assets of a published release.' >&2
+              exit 1
+            fi
+            draft_exists=true
+          fi
+          if current_sha=$(gh api "repos/$GH_REPO/commits/refs%2Ftags%2F$RELEASE_TAG" --jq .sha 2>/dev/null); then
+            if [[ "$current_sha" != "$SOURCE_SHA" ]]; then
+              echo 'The tag moved after verification; refusing to upload.' >&2
+              exit 1
+            fi
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$SOURCE_SHA" --silent
+          fi
+          if [[ "$draft_exists" == true ]]; then
+            gh release upload "$RELEASE_TAG" ./*.zip ./*.sha256 --clobber
+          else
+            gh release create "$RELEASE_TAG" ./*.zip ./*.sha256 --verify-tag --draft --title "Session Canvas $RELEASE_TAG" --generate-notes
+          fi

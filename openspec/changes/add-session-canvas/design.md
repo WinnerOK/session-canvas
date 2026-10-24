@@ -154,6 +154,14 @@ Use `scripts/verify-local.py` as the single build/test/native-preview entry poin
 
 The launcher executes fixed subprocess argument lists, directs SwiftPM/module caches under `.build`, and exposes explicit installed-source opt-in. Preview rebuilds/signs the bundle and defaults to a fresh demo database and PNG under `.build/verification`. Resolve explicit SQLite/PNG outputs against verification, temporary, and Codex visualization roots before starting any subprocess. Preserve the real application database. A bounded capture must produce a fresh PNG and a successful process exit; stale files are not verification evidence. This development permission is independent of permission requests displayed by the product's session viewer.
 
+### 11. Reuse hosted verification before drafting releases
+
+Use GitHub Actions for this GitHub repository. The CI workflow handles pull requests and main-branch pushes and is reusable by the release workflow. Test on `macos-15` (Apple Silicon) and `macos-15-intel`, selecting Xcode 16.4 explicitly. Run normal Swift Testing suites, Python tooling checks, release compilation, and bundle signature verification. Validate all OpenSpec artifacts separately with the pinned CLI version. Hosted fixtures/native rendering do not close opt-in installed-Codex acceptance gates. Repository reads suffice for all checks; do not persist checkout credentials or supply desktop/session/signing secrets.
+
+Release dispatch accepts `vMAJOR.MINOR.PATCH` and resolves an existing tag to its commit or uses the dispatch revision for a new tag. A version-tag push takes the same path. Pass the exact resolved commit into both architecture jobs and specification validation. Only after all succeed does the final job receive repository write permission and create a draft release, creating a missing tag at that verified commit. Recheck an existing tag's resolved commit before uploading and fail if it moved. Reruns may replace draft assets but must reject published releases. Publication remains a maintainer action, allowing review before GitHub makes assets immutable.
+
+Extend the existing app builder with validated version/build metadata while preserving local defaults. Package separate native ZIPs with `ditto`, preserving the app structure and executable permissions; verify architecture with `lipo`, verify the ad-hoc signature, and provide SHA-256 files checked again before upload. Use the tag version in Info.plist and filenames and the workflow run number as the build number. Separate archives provide native test coverage without adding universal-binary assembly. Developer ID signing and notarization remain outside this change; document Gatekeeper limitations. See the [CI/CD guide](../../../docs/ci-cd.md).
+
 ## Risks / Trade-offs
 
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
