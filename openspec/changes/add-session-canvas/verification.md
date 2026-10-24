@@ -49,6 +49,18 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 ## Evidence scope and entry points
 
+### Unknown age-hiding correction, 2026-10-25
+
+The user requested a checked-by-default Hide unknown checkbox inside the Hide Idle controls. It sits directly below Hide Idle after and applies the same source-activity age cutoff to Unknown. Old preferences default to checked; an explicit false persists per source. Never disables age hiding for both Idle and Unknown. Attention's Unknown checkbox still independently hides all Unknown sessions. This preference changes only visibility, not execution evidence or source state.
+
+`unknownAgeHidingDefaultsOnAndPreservesWorkAndUnreviewedResults` verifies the exact one-hour boundary, unchecked and Never behavior, old-payload default/false round-trip, pending input/permission, running execution, unread versus acknowledged results, and missing/future timestamps. `hideUnknownUsesIdleAgeAndRestoresTheSameNoteAndProject` verifies hidden-note/viewer/project projection, restoration, and unchanged workspace geometry/membership/acknowledgment. The existing SQLite/source-isolation and clock reevaluation tests cover the new preference as well. Running, requests, and any known unacknowledged result are protected even if displayed as Unknown.
+
+The complete offline run passed **86 executed Swift tests** (35 core, 54 runtime reported, with three opt-in checks skipped). Release compilation with one job, bundle signature, strict OpenSpec validation, whitespace, and 115 affected local links passed. The fresh `.build/verification/hide-unknown-demo.png` was inspected with an isolated demo database: Hide unknown is checked beneath the one-hour timeout despite an old preference lacking the field; one stale Unknown without a result is hidden, while a day-old Unknown with an unread result and its viewer remain visible. No desktop IPC or installed-source check was used for this correction; prior live-host acceptance limits remain open.
+
+| Correction | Contract | Evidence |
+| --- | --- | --- |
+| Add Hide unknown inside Hide Idle, checked by default, to hide stale Unknown sessions | [Optional age hiding for Unknown](specs/canvas-workspace/spec.md#requirement-optional-age-hiding-for-unknown) | Core/runtime tests cover the shared cutoff, safe exceptions, default/migration, source-isolated persistence, same-position restoration, and viewer closure. |
+
 ### Archived attention state correction, 2026-10-25
 
 The user supplied a viewer with an Archived badge and an Unknown primary state. `confirmedArchiveIsTheStateEvenWhenExecutionAndHistoryAreUnknown` first failed with Unknown/questionmark for archived missing-history evidence and with permission state for stale requests. Confirmed archive now derives Archived before runtime availability or result attention. The note, viewer, counts, overview, and accessibility use that shared state. The Archived checkbox is immediately above Unknown, unchecked by default; the separate Visibility toggle and duplicate viewer badge are removed.

@@ -83,9 +83,10 @@ public struct CanvasVisibility: Codable, Equatable, Sendable {
     public var hiddenStates: Set<NoteState> = [.archived]
     public var hiddenProjectIDs: Set<String> = []
     public var idleTimeout: IdleTimeout = .never
+    public var hideUnknown = true
     public init() {}
     public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty || idleTimeout != .never }
-    enum CodingKeys: String, CodingKey { case hiddenStates, hiddenProjectIDs, hideArchived, idleTimeout }
+    enum CodingKeys: String, CodingKey { case hiddenStates, hiddenProjectIDs, hideArchived, idleTimeout, hideUnknown }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         hiddenStates = try c.decodeIfPresent(Set<NoteState>.self, forKey: .hiddenStates) ?? [.archived]
@@ -93,6 +94,7 @@ public struct CanvasVisibility: Codable, Equatable, Sendable {
         let hidden = try c.decodeIfPresent(Bool.self, forKey: .hideArchived) ?? true
         if hidden { hiddenStates.insert(.archived) } else { hiddenStates.remove(.archived) }
         idleTimeout = try c.decodeIfPresent(IdleTimeout.self, forKey: .idleTimeout) ?? .never
+        hideUnknown = try c.decodeIfPresent(Bool.self, forKey: .hideUnknown) ?? true
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -101,10 +103,14 @@ public struct CanvasVisibility: Codable, Equatable, Sendable {
         try c.encode(hiddenStates.contains(.archived), forKey: .hideArchived)
         try c.encode(hiddenProjectIDs, forKey: .hiddenProjectIDs)
         try c.encode(idleTimeout, forKey: .idleTimeout)
+        try c.encode(hideUnknown, forKey: .hideUnknown)
     }
     public func includesLifecycle(_ session: Session, acknowledged: Set<String>, now: Date) -> Bool {
-        // Uncertain, active, and unreviewed sessions never disappear automatically.
-        guard session.state(acknowledged: acknowledged) == .idle, session.unknownReason == nil else { return true }
+        guard session.execution != .running, session.requests.isEmpty else { return true }
+        if let result = session.latestResult, !acknowledged.contains(result.id) { return true }
+        let state = session.state(acknowledged: acknowledged)
+        let eligible = (state == .idle && session.unknownReason == nil) || (state == .unknown && hideUnknown)
+        guard eligible else { return true }
         guard let seconds = idleTimeout.seconds, session.updatedAt.timeIntervalSince1970 > 0 else { return true }
         return now.timeIntervalSince(session.updatedAt) < seconds
     }

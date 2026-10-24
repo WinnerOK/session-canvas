@@ -26,7 +26,7 @@ import CanvasCore
 
     @Test func lifecycleHidingRequiresKnownIdleAndAcknowledgedResult() {
         let now = Date(timeIntervalSince1970: 10000000), old = now.addingTimeInterval(-86400)
-        var visibility = CanvasVisibility(); visibility.idleTimeout = .oneHour
+        var visibility = CanvasVisibility(); visibility.idleTimeout = .oneHour; visibility.hideUnknown = false
         let result = SessionResult(id: "r", outcome: .completed, text: "Done")
         for execution in [Execution.running, .unknown, .idle] {
             var session = Session(id: "s", title: "Work", execution: execution, latestResult: result, updatedAt: old)
@@ -52,6 +52,7 @@ import CanvasCore
         let visibility = try JSONDecoder().decode(CanvasVisibility.self, from: legacy)
         #expect(visibility.hiddenStates.contains(.archived))
         #expect(visibility.idleTimeout == .never)
+        #expect(visibility.hideUnknown)
         #expect(visibility.hiddenStates == [.unknown, .archived])
         #expect(visibility.hiddenProjectIDs == ["p"])
         let session = Session(id: "s", title: "Old", execution: .idle)
@@ -76,5 +77,37 @@ import CanvasCore
         var all = CanvasVisibility(); all.hiddenStates = []
         #expect(try JSONDecoder().decode(CanvasVisibility.self, from: JSONEncoder().encode(all)).hiddenStates.isEmpty)
         #expect(NoteState.allCases.suffix(2) == [.archived, .unknown])
+    }
+
+    @Test func unknownAgeHidingDefaultsOnAndPreservesWorkAndUnreviewedResults() throws {
+        let now = Date(timeIntervalSince1970: 2000000000)
+        var visibility = CanvasVisibility(); visibility.idleTimeout = .oneHour
+        var session = Session(id: "unknown", title: "Old session", updatedAt: now.addingTimeInterval(-3600))
+        session.unknownReason = .historyMissing
+        #expect(visibility.hideUnknown)
+        #expect(!visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.updatedAt = now.addingTimeInterval(-3599)
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.updatedAt = now.addingTimeInterval(-86400)
+        visibility.hideUnknown = false
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        #expect(try JSONDecoder().decode(CanvasVisibility.self, from: JSONEncoder().encode(visibility)).hideUnknown == false)
+        visibility.hideUnknown = true
+        session.requests = ["approval": .permission]
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.requests = ["input": .input]
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.requests = [:]; session.execution = .running
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.execution = .unknown
+        session.latestResult = SessionResult(id: "unread", outcome: .completed, text: "Done")
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        #expect(!visibility.includesLifecycle(session, acknowledged: ["unread"], now: now))
+        session.latestResult = nil; session.updatedAt = Date(timeIntervalSince1970: 0)
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.updatedAt = now.addingTimeInterval(60)
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
+        session.updatedAt = now.addingTimeInterval(-86400); visibility.idleTimeout = .never
+        #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
     }
 }
