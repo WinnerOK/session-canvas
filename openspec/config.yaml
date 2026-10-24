@@ -1,0 +1,36 @@
+schema: spec-driven
+
+context: |
+  Language: English
+  All artifacts must be written in English.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Session Canvas is a personal spatial workspace over existing Codex sessions.
+  Use GLOSSARY.md for canonical domain language and docs/domain-model.md for the model.
+  Opening a session never acknowledges its result; acknowledgment is explicit in the viewer.
+  Project regions represent actual Codex project membership, not canvas-only tags or working directories.
+  The selected delivery is a Mac-only SwiftUI/AppKit companion with a session/result viewer and SQLite storage.
+  Do not introduce a web renderer or a cross-platform shell for this application.
+  See docs/integration-compatibility.md for verified saved-session support and unresolved desktop capabilities.
+  Read docs/delivery-options.md before making claims about integration support.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
