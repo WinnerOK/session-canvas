@@ -85,6 +85,27 @@ struct LiveStateTests {
         #expect(model.hasLiveState)
     }
 
+    @Test func terminalHistoryDoesNotOverrideDesktopWorkOrRequests() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        #expect(await eventually { model.workspace.sessions.first?.execution == .running })
+        model.openSession("live")
+        for (phase, expected) in [("running", NoteState.running), ("approval", .permission), ("input", .waiting)] {
+            try fixture.update(phase)
+            #expect(await eventually { model.workspace.sessions.first?.state(acknowledged: []) == expected })
+            await model.loadHistory(older: false)
+            #expect(model.history.compactMap(\.result).last?.outcome == .completed)
+            #expect(model.workspace.sessions.first?.state(acknowledged: []) == expected)
+            await model.refresh()
+            #expect(model.workspace.sessions.first?.state(acknowledged: []) == expected)
+        }
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_LIVE_DESKTOP"] == "1"))
     func installedDesktopFeedsLiveStateIntoTheApplication() async throws {
         let id = try #require(ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_OBSERVED_SESSION"])
@@ -143,7 +164,7 @@ struct LiveStateTests {
         for line in sys.stdin:
             m=json.loads(line)
             if "id" not in m: continue
-            result={"codexHome":str(pathlib.Path(__file__).parent)} if m["method"]=="initialize" else {"data":[] if m.get("params",{}).get("archived") else [{"id":"live","name":"Current session","source":"appServer","status":{"type":"notLoaded"}}],"nextCursor":None} if m["method"] == "thread/list" else {}
+            result={"codexHome":str(pathlib.Path(__file__).parent)} if m["method"]=="initialize" else {"data":[] if m.get("params",{}).get("archived") else [{"id":"live","name":"Current session","source":"appServer","status":{"type":"notLoaded"}}],"nextCursor":None} if m["method"] == "thread/list" else {"data":[{"id":"old", "status":"completed", "items":[]}],"nextCursor":None} if m["method"] == "thread/turns/list" else {}
             print(json.dumps({"id":m["id"],"result":result}),flush=True)
         """#
         try cli.write(to: executable, atomically: true, encoding: .utf8)

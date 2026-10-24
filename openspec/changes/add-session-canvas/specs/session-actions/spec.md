@@ -74,6 +74,11 @@ Acknowledge result, Open in Codex, Reload history, and pagination controls SHALL
 ### Requirement: Acknowledge is available in the viewer header
 The top panel SHALL enable Acknowledge only for a Finished session's newest loaded, unacknowledged terminal result. It SHALL remain disabled during history loading and for every other session state. The panel SHALL indicate acknowledged results and announce newer results without silently changing the loaded result targeted by the action. The command SHALL recheck the current state before saving acknowledgment.
 
+#### Scenario: Latest-history recovery enables explicit review
+- **WHEN** opening or reloading the latest history establishes Finished for an Unknown session
+- **THEN** the note and viewer share that Finished state and enable Acknowledge after loading the result
+- **AND** explicit acknowledgment returns the verified inactive session to Idle, allowing the chosen age filter to hide it without moving its note
+
 #### Scenario: Explicitly acknowledge a result
 - **WHEN** the session is Finished, the user chooses Acknowledge for the loaded latest result, and persistence succeeds
 - **THEN** that result is shown as acknowledged and its note becomes Idle if no higher-priority state applies

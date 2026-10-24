@@ -6,6 +6,128 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct ImportRegressionTests {
+    @Test(arguments: [false, true])
+    func latestHistoryRestoresFinishedWithoutLocalRollout(legacy: Bool) async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-rollout"))
+        if legacy { try Data().write(to: fixture.folder.appendingPathComponent("legacy-history")) }
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        let before = try #require(model.workspace.sessions.first { $0.id == "normal" })
+        #expect(model.state(before) == .unknown)
+        let placement = model.workspace.placements[before.id]
+        model.openSession(before.id)
+        for _ in 0..<100 {
+            if !model.history.isEmpty && !model.isLoadingHistory { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let result = try #require(model.history.compactMap(\.result).last)
+        let observed = try #require(model.workspace.sessions.first { $0.id == before.id })
+        #expect(model.state(observed) == .finished)
+        #expect(observed.stateIsFromHistory)
+        #expect(observed.unknownReason == nil)
+        #expect(observed.updatedAt == before.updatedAt)
+        #expect(model.canAcknowledge(result, sessionID: before.id))
+        await model.refresh()
+        #expect(model.workspace.sessions.first { $0.id == before.id }?.state(acknowledged: []) == .finished)
+        #expect(model.workspace.placements[before.id] == placement)
+        model.acknowledge(result, sessionID: before.id)
+        #expect(model.workspace.sessions.first { $0.id == before.id }?.state(acknowledged: [result.id]) == .idle)
+        model.setIdleTimeout(.oneWeek)
+        #expect(!model.visibleSessions.contains { $0.id == before.id })
+        try Data().write(to: fixture.folder.appendingPathComponent("active"))
+        // A debounced source refresh may already be reading the previous inventory.
+        for _ in 0..<100 {
+            if !model.isRefreshing { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        await model.refresh()
+        #expect(model.workspace.sessions.first { $0.id == before.id }?.execution == .unknown)
+    }
+
+    @Test(arguments: [false, true])
+    func historyOnlyPromotesTheLatestTerminalTurn(legacy: Bool) async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-rollout"))
+        if legacy { try Data().write(to: fixture.folder.appendingPathComponent("legacy-history")) }
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        _ = try await source.snapshot()
+        let path = fixture.folder.appendingPathComponent("history-turns.json")
+        for status in ["inProgress", "unsupported"] {
+            try "[{\"id\":\"new\",\"status\":\"\(status)\",\"items\":[]},{\"id\":\"old\",\"status\":\"completed\",\"items\":[]}]".write(to: path, atomically: true, encoding: .utf8)
+            let page = try await source.history(sessionID: "normal", cursor: nil)
+            #expect(page.entries.compactMap(\.result).last?.id == "normal/old/completed")
+            #expect(page.sessionObservation?.execution == .unknown)
+            #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.execution == .unknown)
+        }
+        for status in ["completed", "failed", "interrupted"] {
+            try "[{\"id\":\"new\",\"status\":\"\(status)\",\"items\":[]}]".write(to: path, atomically: true, encoding: .utf8)
+            let page = try await source.history(sessionID: "normal", cursor: nil)
+            #expect(page.sessionObservation?.state(acknowledged: []) == .finished)
+            #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.state(acknowledged: []) == .finished)
+        }
+        try "[]".write(to: path, atomically: true, encoding: .utf8)
+        #expect(try await source.history(sessionID: "normal", cursor: nil).sessionObservation?.execution == .unknown)
+        try "[{\"id\":\"old\",\"status\":\"completed\",\"items\":[]}]".write(to: path, atomically: true, encoding: .utf8)
+        #expect(try await source.history(sessionID: "normal", cursor: "0").sessionObservation == nil)
+        #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.execution == .unknown)
+    }
+
+    @Test func historyCannotRegressNewerMetadataOrRolloutWork() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        _ = try await source.snapshot()
+        try Data().write(to: fixture.folder.appendingPathComponent("change-file-on-history"))
+        let stalePage = try await source.history(sessionID: "normal", cursor: nil)
+        #expect(stalePage.sessionObservation?.execution == .unknown)
+        try Data().write(to: fixture.folder.appendingPathComponent("active"))
+        _ = try await source.snapshot()
+        try Data().write(to: fixture.folder.appendingPathComponent("legacy-history"))
+        let olderMetadata = try await source.history(sessionID: "normal", cursor: nil)
+        #expect(olderMetadata.sessionObservation?.execution == .unknown)
+        #expect(olderMetadata.sessionObservation?.revision == "2.0")
+    }
+
+    @Test func delayedHistoryCannotReplaceNewWorkInTheViewer() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-rollout"))
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        try Data().write(to: fixture.folder.appendingPathComponent("block-history"))
+        model.openSession("normal")
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path))
+        let index = try #require(model.workspace.sessions.firstIndex { $0.id == "normal" })
+        model.workspace.sessions[index].execution = .running
+        model.workspace.sessions[index].requests = ["new-approval": .permission]
+        model.workspace.sessions[index].latestResult = SessionResult(id: "new-result", outcome: .completed, text: "Newer result")
+        try Data().write(to: fixture.folder.appendingPathComponent("release-history"))
+        for _ in 0..<100 {
+            if !model.history.isEmpty && !model.isLoadingHistory { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!model.history.isEmpty)
+        #expect(model.state(model.workspace.sessions[index]) == .permission)
+        #expect(model.workspace.sessions[index].latestResult?.id == "new-result")
+        let displayed = try #require(model.history.compactMap(\.result).last)
+        #expect(!model.canAcknowledge(displayed, sessionID: "normal"))
+    }
+
     @Test func unloadedSessionsRecoverTerminalStateBeforeOpeningViewer() async throws {
         let fixture = try SourceFixture()
         defer { fixture.remove() }
@@ -199,7 +321,7 @@ private struct SourceFixture {
         settings = ConnectionSettings(executable: executable.path, socket: "", nativeURLTemplate: "codex://threads/{id}")
         let script = #"""
         #!/usr/bin/python3
-        import json, pathlib, sys
+        import json, pathlib, sys, time
         home = pathlib.Path(__file__).parent
         archived_ids = {"archived"}
         reads = 0
@@ -218,7 +340,8 @@ private struct SourceFixture {
                     records = [{"type":"session_meta", "payload":{"id":ident}}, {"type":"event_msg", "payload":{"type":"task_started" if active else "task_complete", "turn_id":"last"}}]
                     content = "".join(json.dumps(v) + "\n" for v in records)
                     if not path.exists() or path.read_text() != content: path.write_text(content)
-                    return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", path=str(path), updatedAt=2 if ident == "normal" and (home / "active").exists() else 1, **extra)
+                    listed_path = home / "sessions" / "unavailable.jsonl" if ident == "normal" and (home / "missing-rollout").exists() else path
+                    return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", path=str(listed_path), updatedAt=2 if ident == "normal" and (home / "active").exists() else 1, **extra)
                 if request.get("params", {}).get("archived"):
                     result = {"data": [] if (home / "omit-archived").exists() else [session(ident, "cli") for ident in archived_ids], "nextCursor": None}
                 elif request.get("params", {}).get("cursor"):
@@ -232,9 +355,19 @@ private struct SourceFixture {
                 reads += 1
                 (home / "reads").write_text(str(reads))
                 ident = request["params"]["threadId"]
-                result = {"data": [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}], "nextCursor": None}
+                if (home / "block-history").exists():
+                    (home / "history-ready").touch()
+                    deadline = time.monotonic() + 2
+                    while not (home / "release-history").exists() and time.monotonic() < deadline:
+                        time.sleep(.01)
+                if (home / "change-file-on-history").exists():
+                    with (home / "sessions" / (ident + ".jsonl")).open("a") as f:
+                        f.write(json.dumps({"type":"event_msg", "payload":{"type":"task_started", "turn_id":"newer"}}) + "\n")
+                turns = json.loads((home / "history-turns.json").read_text()) if (home / "history-turns.json").exists() else [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}]
+                result = {"data": turns, "nextCursor": None}
             elif method == "thread/read":
-                result = {"thread":{"id":request["params"]["threadId"], "name":"My work", "cwd":"/Projects/existing", "updatedAt":1, "status":{"type":"notLoaded"}, "turns":[{"id":"last", "status":"completed", "items":[]}]}}
+                turns = list(reversed(json.loads((home / "history-turns.json").read_text()))) if (home / "history-turns.json").exists() else [{"id":"last", "status":"completed", "items":[]}]
+                result = {"thread":{"id":request["params"]["threadId"], "name":"My work", "cwd":"/Projects/existing", "updatedAt":1, "status":{"type":"notLoaded"}, "turns":turns}}
             elif method in ["thread/archive", "thread/unarchive"]:
                 if (home / "reject-archive").exists():
                     print(json.dumps({"id": request["id"], "error": {"code": -32600}}), flush=True)

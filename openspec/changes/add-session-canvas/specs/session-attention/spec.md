@@ -136,7 +136,7 @@ Starting a later turn SHALL give current execution or requests display priority 
 - **AND** merely having opened it in Codex previously is not treated as acknowledgment
 
 ### Requirement: Missing execution evidence is Unknown
-When execution state is stale or unavailable for a non-archived session, the note SHALL show Unknown and indicate its last-known state separately. A confirmed archived session SHALL remain Archived. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
+When neither current execution nor verified latest-history evidence establishes a non-archived session's state, the note SHALL show Unknown and indicate its last-known state separately. A confirmed archived session SHALL remain Archived. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
 
 #### Scenario: Recover saved terminal state during discovery
 - **WHEN** an unloaded session has identity-verified saved evidence whose latest work is terminal
@@ -144,6 +144,22 @@ When execution state is stale or unavailable for a non-archived session, the not
 - **AND** the viewer identifies saved-history provenance and a current desktop observation overrides it
 - **AND** a later start, ambiguous tail, incomplete terminal append, missing history, or unsupported evidence remains Unknown
 - **AND** bulk file reads are bounded, cache invalidates on file changes as well as source revision, and no turn is resumed or submitted
+
+#### Scenario: Recover Finished while reading the latest history
+- **WHEN** the latest paged or legacy history response confirms its last turn completed, failed, or was interrupted, with no newer work or pending request
+- **THEN** a non-archived Unknown session becomes Finished for that unacknowledged result even if its local rollout is unavailable
+- **AND** the viewer identifies saved-history provenance, explicit acknowledgment becomes available after loading, and opening alone never acknowledges the result
+- **AND** unchanged source revision/file evidence retains the recovered state across ordinary refresh without per-session discovery RPCs or manufactured activity
+
+#### Scenario: A historical result is not the latest work
+- **WHEN** the newest raw turn is unfinished or unsupported, the latest response is empty, or a terminal result occurs only in an older page
+- **THEN** that result alone does not establish saved Idle or Finished
+- **AND** an older terminal turn cannot hide newer work or a pending input/permission request
+
+#### Scenario: State changes during a history read
+- **WHEN** a history reply predates known source metadata, source metadata/results or the exact rollout change in flight, or the workspace session changes while loading
+- **THEN** the reply does not replace newer execution, requests, or result identity with saved completion
+- **AND** known archive status, project membership, placement, and acknowledgments remain intact
 
 #### Scenario: Observe the active desktop runtime
 - **WHEN** an existing session runs or changes its pending requests in Codex desktop

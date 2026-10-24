@@ -333,7 +333,11 @@ public struct HistoryEntry: Identifiable, Equatable, Sendable {
 public struct HistoryPage: Sendable {
     public var entries: [HistoryEntry]
     public var nextCursor: String?
-    public init(entries: [HistoryEntry], nextCursor: String? = nil) { self.entries = entries; self.nextCursor = nextCursor }
+    /// Present only when reading the latest history established a source observation.
+    public var sessionObservation: Session?
+    public init(entries: [HistoryEntry], nextCursor: String? = nil, sessionObservation: Session? = nil) {
+        self.entries = entries; self.nextCursor = nextCursor; self.sessionObservation = sessionObservation
+    }
 }
 
 public enum CanvasError: LocalizedError {
