@@ -65,6 +65,10 @@ struct ContentView: View {
                     .help("Fit to content (⌘0)")
                 Button { model.toggleFullScreen() } label: { Label("Toggle full screen", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .help("Toggle full screen (⌃⌘F)")
+                Button("Acknowledge all", systemImage: "checkmark.circle") { model.acknowledgeAll() }
+                    .labelStyle(.titleAndIcon).disabled(!model.canAcknowledgeAll)
+                    .help("Mark the latest results of all \(model.acknowledgeAllCount) Finished sessions as reviewed, including hidden sessions")
+                    .accessibilityIdentifier("acknowledge-all")
                 TextField("Find a session", text: $model.search).textFieldStyle(.roundedBorder).frame(width: 190)
                 Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }.disabled(!model.connected || model.isRefreshing).help("Refresh sessions")
                 Button { model.showsSettings = true } label: { Image(systemName: "slider.horizontal.3") }.help("Connection settings")
@@ -269,15 +273,19 @@ struct SessionViewer: View {
     private var displayedResult: SessionResult? { model.history.last { $0.result != nil }?.result }
 
     private func acknowledgeButton(_ session: Session) -> some View {
-        let result = displayedResult
+        let result = displayedResult ?? session.latestResult.flatMap { (model.acknowledgments[session.id] ?? []).contains($0.id) ? $0 : nil }
         let acknowledged = result.map { (model.acknowledgments[session.id] ?? []).contains($0.id) } ?? false
-        let available = result.map { model.canAcknowledge($0, sessionID: session.id) } ?? false
+        let available = result.map { acknowledged ? model.canMarkUnread($0, sessionID: session.id) : model.canAcknowledge($0, sessionID: session.id) } ?? false
         return Button {
-            if let result { model.acknowledge(result, sessionID: session.id) }
+            if let result {
+                if acknowledged { model.markUnread(result, sessionID: session.id) }
+                else { model.acknowledge(result, sessionID: session.id) }
+            }
         } label: {
-            Label(acknowledged ? "Acknowledged" : "Acknowledge result", systemImage: acknowledged ? "checkmark.seal.fill" : "checkmark")
+            Label(acknowledged ? "Mark as unread" : "Acknowledge result", systemImage: acknowledged ? "arrow.uturn.backward" : "checkmark")
         }.buttonStyle(.borderedProminent).fixedSize().disabled(!available)
-            .help("Available only for Finished sessions with a loaded, unacknowledged result")
+            .help(acknowledged ? "Mark the displayed result as unread" : "Available only for Finished sessions with a loaded, unacknowledged result")
+            .accessibilityIdentifier("result-acknowledgment")
     }
 
     private func openInCodexButton(_ session: Session) -> some View {

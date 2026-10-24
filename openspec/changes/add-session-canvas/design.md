@@ -96,6 +96,10 @@ On connection loss, invalid observation, or failed freshness verification, mark 
 
 The viewer retains the displayed result identity. If another result arrives, advertise View latest without retargeting an existing Acknowledge action. Enable the action only while the selected session's current derived state is Finished and its target result is loaded and unacknowledged. UI availability and the command share one eligibility predicate; the command rechecks the current session before writing. A new turn, unresolved request, or lost live evidence disables acknowledgment even when an older result remains loaded. Commit an eligible acknowledgment durably before clearing visual attention. Repeated terminal observations do not invalidate prior acknowledgments.
 
+The top toolbar also exposes Acknowledge all as an explicit exception to the viewer-loading requirement. At invocation, capture the latest known result of every current-source Finished session across all filters. A single SQLite transaction inserts the exact source/session/result identities; a failed batch rolls back entirely and leaves the model unchanged. Reuse one prepared statement and publish one acknowledgment dictionary update after commit, then reevaluate visibility once. Do not load histories or send source commands. Disable while disconnected/refreshing, without storage, or with no targets. Main-actor synchronous capture/commit prevents a newly arriving result from joining an older click's batch.
+
+For a known acknowledged result, the same viewer button changes to Mark as unread. Its target is the displayed result, falling back to the known acknowledged latest result when history is unavailable. It can remove that exact review record in any note state after loading ends; it does not acknowledge an unshown unread result. Commit the deletion before changing the model. Keep source execution, requests, archive/project facts, activity, geometry, and other review records unchanged. Removing the latest acknowledgment returns verified inactive work to Finished; higher-priority states retain their normal appearance. No schema migration is needed.
+
 ### 5. Treat spatial changes as explicit commands
 
 Store positions and bounds in world/canvas coordinates, independently from screen coordinates. Distinguish pointer clicks from drags using an interaction threshold; suppress click after a drag or cancellation. Hit-test a note's center only when the drop commits, with the same calculation used for preview. Region borders count as unassigned space.
@@ -134,7 +138,7 @@ Keep durable state in the local service/application rather than in a mounted plu
 
 ### 8. Render a stable, filterable canvas at every zoom
 
-Clip notes, project areas, labels, dots, and shadows to the AppKit canvas bounds. The native top toolbar owns New Session, Fit to Content, and Full Screen; no workspace heading, tagline, or gray header panel sits above the canvas. A native `NavigationSplitView` sidebar toggles through its toolbar control or Shift + Command + S without resetting canvas state.
+Clip notes, project areas, labels, dots, and shadows to the AppKit canvas bounds. The native top toolbar owns New Session, Fit to Content, Full Screen, and labeled Acknowledge all; no workspace heading, tagline, or gray header panel sits above the canvas. A native `NavigationSplitView` sidebar toggles through its toolbar control or Shift + Command + S without resetting canvas state.
 
 Use one derived visible set: search, independently enabled attention states, and hidden project IDs all apply. Omit projects with no visible sessions from the sidebar, canvas, overview, accessibility targets, and fit bounds. Hidden projects have individual/all restore controls. Changes of session state or acknowledgment reevaluate filters; close the viewer if its session becomes hidden. Persist attention/project visibility per source while retaining all underlying layout and membership, including hidden members.
 
@@ -146,7 +150,7 @@ A project area stays interactive even without text. A click zooms into its sessi
 
 Keep source history chronological internally and render it in reverse, newest at the top. Opening or reloading positions the transcript at its newest entry. Loading older pages inserts older content below the newer entries without scrolling to the bottom. A fixed panel above the scrolling transcript holds Acknowledge result, Open in Codex, Reload history, and pagination; use a wrapping layout for narrow viewers.
 
-The header's acknowledgment targets the newest loaded terminal result. A newer unloaded result offers View latest result without retargeting the existing action. Keep acknowledgment disabled outside Finished, while history loads, or for an already acknowledged or unloaded result; reading, reloading, scrolling, opening natively, and closing remain independent of acknowledgment.
+The header's acknowledgment targets the newest loaded terminal result. A newer unloaded result offers View latest result without retargeting the existing action. Keep acknowledgment disabled outside Finished, while history loads, or for an unloaded unread result. An acknowledged target instead offers enabled Mark as unread after loading, regardless of note state; a known acknowledged latest result can be used when no history loaded. Reading, reloading, scrolling, opening natively, and closing remain independent of acknowledgment.
 
 ### 10. Stable local verification permission
 

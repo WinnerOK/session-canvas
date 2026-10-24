@@ -162,6 +162,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 13.2 Use one worker and at least one second between checks, request one latest turn when supported, discard legacy transcript entries, cache successful/failed attempts by source/file/result revision, exclude active/requesting/archived/internal/no-result/later-work sessions, honor explicit session scope, and cancel queued/in-flight publication on close/reconnect/disconnect.
 - [x] 13.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without live desktop testing.
 
+## 14. Bulk and reversible acknowledgment
+
+- [x] 14.1 Add labeled Acknowledge all to the top toolbar; atomically record exact latest-result identities of every current-source Finished session, including filtered notes, without loading viewers or acknowledging other states/later results.
+- [x] 14.2 Add Mark as unread to the same viewer control for a known acknowledged result in any state, including unavailable history; persist exact-identity deletion and preserve work/requests, source facts, other records, and geometry on success or failure.
+- [x] 14.3 Complete offline regressions, release/signature, native toolbar/unread-control inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

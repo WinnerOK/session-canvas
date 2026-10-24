@@ -37,7 +37,7 @@ The terminal outcome of a turn, including completion, failure, or interruption.
 _Avoid_: Session, successful completion
 
 **Acknowledgment**:
-The user's explicit recognition of a particular result as seen while viewing that session; opening it alone is not acknowledgment.
+The user's explicit record that a particular result has been reviewed, made in the viewer or through Acknowledge all. Mark as unread removes that record; opening a session alone is not acknowledgment.
 _Avoid_: Permission approval, task completion
 
 **Note state**:
