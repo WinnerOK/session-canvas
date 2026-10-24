@@ -120,6 +120,8 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 9.5 Persist archive hiding and idle timeout per source, preserve geometry/acknowledgment, protect non-Idle states, and reevaluate visibility on time/activity changes.
 - [x] 9.6 Complete offline core/runtime regressions, demo capture, release build, signature, strict OpenSpec/whitespace/link validation, and record earlier installed-source observations and the failed live run separately. Further live verification is deferred after the user's safety correction.
 - [ ] 9.7 Complete real-host archive/restore UI acceptance across host versions; fixtures and isolated server verification do not establish every live-host flow.
+- [x] 9.8 Add explicit single-session live-test scoping and a host CPU/RSS/time watchdog, verify abort/success/busy-host cleanup with mocked processes and the subscription boundary with a local socket fixture.
+- [x] 9.9 Record the newly authorized one-session ChatGPT check: one observed Running session, peak main-process CPU 19.58%, maximum RSS growth 44.36 MiB, 30.01 seconds including build, same surviving host PID and no remaining test helpers. Full-inventory, prolonged, cross-version, and real-host archive/restore UI acceptance remain open.
 
 ## Workflow follow-up
 

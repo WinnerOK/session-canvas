@@ -41,6 +41,7 @@ final class ApplicationModel: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private var activityTask: Task<Void, Never>?
     private let nativeOpener: ((URL) -> Void)?
+    private let observedSessionIDs: Set<String>?
 
     struct CreationContext: Identifiable {
         let id = UUID()
@@ -48,8 +49,9 @@ final class ApplicationModel: ObservableObject {
         var projectID: String?
     }
 
-    init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil) {
+    init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil, observedSessionIDs: Set<String>? = nil) {
         self.nativeOpener = nativeOpener
+        self.observedSessionIDs = observedSessionIDs
         mode = demo ? .demo : .history
         settings = UserDefaults.standard.data(forKey: "connectionSettings").flatMap { try? JSONDecoder().decode(ConnectionSettings.self, from: $0) } ?? .defaults
         activityTask = Task { [weak self] in
@@ -195,7 +197,7 @@ final class ApplicationModel: ObservableObject {
         if mode == .demo {
             let saved = try? database?.load(source: "demo-v1")
             next = DemoSource(restored: saved?.sessions ?? [])
-        } else { next = CodexSource(mode: mode, settings: settings) }
+        } else { next = CodexSource(mode: mode, settings: settings, observedSessionIDs: observedSessionIDs) }
         source = next
         let cachedSourceID = next.sourceID
         do {

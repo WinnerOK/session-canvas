@@ -73,6 +73,7 @@ final class CodexSource: SessionSource {
     private let rpc = RPCConnection()
     private let desktop = DesktopRuntime()
     private let observeDesktop: Bool
+    private let observedSessionIDs: Set<String>?
     private var runtimeStatus: [String: JSONValue] = [:]
     private var activeTurnIDs: [String: String] = [:]
     var hasLiveState: Bool { mode == .shared || desktop.connected }
@@ -93,9 +94,10 @@ final class CodexSource: SessionSource {
     private let workingDirectoryBase: URL
     private(set) var hiddenSessionIDs: Set<String> = []
 
-    init(mode: SourceMode, settings: ConnectionSettings, workingDirectoryBase: URL? = nil, observeDesktop: Bool = true) {
+    init(mode: SourceMode, settings: ConnectionSettings, workingDirectoryBase: URL? = nil, observeDesktop: Bool = true, observedSessionIDs: Set<String>? = nil) {
         self.mode = mode; self.settings = settings
         self.observeDesktop = observeDesktop
+        self.observedSessionIDs = observedSessionIDs
         self.workingDirectoryBase = workingDirectoryBase ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Session Canvas/Workspaces", isDirectory: true)
         // History and shared observations of the same local Codex store share acknowledgment/layout identity.
@@ -157,7 +159,8 @@ final class CodexSource: SessionSource {
         for id in removed.union(hiddenSessionIDs) { previous.removeValue(forKey: id) }
         // Reapply assignments for retained sessions too, including external project moves/removals.
         for id in previous.keys { previous[id]?.projectID = desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id]) }
-        desktop.observe(Set(previous.keys))
+        let availableIDs = Set(previous.keys)
+        desktop.observe(observedSessionIDs.map { availableIDs.intersection($0) } ?? availableIDs)
         // Bound parallel metadata reads; unchanged source revisions reuse saved evidence.
         let candidates = previous.values.filter {
             let current = desktop.applying(to: $0)
