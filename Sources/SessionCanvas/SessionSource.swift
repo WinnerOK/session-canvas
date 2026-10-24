@@ -241,7 +241,9 @@ final class CodexSource: SessionSource {
                 let value = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(true)])
                 let thread = value["thread"]
                 guard thread["id"].string == sessionID else { throw CanvasError.message("Codex returned history for a different session.") }
-                let session = try CodexWire.session(thread, live: mode == .shared)
+                var session = try CodexWire.session(thread, live: mode == .shared)
+                // History metadata omits archive status; discovery owns that fact.
+                session.archived = previous[sessionID]?.archived
                 previous[sessionID] = session
                 legacyHistory[sessionID] = CodexWire.history(thread["turns"].array, sessionID: sessionID)
             } catch {

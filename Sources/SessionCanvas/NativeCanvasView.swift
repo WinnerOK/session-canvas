@@ -10,6 +10,7 @@ extension NoteState {
         case .permission: return .systemPurple
         case .finished: return .systemGreen
         case .idle: return .secondaryLabelColor
+        case .archived: return .systemBrown
         case .unknown: return .systemGray
         }
     }
@@ -82,7 +83,7 @@ final class CanvasNSView: NSView {
             guard rect.intersects(bounds) else { return nil }
             let members = model.visibleSessions.filter { $0.projectID == project.id }
             let states = Set(members.map { model.state($0) })
-            let state = [NoteState.permission, .waiting, .running, .finished, .unknown, .idle].first { states.contains($0) } ?? .idle
+            let state = [NoteState.permission, .waiting, .running, .finished, .archived, .unknown, .idle].first { states.contains($0) } ?? .idle
             return ProjectOverview(project: project, region: rect, count: members.count, state: state)
         }
     }
@@ -235,10 +236,10 @@ final class CanvasNSView: NSView {
         if model.pendingSessions.contains(session.id) { footer = "Moving to project…" }
         else if let result = session.latestResult {
             let seen = (model.acknowledgments[session.id] ?? []).contains(result.id)
-            footer = seen ? "Result acknowledged" : "\(result.outcome.label) · review result"
+            footer = state == .archived ? result.outcome.label : seen ? "Result acknowledged" : "\(result.outcome.label) · review result"
         } else if !session.cwd.isEmpty { footer = URL(fileURLWithPath: session.cwd).lastPathComponent }
         else { footer = model.mode == .demo ? "Demo session" : "Codex session" }
-        text((session.isArchived ? "Archived · " : "") + footer, in: NSRect(x: rect.minX + inset, y: rect.minY + 100 * scale, width: rect.width - inset * 2, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
+        text(footer, in: NSRect(x: rect.minX + inset, y: rect.minY + 100 * scale, width: rect.width - inset * 2, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
         text(model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - 25 * scale, width: rect.width - inset * 2 - 18 * scale, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
         if state == .finished {
             text("↗", in: NSRect(x: rect.maxX - 32 * scale, y: rect.maxY - 32 * scale, width: 16 * scale, height: 16 * scale), font: .systemFont(ofSize: 13 * scale), color: state.color)
@@ -418,7 +419,7 @@ final class CanvasNSView: NSView {
             let element = CanvasAccessibilityElement()
             element.setAccessibilityRole(.button)
             element.setAccessibilityParent(self)
-            element.setAccessibilityLabel(session.title + ", " + model.state(session).label + ", last activity " + model.activityLabel(session) + (session.isArchived ? ", archived" : ""))
+            element.setAccessibilityLabel(session.title + ", " + model.state(session).label + ", last activity " + model.activityLabel(session))
             if let window {
                 let local = screen(placement.rect)
                 element.setAccessibilityFrame(window.convertToScreen(convert(local, to: nil)))

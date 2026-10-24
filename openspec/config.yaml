@@ -14,6 +14,7 @@ context: |
   The default source combines saved discovery/history with read-only live desktop observations and explicit project identities.
   Desktop creation verifies durable history and releases child-process ownership, reveals the new session despite filters, and automatically opens it in Codex; it never starts a model turn. Keep valid clicked placement or choose the nearest valid position for visible/hidden collisions. Creation in the context's project preserves pan/zoom; only a changed chosen/confirmed project or an explicit action requests focus. Blank names and projectless folders receive explained defaults. Submission errors stay in the active dialog.
   Visibility filters and project overviews affect rendering, not source membership or canvas geometry.
+  Confirmed Archived takes display priority over execution availability. Its Attention checkbox sits immediately above Unknown; idle-age hiding applies only to non-archived Idle sessions.
   See docs/integration-compatibility.md for verified capabilities and unresolved desktop gates.
   See openspec/changes/add-session-canvas/verification.md for correction-to-requirement and test coverage.
   Read docs/delivery-options.md before making claims about integration support.

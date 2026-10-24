@@ -41,8 +41,12 @@ The user's explicit recognition of a particular result as seen while viewing tha
 _Avoid_: Permission approval, task completion
 
 **Note state**:
-The attention signal shown by a session note, derived from its execution state and whether its latest result has been acknowledged.
+The attention signal shown by a session note, derived from its archive status, execution state, and whether its latest result has been acknowledged.
 _Avoid_: Execution state, note color
+
+**Archived**:
+A session state confirmed by Codex that takes precedence over execution and result attention until the session is restored.
+_Avoid_: Unknown, acknowledged result, deleted session
 
 **Session viewer**:
 The view of an existing session and its results within Session Canvas, where the user can explicitly acknowledge a displayed result.

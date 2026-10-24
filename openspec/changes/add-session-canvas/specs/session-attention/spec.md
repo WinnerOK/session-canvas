@@ -7,22 +7,37 @@ Show which sessions are working or need attention, and preserve notice of a term
 ## ADDED Requirements
 
 ### Requirement: Deterministic note state
-The system SHALL derive note state in this priority order: Unknown when current execution cannot be established; Permission required for unresolved permissions; Waiting for you for unresolved input; Running for active execution; Finished for an unacknowledged latest terminal result; otherwise Idle. Each state SHALL have a distinct visual treatment, text label, and icon.
+The system SHALL derive note state in this order: Archived for confirmed archive status; Unknown when execution is unavailable; Permission required; Waiting for you; Running; Finished for an unacknowledged latest result; otherwise Idle. Each state SHALL have a distinct visual treatment, label, and icon. Archived SHALL retain history and acknowledgment independently of its display state.
+
+#### Scenario: Archived with unavailable execution or history
+- **WHEN** Codex confirms a session is archived, including when local history is missing or cached execution/request evidence exists
+- **THEN** its note and viewer show Archived with the archive icon, and its Attention count belongs to Archived rather than Unknown
+- **AND** an unread terminal result remains unacknowledged
+
+#### Scenario: Restore an archived session
+- **WHEN** the source confirms Unarchive
+- **THEN** its state is recalculated from execution/request/result evidence, including Unknown when unavailable or Finished for an unread result
+- **AND** geometry, history, and acknowledgment are retained
+
+#### Scenario: Read history without archive metadata
+- **WHEN** a history response omits archive status and a later inventory page omits the known archived session
+- **THEN** its confirmed Archived state is retained until authoritative unarchive evidence arrives
+- **AND** reading history alone neither restores nor acknowledges the session
 
 #### Scenario: Permission takes priority over activity
 - **WHEN** an executing session has both an unresolved permission request and an unresolved input request
 - **THEN** its note displays Permission required
 
 #### Scenario: Acknowledged session is idle
-- **WHEN** a session has no active turn or pending request and its latest result is acknowledged
+- **WHEN** a non-archived session has no active turn or pending request and its latest result is acknowledged
 - **THEN** its note displays Idle
 
 #### Scenario: A session has never executed
-- **WHEN** a session has no active turn, pending request, or terminal result
+- **WHEN** a non-archived session has no active turn, pending request, or terminal result
 - **THEN** its note displays Idle
 
 ### Requirement: Terminal evidence creates Finished
-The system SHALL recognize completion, failure, and interruption as terminal outcomes only from authoritative source evidence. When no active work or request takes priority, a newly observed terminal result SHALL make the note Finished with a Completed, Failed, or Stopped outcome label.
+The system SHALL recognize completion, failure, and interruption as terminal outcomes only from authoritative source evidence. For a non-archived session, when no active work or request takes priority, a newly observed terminal result SHALL make the note Finished with a Completed, Failed, or Stopped outcome label.
 
 #### Scenario: Successful work ends
 - **WHEN** the source confirms a turn completed and no later work or request is active
@@ -86,10 +101,10 @@ An accepted acknowledgment SHALL clear Finished only when the latest result is a
 - **THEN** no acknowledgment or approval is sent and the note remains Permission required
 
 ### Requirement: Acknowledgment is available only for Finished sessions
-The Acknowledge action SHALL be enabled and accepted only while the selected session's current derived note state is Finished and the targeted result is loaded and unacknowledged. Running, Waiting for you, Permission required, Idle, and Unknown SHALL disable it. The command SHALL recheck eligibility before any acknowledgment write so a state change after rendering cannot bypass this rule.
+The Acknowledge action SHALL be enabled and accepted only while the selected session's current derived note state is Finished and the targeted result is loaded and unacknowledged. Running, Waiting for you, Permission required, Idle, Archived, and Unknown SHALL disable it. The command SHALL recheck eligibility before any acknowledgment write so a state change after rendering cannot bypass this rule.
 
 #### Scenario: An older result remains loaded in another state
-- **WHEN** a result remains loaded while the session is Running, Waiting for you, Permission required, Idle, or Unknown
+- **WHEN** a result remains loaded while the session is Running, Waiting for you, Permission required, Idle, Archived, or Unknown
 - **THEN** Acknowledge is disabled and invoking its command does not record an acknowledgment
 - **AND** the current session state and pending requests are preserved
 
@@ -121,7 +136,7 @@ Starting a later turn SHALL give current execution or requests display priority 
 - **AND** merely having opened it in Codex previously is not treated as acknowledgment
 
 ### Requirement: Missing execution evidence is Unknown
-When execution state is stale or unavailable, the note SHALL show Unknown and indicate its last-known state separately. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
+When execution state is stale or unavailable for a non-archived session, the note SHALL show Unknown and indicate its last-known state separately. A confirmed archived session SHALL remain Archived. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
 
 #### Scenario: Recover saved terminal state during discovery
 - **WHEN** an unloaded session has identity-verified saved evidence whose latest work is terminal

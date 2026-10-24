@@ -7,11 +7,11 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 ## What Changes
 
 - Display one persistent pan/zoom canvas of user sessions, including optional archive visibility. Exclude Guardian/internal agents by source/parent metadata without deleting them.
-- Recover saved terminal state before opening a viewer; current desktop observations take priority. Show single-unit last activity on notes and relative plus exact activity time in the viewer. Offer archive/restore and persisted idle-age hiding, keeping active, uncertain, and unreviewed sessions visible under these lifecycle filters.
+- Recover saved terminal state before opening a viewer; current desktop observations take priority for non-archived sessions. Show single-unit last activity on notes and relative plus exact activity time in the viewer. Offer archive/restore and persisted idle-age hiding, keeping active, uncertain, and unreviewed sessions eligible under the age filter.
 - Clip drawing to the canvas. Put New Session/Fit/Full Screen in the top toolbar, remove the workspace heading/tagline/header panel, and make the native sidebar toggleable.
 - Use project overviews at distant zoom. Keep original geometry and drag behavior; show readable truncated names when they fit, otherwise omit text. Zoom must not shift or reflow regions.
 - Combine search, independent attention visibility, and individual project hiding. Omit projects without visible sessions; persist per-source visibility and offer restore actions.
-- Derive note color and label from live execution, pending requests, and explicit acknowledgment of the latest terminal result: Running, Waiting for you, Permission required, Finished, Idle, or Unknown.
+- Derive note color and label from confirmed archive status, live execution, pending requests, and explicit acknowledgment of the latest result. Archived takes priority over Unknown and has its own Attention checkbox immediately above Unknown, hidden by default.
 - Keep Finished until explicit acknowledgment of a displayed result. Enable Acknowledge only for Finished sessions; opening never acknowledges.
 - Import actual projects and explicit memberships independently of working directories. Note-drop mutations require capable sources and confirmation; current real existing-session moves remain disabled.
 - Show newest-first read-only history with fixed, wrapping Acknowledge/Open in Codex/Reload controls. Session menus start with Open in Codex and omit Open session.
@@ -38,6 +38,6 @@ None. These capabilities originated in this change and have not yet been archive
 
 Introduces a native SwiftUI/AppKit canvas UI, local SQLite storage, and an integration boundary to the user's existing Codex source. The selected Mac-only companion combines CLI inventory/history, validated saved project metadata, and a read-only revisioned desktop runtime feed with automatic reconnection. The newer bundled CLI supports empty-session creation with confirmed project identity. Existing-session membership mutations and full native workflow acceptance remain open gates. See [verification.md](verification.md) for correction-to-requirement coverage and [integration compatibility](../../../docs/integration-compatibility.md) for observed capabilities and limits.
 
-Initial scope is one user, one local source, and one canvas. Collaboration, drawing tools, multiple boards, session archive/delete controls, in-view replies, and permission approval are deferred. The viewer delegates continuing work and resolving requests to Codex desktop.
+Initial scope is one user, one local source, and one canvas. Archive/restore controls are included. Collaboration, drawing tools, multiple boards, session deletion, in-view replies, and permission approval are deferred. The viewer delegates continuing work and resolving requests to Codex desktop.
 
 Supporting investigation: [domain model](../../../docs/domain-model.md), [delivery comparison](../../../docs/delivery-options.md), and [glossary](../../../GLOSSARY.md).

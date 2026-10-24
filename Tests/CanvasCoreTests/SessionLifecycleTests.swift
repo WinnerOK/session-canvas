@@ -3,6 +3,16 @@ import Testing
 import CanvasCore
 
 @Suite struct SessionLifecycleTests {
+    @Test func confirmedArchiveIsTheStateEvenWhenExecutionAndHistoryAreUnknown() {
+        for execution in [Execution.unknown, .idle, .running] {
+            var session = Session(id: "archived", title: "Archived work", execution: execution,
+                                  latestResult: SessionResult(id: "unread", outcome: .stopped, text: "Stopped"), isArchived: true)
+            session.unknownReason = .historyMissing
+            session.requests = ["old-request": .permission]
+            #expect(session.state(acknowledged: []).label == "Archived")
+            #expect(session.state(acknowledged: ["unread"]).symbol == "archivebox")
+        }
+    }
     @Test func activityUsesOnlyLargestUnitAndCapsAtOneMonth() {
         let now = Date(timeIntervalSince1970: 2000000000)
         for (seconds, expected) in [(0.0, "0m ago"), (59, "0m ago"), (60, "1m ago"), (900, "15m ago"),
@@ -19,7 +29,7 @@ import CanvasCore
         var visibility = CanvasVisibility(); visibility.idleTimeout = .oneHour
         let result = SessionResult(id: "r", outcome: .completed, text: "Done")
         for execution in [Execution.running, .unknown, .idle] {
-            var session = Session(id: "s", title: "Work", execution: execution, latestResult: result, updatedAt: old, isArchived: true)
+            var session = Session(id: "s", title: "Work", execution: execution, latestResult: result, updatedAt: old)
             #expect(visibility.includesLifecycle(session, acknowledged: [], now: now))
             #expect(visibility.includesLifecycle(session, acknowledged: ["r"], now: now) == (execution != .idle))
             session.requests = ["p": .permission]
@@ -40,9 +50,9 @@ import CanvasCore
     @Test func olderSavedPayloadsKeepLayoutAndDefaultVisibility() throws {
         let legacy = Data(#"{"hiddenStates":["unknown"],"hiddenProjectIDs":["p"]}"#.utf8)
         let visibility = try JSONDecoder().decode(CanvasVisibility.self, from: legacy)
-        #expect(visibility.hideArchived)
+        #expect(visibility.hiddenStates.contains(.archived))
         #expect(visibility.idleTimeout == .never)
-        #expect(visibility.hiddenStates == [.unknown])
+        #expect(visibility.hiddenStates == [.unknown, .archived])
         #expect(visibility.hiddenProjectIDs == ["p"])
         let session = Session(id: "s", title: "Old", execution: .idle)
         var payload = try JSONEncoder().encode(session)
@@ -51,5 +61,20 @@ import CanvasCore
         payload = try JSONSerialization.data(withJSONObject: object)
         let restored = try JSONDecoder().decode(Session.self, from: payload)
         #expect(!restored.isArchived && !restored.stateIsFromHistory)
+    }
+
+    @Test func archiveVisibilityMigratesAndRoundTripsWithoutASecondSetting() throws {
+        for hidden in [false, true] {
+            let legacy = Data("{\"hiddenStates\":[\"unknown\"],\"hiddenProjectIDs\":[\"p\"],\"hideArchived\":\(hidden),\"idleTimeout\":\"oneDay\"}".utf8)
+            let visibility = try JSONDecoder().decode(CanvasVisibility.self, from: legacy)
+            #expect(visibility.hiddenStates.contains(.archived) == hidden)
+            #expect(visibility.hiddenStates.contains(.unknown))
+            #expect(visibility.hiddenProjectIDs == ["p"])
+            #expect(visibility.idleTimeout == .oneDay)
+            #expect(try JSONDecoder().decode(CanvasVisibility.self, from: JSONEncoder().encode(visibility)) == visibility)
+        }
+        var all = CanvasVisibility(); all.hiddenStates = []
+        #expect(try JSONDecoder().decode(CanvasVisibility.self, from: JSONEncoder().encode(all)).hiddenStates.isEmpty)
+        #expect(NoteState.allCases.suffix(2) == [.archived, .unknown])
     }
 }

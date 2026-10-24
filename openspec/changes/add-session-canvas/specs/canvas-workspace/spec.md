@@ -158,7 +158,17 @@ The system SHALL retain known notes during disconnects, incomplete discovery, or
 - **THEN** its note follows archive visibility settings and is restored to its saved position if that position still matches its membership
 
 ### Requirement: Persisted archive and idle-age visibility
-The sidebar SHALL offer Hide archived sessions, enabled by default, and Hide Idle after with Never (default), 15 minutes, 1 hour, 1 day, 1 week, and 1 month. These settings SHALL combine with existing search, attention, and project filters, persist per source, and leave membership, geometry, and acknowledgment unchanged. A month SHALL mean 30 days. Show all sessions SHALL disable lifecycle hiding as well as clear existing filters.
+Attention SHALL include an Archived checkbox immediately above Unknown, unchecked by default, using the same state filtering as other rows. Visibility SHALL retain Hide Idle after with Never, 15 minutes, 1 hour, 1 day, 1 week, or 1 month (30 days). Choices SHALL persist per source without changing geometry, membership, or acknowledgment. Show all sessions SHALL clear all filters.
+
+#### Scenario: Hide or show archived sessions with missing history
+- **WHEN** the user toggles Archived under Attention while an archived session has unavailable execution or local history
+- **THEN** its note is hidden or shown using Archived, independently of the Unknown checkbox and the Idle timeout
+- **AND** its result remains unacknowledged and its geometry is preserved
+
+#### Scenario: Migrate the former archive visibility control
+- **WHEN** saved visibility contains the former hideArchived option or predates archive visibility
+- **THEN** the Archived checkbox preserves that option, defaulting to unchecked for older payloads
+- **AND** other state/project/age choices are retained, with no second archive visibility control
 
 #### Scenario: Expire an idle session
 - **WHEN** a known Idle session reaches the chosen interval since its source activity timestamp
@@ -166,12 +176,12 @@ The sidebar SHALL offer Hide archived sessions, enabled by default, and Hide Idl
 - **AND** new source activity or a higher-priority state makes it eligible again without changing its saved placement
 
 #### Scenario: Protect work and unreviewed results
-- **WHEN** archive or age hiding would exclude Running, Waiting for you, Permission required, Unknown, or Finished with an unacknowledged result
-- **THEN** lifecycle hiding keeps that session eligible regardless of age or archive state
+- **WHEN** age hiding would exclude a non-archived Running, Waiting for you, Permission required, Unknown, or Finished session
+- **THEN** the Idle-age filter keeps it eligible regardless of age
 - **AND** existing explicit attention/project/search filters retain their established semantics
 
 #### Scenario: Restore visibility
-- **WHEN** the user disables archive hiding, chooses Never, or selects Show all sessions
+- **WHEN** the user checks Archived, chooses Never, or selects Show all sessions
 - **THEN** the corresponding hidden notes and nonempty project areas return at their saved positions
 
 ### Requirement: Compact source activity age

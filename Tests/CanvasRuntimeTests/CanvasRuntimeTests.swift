@@ -44,7 +44,7 @@ struct CanvasRuntimeTests {
         #expect(model.state(model.workspace.sessions[index]) == .finished)
         model.shutdown()
     }
-    @Test(arguments: [NoteState.running, .waiting, .permission, .idle, .unknown])
+    @Test(arguments: [NoteState.running, .waiting, .permission, .idle, .archived, .unknown])
     func acknowledgmentIsRejectedOutsideFinished(state: NoteState) async throws {
         let path = temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
@@ -62,6 +62,7 @@ struct CanvasRuntimeTests {
         case .waiting: model.workspace.sessions[index].requests = ["input": .input]
         case .permission: model.workspace.sessions[index].requests = ["approval": .permission]
         case .idle: model.workspace.sessions[index].latestResult = nil
+        case .archived: model.workspace.sessions[index].archived = true
         case .unknown: model.workspace.sessions[index].execution = .unknown
         case .finished: Issue.record("This regression must use a non-Finished state")
         }
@@ -72,6 +73,7 @@ struct CanvasRuntimeTests {
         #expect(try CanvasDatabase(path: path).acknowledgments(source: model.sourceID)["demo-state"]?.contains(result.id) != true)
         #expect(model.state(model.workspace.sessions[index]) == state)
         model.workspace.sessions[index].execution = .idle
+        model.workspace.sessions[index].archived = false
         model.workspace.sessions[index].requests = [:]
         model.workspace.sessions[index].latestResult = result
         #expect(model.state(model.workspace.sessions[index]) == .finished)

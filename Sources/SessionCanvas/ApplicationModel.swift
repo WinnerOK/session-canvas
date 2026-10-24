@@ -132,9 +132,8 @@ final class ApplicationModel: ObservableObject {
     func showAllProjects() {
         var next = visibility; next.hiddenProjectIDs = []; setVisibility(next)
     }
-    func setHideArchived(_ hidden: Bool) { var next = visibility; next.hideArchived = hidden; setVisibility(next) }
     func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
-    func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hideArchived = false; setVisibility(next) }
+    func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hiddenStates = []; setVisibility(next) }
     func canArchive(_ session: Session) -> Bool {
         archiveEligible(session) && !pendingSessions.contains(session.id) && !isRefreshing
     }
@@ -263,6 +262,7 @@ final class ApplicationModel: ObservableObject {
             for session in snapshot.sessions {
                 var updated = session
                 if updated.latestResult == nil { updated.latestResult = merged[session.id]?.latestResult }
+                if updated.archived == nil { updated.archived = merged[session.id]?.archived }
                 merged[session.id] = updated
             }
             for id in source.removedSessionIDs { merged.removeValue(forKey: id) }
