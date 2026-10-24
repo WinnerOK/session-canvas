@@ -6,6 +6,8 @@
 
 Hosted checks use fixtures and native AppKit rendering/events. They do not require an installed Codex desktop, account credentials, saved sessions, or Developer ID secrets. The three installed-source tests remain opt-in local checks; CI does not claim to verify the remaining real-desktop integration gates. See [local verification](native-application.md#codex-verification-launcher) and the [evidence ledger](../openspec/changes/add-session-canvas/verification.md).
 
+The first hosted run exposed a Swift 6.1 overload ambiguity in project-focus geometry that local Swift 6.4 accepted. The canvas now converts AppKit dimensions to the domain's `Double` before that arithmetic, retaining the same positioning formula. Both architectures continue using Xcode 16.4 so CI verifies this compatibility boundary.
+
 After these files reach GitHub, Actions must be enabled for the repository. To require checks before merging, add the two architecture jobs and OpenSpec to the branch protection/ruleset after their first run. Adding workflow files alone does not configure branch protection. Pull requests use `contents: read`, and checkout does not persist credentials.
 
 ## Create a release in GitHub

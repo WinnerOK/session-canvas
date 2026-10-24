@@ -116,6 +116,9 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 9.3 Add validated bundle versions/build numbers and architecture-specific ZIP/checksum packaging; verify metadata, executable permissions, failure propagation, and a local Apple Silicon archive.
 - [x] 9.4 Document GitHub setup, manual/tag release flows, draft review, checksum verification, and ad-hoc signing limitations; synchronize SDD and verify local structure/links.
 - [ ] 9.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
+  - [x] 9.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
+  - [ ] 9.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head.
+  - [ ] 9.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
 
 ## Workflow follow-up
 
