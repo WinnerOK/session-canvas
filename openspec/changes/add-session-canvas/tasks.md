@@ -117,7 +117,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 9.2.2 Pace/coalesce subscriptions, disable desktop observation in saved-inventory tests, isolate the live test behind a separate exact-filter opt-in, and cap default build jobs after the reported CPU/crash incident; verify these boundaries using fixtures only.
 - [x] 9.3 Include archived discovery and implement source-confirmed archive/restore from session menus and viewer, protecting active, Unknown, and unreviewed sessions.
 - [x] 9.4 Display one-unit source activity on notes and relative/exact time in the viewer, refreshing without manufacturing activity.
-- [x] 9.5 Persist archive hiding and idle timeout per source, preserve geometry/acknowledgment, protect non-Idle states, and reevaluate visibility on time/activity changes.
+- [x] 9.5 Persist archive hiding and idle timeout per source, preserve geometry/acknowledgment, protect work and unreviewed results, and reevaluate visibility on time/activity changes; section 11 extends age hiding to optional Unknown.
 - [x] 9.6 Complete offline core/runtime regressions, demo capture, release build, signature, strict OpenSpec/whitespace/link validation, and record earlier installed-source observations and the failed live run separately. Further live verification is deferred after the user's safety correction.
 - [ ] 9.7 Complete real-host archive/restore UI acceptance across host versions; fixtures and isolated server verification do not establish every live-host flow.
 - [x] 9.8 Add explicit single-session live-test scoping and a host CPU/RSS/time watchdog, verify abort/success/busy-host cleanup with mocked processes and the subscription boundary with a local socket fixture.
@@ -130,6 +130,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 10.3 Preserve legacy hideArchived choices through hiddenStates membership and a compatible payload codec; verify both choices, Show all, source isolation, restore, geometry, and Finished-only acknowledgment including Archived.
 - [x] 10.4 Complete offline regressions, native demo inspection of the archived session/Attention row, release/signature, strict validation, whitespace, and affected local links; update PR evidence without live desktop testing.
 - [x] 10.5 Preserve known archive metadata across legacy history reads and incomplete inventory, including cached sessions; reproduce the downgrade before fixing it and verify archive/restore/failure on the same source fixture.
+
+## 11. Optional Unknown age hiding
+
+- [x] 11.1 Add Hide unknown directly below Hide Idle after, checked by default including old preferences, with source-isolated persistence and the same activity cutoff; Never disables age hiding for both states.
+- [x] 11.2 Preserve running execution, pending requests, and any known unacknowledged result even when displayed as Unknown; restore expired notes/projects without changing state, geometry, membership, or acknowledgment.
+- [x] 11.3 Complete offline regression, native demo inspection, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without desktop IPC.
 
 ## Workflow follow-up
 

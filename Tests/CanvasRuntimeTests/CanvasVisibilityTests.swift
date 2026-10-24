@@ -45,6 +45,7 @@ struct CanvasVisibilityTests {
         model.setStateVisible(.unknown, false)
         model.setProjectVisible("research", false)
         model.setIdleTimeout(.oneWeek)
+        model.setHideUnknown(false)
         model.setStateVisible(.archived, true)
         let expected = model.visibility
         #expect(model.workspace == original)
@@ -132,7 +133,8 @@ struct CanvasVisibilityTests {
         model.updateActivityTime(now: now.addingTimeInterval(1))
         #expect(!model.visibleSessions.contains { $0.id == "idle" })
         #expect(model.selectedSessionID == nil)
-        #expect(model.visibleSessions.count == 5)
+        #expect(model.visibleSessions.count == 4)
+        #expect(!model.visibleSessions.contains { $0.id == "unknown" })
         #expect(model.workspace == original)
         let i = model.workspace.sessions.firstIndex { $0.id == "idle" }!
         model.workspace.sessions[i].updatedAt = now
@@ -202,6 +204,42 @@ struct CanvasVisibilityTests {
         #expect(model.state(model.workspace.sessions[index]) == .unknown)
         model.workspace.sessions[index].execution = .idle
         #expect(model.state(model.workspace.sessions[index]) == .finished)
+    }
+
+    @Test func hideUnknownUsesIdleAgeAndRestoresTheSameNoteAndProject() {
+        let model = fixture()
+        defer { model.shutdown() }
+        let now = Date(timeIntervalSince1970: 2000000000)
+        let index = model.workspace.sessions.firstIndex { $0.id == "unknown" }!
+        model.workspace.sessions[index].updatedAt = now.addingTimeInterval(-3600)
+        model.workspace.sessions[index].projectID = "old"
+        model.workspace.projects.append(Project(id: "old", name: "Old sessions"))
+        model.workspace.regions["old"] = Rect(-1000, -1000, 760, 580)
+        model.workspace.placements["unknown"] = Placement(Point(-980, -936))
+        model.updateActivityTime(now: now)
+        let original = model.workspace
+        model.setIdleTimeout(.oneHour)
+        #expect(model.visibility.hideUnknown)
+        #expect(!model.visibleSessions.contains { $0.id == "unknown" })
+        #expect(!model.visibleProjects.contains { $0.id == "old" })
+        model.setHideUnknown(false)
+        #expect(model.visibleSessions.contains { $0.id == "unknown" })
+        #expect(model.visibleProjects.contains { $0.id == "old" })
+        model.openSession("unknown")
+        model.setHideUnknown(true)
+        #expect(model.selectedSessionID == nil)
+        #expect(model.workspace == original)
+        model.workspace.sessions[index].execution = .running
+        #expect(model.visibleSessions.contains { $0.id == "unknown" })
+        model.workspace.sessions[index].execution = .unknown
+        model.workspace.sessions[index].latestResult = SessionResult(id: "result", outcome: .completed, text: "Done")
+        #expect(model.visibleSessions.contains { $0.id == "unknown" })
+        model.acknowledgments["unknown"] = ["result"]
+        #expect(!model.visibleSessions.contains { $0.id == "unknown" })
+        model.showAllSessions()
+        #expect(model.visibleSessions.contains { $0.id == "unknown" })
+        #expect(model.workspace.placements == original.placements)
+        #expect(model.workspace.regions == original.regions)
     }
 
     private func fixture() -> ApplicationModel {

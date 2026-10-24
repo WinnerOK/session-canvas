@@ -133,6 +133,7 @@ final class ApplicationModel: ObservableObject {
         var next = visibility; next.hiddenProjectIDs = []; setVisibility(next)
     }
     func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
+    func setHideUnknown(_ hidden: Bool) { var next = visibility; next.hideUnknown = hidden; setVisibility(next) }
     func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hiddenStates = []; setVisibility(next) }
     func canArchive(_ session: Session) -> Bool {
         archiveEligible(session) && !pendingSessions.contains(session.id) && !isRefreshing

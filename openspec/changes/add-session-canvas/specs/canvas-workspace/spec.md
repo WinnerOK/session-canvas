@@ -176,13 +176,31 @@ Attention SHALL include an Archived checkbox immediately above Unknown, unchecke
 - **AND** new source activity or a higher-priority state makes it eligible again without changing its saved placement
 
 #### Scenario: Protect work and unreviewed results
-- **WHEN** age hiding would exclude a non-archived Running, Waiting for you, Permission required, Unknown, or Finished session
-- **THEN** the Idle-age filter keeps it eligible regardless of age
+- **WHEN** age hiding would exclude running execution, a pending input/permission request, or a known unacknowledged result
+- **THEN** the age filter keeps it eligible regardless of age, including when the displayed state is Unknown
 - **AND** existing explicit attention/project/search filters retain their established semantics
 
 #### Scenario: Restore visibility
 - **WHEN** the user checks Archived, chooses Never, or selects Show all sessions
 - **THEN** the corresponding hidden notes and nonempty project areas return at their saved positions
+
+### Requirement: Optional age hiding for Unknown
+Visibility SHALL include Hide unknown directly below Hide Idle after, checked by default including for old preferences. Its per-source choice SHALL persist and apply the same source-activity cutoff to Unknown. Never SHALL disable age hiding for both Idle and Unknown. Hiding SHALL NOT change source state, acknowledgment, membership, or geometry. The Attention Unknown choice SHALL remain independent.
+
+#### Scenario: Expire stale Unknown sessions by default
+- **WHEN** an Unknown session with no active work, pending request, or unacknowledged result reaches the selected activity-age limit
+- **THEN** it leaves the visible set within 30 seconds and its open viewer closes
+- **AND** counts and project visibility use the same projection without changing its Unknown state or saved placement
+
+#### Scenario: Retain Unknown when age hiding is disabled or unavailable
+- **WHEN** Hide unknown is unchecked, the timeout is Never, or the activity timestamp is missing or in the future
+- **THEN** Unknown sessions remain eligible under the age filter
+- **AND** unchecking Hide unknown restores expired Unknown notes and their project areas at their saved positions
+
+#### Scenario: Restore the saved Unknown preference
+- **WHEN** visibility is loaded for the same source after reopening
+- **THEN** the saved Hide unknown choice is retained independently of other sources and Attention choices
+- **AND** a preference without that field starts checked
 
 ### Requirement: Compact source activity age
 Each detailed session note SHALL show last source activity using one largest unit: whole minutes, hours, days, then the capped label 1 month ago at 30 days and beyond. Polling, viewing, acknowledgment, and archive changes SHALL NOT manufacture a newer activity timestamp. Labels SHALL refresh within 30 seconds without requiring manual refresh; missing timestamps SHALL display Activity unavailable and SHALL NOT expire a session by age.

@@ -97,7 +97,9 @@ struct ContentView: View {
                         Picker("Hide Idle after", selection: Binding(get: { model.visibility.idleTimeout }, set: { model.setIdleTimeout($0) })) {
                             ForEach(IdleTimeout.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
-                        Text("Active sessions, Unknown, and results to review stay visible.").font(.caption2).foregroundStyle(.secondary)
+                        Toggle("Hide unknown", isOn: Binding(get: { model.visibility.hideUnknown }, set: { model.setHideUnknown($0) }))
+                            .toggleStyle(.checkbox).help("Apply the same age limit to Unknown sessions. Never disables age hiding.")
+                        Text("Active sessions and results to review stay visible.").font(.caption2).foregroundStyle(.secondary)
                     }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 20)
                     HStack {
                         Text("PROJECTS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
