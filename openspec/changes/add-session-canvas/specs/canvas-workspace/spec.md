@@ -14,7 +14,12 @@ The application SHALL use native SwiftUI/AppKit interfaces on macOS 14 or later,
 - **THEN** a native window presents the canvas, sidebar, and session viewer without a web renderer
 
 ### Requirement: Canvas-first window controls
-The application SHALL place New Session, Fit to Content, and Full Screen controls in the top window toolbar. The canvas SHALL begin directly below that toolbar without a workspace heading, tagline, or header panel. The left sidebar SHALL be collapsible through the native toolbar toggle and Shift + Command + S.
+The application SHALL place New Session, Fit to Content, Full Screen, and a labeled Acknowledge all control in the top window toolbar. The canvas SHALL begin directly below that toolbar without a workspace heading, tagline, or header panel. The left sidebar SHALL be collapsible through the native toolbar toggle and Shift + Command + S.
+
+#### Scenario: Acknowledge from the top bar
+- **WHEN** Finished sessions have unacknowledged latest results
+- **THEN** Acknowledge all is available in the top toolbar independently of viewer selection and filters
+- **AND** it is disabled with no eligible results, during source refresh, or without a connected source/storage
 
 #### Scenario: Collapse and restore the sidebar
 - **WHEN** the user toggles the sidebar through the toolbar or keyboard shortcut

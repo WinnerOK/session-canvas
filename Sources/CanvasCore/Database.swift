@@ -39,7 +39,27 @@ public final class CanvasDatabase {
         return try JSONDecoder().decode(Workspace.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0))))
     }
     public func acknowledge(source: String, session: String, result: String) throws {
+        try acknowledge(source: source, results: [(session, result)])
+    }
+    public func acknowledge(source: String, results: [(session: String, result: String)]) throws {
+        guard !results.isEmpty else { return }
         let stmt = try statement("INSERT OR IGNORE INTO acknowledgments(source,session,result) VALUES(?,?,?)")
+        defer { sqlite3_finalize(stmt) }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            for result in results {
+                sqlite3_reset(stmt); sqlite3_clear_bindings(stmt)
+                for (index, value) in [source, result.session, result.result].enumerated() { sqlite3_bind_text(stmt, Int32(index + 1), value, -1, transient) }
+                guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }
+            }
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+    public func removeAcknowledgment(source: String, session: String, result: String) throws {
+        let stmt = try statement("DELETE FROM acknowledgments WHERE source=? AND session=? AND result=?")
         defer { sqlite3_finalize(stmt) }
         for (index, value) in [source, session, result].enumerated() { sqlite3_bind_text(stmt, Int32(index + 1), value, -1, transient) }
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }

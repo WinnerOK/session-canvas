@@ -353,6 +353,38 @@ final class ApplicationModel: ObservableObject {
             closeHiddenSelection()
         } catch { errorMessage = "Acknowledgment was not saved. Please retry. \(error.localizedDescription)" }
     }
+    private var acknowledgeAllTargets: [(session: String, result: String)] {
+        workspace.sessions.compactMap { session in
+            guard state(session) == .finished, let result = session.latestResult else { return nil }
+            return (session.id, result.id)
+        }
+    }
+    var acknowledgeAllCount: Int { acknowledgeAllTargets.count }
+    var canAcknowledgeAll: Bool { connected && !isRefreshing && database != nil && acknowledgeAllCount > 0 }
+    func acknowledgeAll() {
+        guard canAcknowledgeAll, let database else { return }
+        let targets = acknowledgeAllTargets
+        do {
+            try database.acknowledge(source: sourceID, results: targets)
+            var next = acknowledgments
+            for target in targets { next[target.session, default: []].insert(target.result) }
+            acknowledgments = next
+            closeHiddenSelection()
+        } catch { errorMessage = "Acknowledgments were not saved. Please retry. \(error.localizedDescription)" }
+    }
+    func canMarkUnread(_ result: SessionResult, sessionID: String) -> Bool {
+        selectedSessionID == sessionID && !isLoadingHistory && selectedSession != nil &&
+            (history.contains(where: { $0.result?.id == result.id }) || selectedSession?.latestResult?.id == result.id) &&
+            (acknowledgments[sessionID] ?? []).contains(result.id)
+    }
+    func markUnread(_ result: SessionResult, sessionID: String) {
+        guard canMarkUnread(result, sessionID: sessionID), let database else { return }
+        do {
+            try database.removeAcknowledgment(source: sourceID, session: sessionID, result: result.id)
+            acknowledgments[sessionID]?.remove(result.id)
+            closeHiddenSelection()
+        } catch { errorMessage = "Result was not marked unread. Please retry. \(error.localizedDescription)" }
+    }
     func moveNote(id: String, position: Point, expectedRevision: String) {
         guard let session = workspace.sessions.first(where: { $0.id == id }), let previous = workspace.placements[id], !pendingSessions.contains(id) else { return }
         guard session.revision == expectedRevision else { errorMessage = "The session changed during the drag. Its current placement was retained."; return }

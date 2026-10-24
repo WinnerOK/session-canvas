@@ -61,7 +61,7 @@ The live-test watchdog samples ChatGPT CPU time and RSS every 0.5 seconds. It re
 
 ## Controls
 
-The canvas starts immediately below the window toolbar. New Session, Fit to Content, and Full Screen live in that toolbar. The native sidebar toggle collapses the left panel and gives its space to the canvas; Shift + Command + S performs the same action without changing the viewport, filters, or open session.
+The canvas starts immediately below the window toolbar. New Session, Fit to Content, Full Screen, and Acknowledge all live in that toolbar. The native sidebar toggle collapses the left panel and gives its space to the canvas; Shift + Command + S performs the same action without changing the viewport, filters, or open session.
 
 | Action | Control |
 | --- | --- |
@@ -81,6 +81,8 @@ The canvas starts immediately below the window toolbar. New Session, Fit to Cont
 | Reset visibility and search | All sessions, the empty-view button, or Command + 1 |
 | Create a session | Top toolbar, File menu, right-click canvas background or a project area, or Command + N |
 | Acknowledge | Acknowledge result in the viewer's fixed top panel; available only for Finished sessions with a loaded, unacknowledged result |
+| Acknowledge all | Top toolbar; review latest results of all current-source Finished sessions, including notes hidden by filters |
+| Reverse acknowledgment | Mark as unread on the same viewer button; available for a known acknowledged result in any session state after loading ends |
 | Continue in Codex | Open in Codex in the viewer's top panel or the first item in a real note's context menu |
 | Reload history | Reload history in the viewer's top panel |
 | Change connection | Connection Settings, Command + comma, or the source menu in the sidebar |
@@ -90,6 +92,10 @@ The note center at release determines the target project. Borders are unassigned
 Real session-note context menus start with Open in Codex and omit the duplicate Open session action. Primary click and keyboard activation open the local viewer. Demo notes have no native Codex navigation target.
 
 The session viewer displays messages and results newest first, opening at the top. Loading older pages appends them below the newer content. Acknowledge result, Open in Codex, Reload history, and pagination controls stay above the scrolling transcript; narrow viewers wrap the main actions into two rows. Acknowledge targets the newest loaded result and is enabled only while the session is Finished and history is not loading. It remains disabled in Running, Waiting for you, Permission required, Idle, Archived, and Unknown, or for an unloaded/already acknowledged result. The command rechecks the current state before saving, including when a new turn starts after the viewer rendered. A newer unviewed result offers View latest result without changing the acknowledgment target. History failures appear beside Reload history for retry.
+
+**Acknowledge all** applies to every currently Finished session in the connected source, including notes hidden by search, attention, or project filters. It records only each session's latest known result at the moment of the click; no viewer or history request is required. Running, pending requests, Unknown, Archived, no-result sessions, and results discovered afterward are excluded. The button is disabled during refresh or when no eligible result/storage/connection exists. The batch is atomic: a storage failure leaves all prior acknowledgments and attention intact. Normal Idle/age filters apply afterward and can close the selected viewer.
+
+For an acknowledged result the viewer's same button reads **Mark as unread**. It removes only that result's local review record and remains available in Idle, Running, request states, Unknown, and Archived after loading ends. If transcript history failed to load, the known acknowledged latest result can still be marked unread. A latest inactive result becomes Finished again; active work/requests, archives, and other results keep their normal priority. Both directions persist across restart and surface storage errors without optimistic UI changes. If reviewed notes were hidden by age, use Show all sessions to make them available for reversal.
 
 Opening or reloading the latest history can also resolve Unknown: if the newest raw turn is terminal and no newer work or pending request is known, the note and viewer become Finished for its unread result. This works with paged and legacy history even when the local rollout is unavailable. The viewer marks saved-history provenance; opening still does not acknowledge the result. Older pages, a cached Completed result alone, empty/unsupported latest evidence, and a completed turn followed by newer work cannot establish Finished. Source revision/file changes and live state take priority over a delayed history response. Normal refresh retains valid recovered evidence; explicit acknowledgment then returns the session to Idle and enables the selected age limit.
 

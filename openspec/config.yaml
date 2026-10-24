@@ -6,8 +6,8 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
   Session Canvas is a personal spatial workspace over existing Codex sessions.
   Use GLOSSARY.md for canonical domain language and docs/domain-model.md for the model.
-  Opening a session never acknowledges its result; acknowledgment is explicit in the viewer.
-  Enable and accept acknowledgment only for Finished sessions with a loaded, unacknowledged result; recheck the current state before saving.
+  Opening a session never acknowledges its result. Viewer acknowledgment requires a loaded unread result in Finished; Acknowledge all explicitly records the latest known results of all Finished sessions in the current source, including filtered notes, without loading viewers. Recheck eligibility and persist a bulk snapshot atomically.
+  Mark as unread reverses one known acknowledgment from the viewer in any session state, preserving execution, requests, source membership, and other results.
   Project regions represent actual Codex project membership, not canvas-only tags or working directories.
   The selected delivery is a Mac-only SwiftUI/AppKit companion with a session/result viewer and SQLite storage.
   Do not introduce a web renderer or a cross-platform shell for this application.

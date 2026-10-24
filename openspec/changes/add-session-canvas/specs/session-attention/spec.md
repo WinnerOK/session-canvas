@@ -71,19 +71,19 @@ An unresolved request SHALL remain part of the note-state calculation until the 
 - **THEN** the note changes from Waiting for you to Running
 
 ### Requirement: Opening never acknowledges
-A Finished note SHALL retain its Finished state when its session viewer is opened, focused, scrolled, or closed. The system SHALL require a distinct Acknowledge action while a particular terminal result is displayed.
+A Finished note SHALL retain its Finished state when its session viewer is opened, focused, scrolled, or closed. The system SHALL require a distinct viewer Acknowledge action or the explicit top-bar Acknowledge all action.
 
 #### Scenario: Inspect and return without acknowledgment
 - **WHEN** the user opens a Finished note, reads its result, and returns to the canvas without choosing Acknowledge
 - **THEN** the note remains Finished
 
 ### Requirement: Acknowledgment targets the displayed result
-The Acknowledge action SHALL record only the identity of the terminal result displayed in the session viewer when the action is taken. It SHALL NOT acknowledge a different result that arrives concurrently. Acknowledgment SHALL be unavailable when no terminal result is displayed.
+The viewer Acknowledge action SHALL record only the identity of the terminal result displayed when the action is taken. It SHALL NOT acknowledge a different result that arrives concurrently. Viewer acknowledgment SHALL be unavailable when no terminal result is displayed; explicit bulk acknowledgment follows its separate contract.
 
 #### Scenario: A newer result arrives during review
 - **WHEN** result A is displayed and result B completes before the user acknowledges A
 - **THEN** the action acknowledges only A
-- **AND** B remains unacknowledged until displayed and explicitly acknowledged
+- **AND** B remains unacknowledged until separately acknowledged in its viewer or included in a later explicit bulk action
 
 #### Scenario: There is no result to acknowledge
 - **WHEN** the viewer shows a session that has never produced a terminal result
@@ -101,7 +101,7 @@ An accepted acknowledgment SHALL clear Finished only when the latest result is a
 - **THEN** no acknowledgment or approval is sent and the note remains Permission required
 
 ### Requirement: Acknowledgment is available only for Finished sessions
-The Acknowledge action SHALL be enabled and accepted only while the selected session's current derived note state is Finished and the targeted result is loaded and unacknowledged. Running, Waiting for you, Permission required, Idle, Archived, and Unknown SHALL disable it. The command SHALL recheck eligibility before any acknowledgment write so a state change after rendering cannot bypass this rule.
+The viewer Acknowledge action SHALL require the selected session to be Finished and the targeted result to be loaded and unacknowledged. Running, Waiting for you, Permission required, Idle, Archived, and Unknown SHALL disable it. The command SHALL recheck eligibility before writing. Explicit bulk acknowledgment may use known latest results without loading viewers; reversing acknowledgment follows Mark as unread.
 
 #### Scenario: An older result remains loaded in another state
 - **WHEN** a result remains loaded while the session is Running, Waiting for you, Permission required, Idle, Archived, or Unknown
@@ -113,7 +113,7 @@ The Acknowledge action SHALL be enabled and accepted only while the selected ses
 - **THEN** Acknowledge becomes available again after history loading completes
 
 ### Requirement: Acknowledgment is durable and repeatable
-The system SHALL persist acknowledgment per user, session, and result identity. Repeated acknowledgment of the same result SHALL have no additional effect. A failed save SHALL retain the unacknowledged state and show a retryable error.
+The system SHALL persist acknowledgment per user, session, and result identity until explicitly reversed. Repeated acknowledgment of the same result SHALL have no additional effect. A failed save SHALL retain the previous acknowledgment state and show a retryable error.
 
 #### Scenario: Restart after acknowledgment
 - **WHEN** the app restarts after a result was successfully acknowledged
@@ -122,6 +122,37 @@ The system SHALL persist acknowledgment per user, session, and result identity. 
 #### Scenario: Acknowledgment cannot be saved
 - **WHEN** storage fails while saving an acknowledgment
 - **THEN** the result remains unacknowledged and the viewer offers retry
+
+### Requirement: Explicit bulk acknowledgment
+Acknowledge all SHALL atomically record the latest known unread result of every current-source Finished session, including filtered sessions, without opening history. It SHALL recheck eligibility at invocation, capture exact session/result identities, and exclude every other state. Failure SHALL preserve all prior records and UI state. The action SHALL NOT change execution, requests, activity, membership, geometry, filters, or results arriving after the captured snapshot.
+
+#### Scenario: Review all known Finished results
+- **WHEN** the user invokes Acknowledge all with Finished sessions hidden by search, attention, or project filters
+- **THEN** each eligible latest result is recorded in one transaction without requiring viewer selection/history
+- **AND** eligible notes derive Idle and normal age/visibility filters apply, while Running, requests, Unknown, Archived, no-result sessions, and other sources remain untouched
+
+#### Scenario: A result arrives after the bulk action
+- **WHEN** another result appears after the action captured its targets
+- **THEN** it remains unacknowledged and derives Finished when no higher-priority state applies
+- **AND** repeated bulk invocation with no eligible targets has no effect
+
+#### Scenario: A bulk write fails partway
+- **WHEN** storage rejects one acknowledgment after earlier inserts in the same batch
+- **THEN** all inserts from that batch roll back, existing records remain, and the UI reports a retryable failure without clearing attention
+
+### Requirement: Reverse explicit acknowledgment
+The viewer SHALL offer Mark as unread on the same button for an acknowledged displayed result, or its known latest result when history is unavailable. It SHALL remove only that source/session/result record in any session state after rechecking identity and acknowledgment. It SHALL be disabled during loading and preserve all source facts, other acknowledgments, and geometry. A failed deletion SHALL preserve the previous record and show an error.
+
+#### Scenario: Mark an acknowledged result unread
+- **WHEN** the user selects Mark as unread for an acknowledged result
+- **THEN** that acknowledgment is durably removed and an inactive latest result becomes Finished again
+- **AND** Running, pending requests, Unknown, and Archived keep their derived state; newer/other results are unchanged
+- **AND** the same control offers Acknowledge result again when its normal Finished/loaded eligibility applies
+
+#### Scenario: History is unavailable for an acknowledged session
+- **WHEN** the viewer knows the acknowledged latest result but cannot load transcript history
+- **THEN** Mark as unread remains available after loading ends without requiring a history RPC or source mutation
+- **AND** an unrelated unshown result cannot be used as its target
 
 ### Requirement: Each new result needs acknowledgment
 Starting a later turn SHALL give current execution or requests display priority without erasing prior acknowledgments. A later terminal result SHALL require its own acknowledgment. On first discovery, the latest known terminal result SHALL be unacknowledged unless this app already holds its acknowledgment.

@@ -65,7 +65,7 @@ The viewer SHALL show the session title, current note state, and read-only sourc
 - **AND** it does not offer acknowledgment for the unloaded result
 
 ### Requirement: Viewer controls remain above history
-Acknowledge result, Open in Codex, Reload history, and pagination controls SHALL remain in a fixed panel above the transcript. The panel SHALL adapt to narrow viewer widths without clipping button labels.
+Acknowledge result or Mark as unread, Open in Codex, Reload history, and pagination controls SHALL remain in a fixed panel above the transcript. The panel SHALL adapt to narrow viewer widths without clipping button labels.
 
 #### Scenario: Scroll in a narrow viewer
 - **WHEN** the viewer is narrow and the user scrolls through its transcript
@@ -73,6 +73,11 @@ Acknowledge result, Open in Codex, Reload history, and pagination controls SHALL
 
 ### Requirement: Acknowledge is available in the viewer header
 The top panel SHALL enable Acknowledge only for a Finished session's newest loaded, unacknowledged terminal result. It SHALL remain disabled during history loading and for every other session state. The panel SHALL indicate acknowledged results and announce newer results without silently changing the loaded result targeted by the action. The command SHALL recheck the current state before saving acknowledgment.
+
+#### Scenario: Reverse acknowledgment from the same control
+- **WHEN** the targeted result is already acknowledged
+- **THEN** the same header button reads Mark as unread and permits reversal in any session state after loading ends
+- **AND** when no result is loaded, the known acknowledged latest result can be used without enabling acknowledgment of an unshown unread result
 
 #### Scenario: Latest-history recovery enables explicit review
 - **WHEN** opening or reloading the latest history establishes Finished for an Unknown session

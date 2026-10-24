@@ -48,6 +48,19 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 ## Evidence scope and entry points
 
+### Bulk and reversible acknowledgment, 2026-10-25
+
+The top toolbar now exposes Acknowledge all for every current-source Finished session, including filtered notes, without opening viewers or loading histories. Invocation rechecks eligibility and captures exact latest-result identities; one SQLite transaction inserts the batch, then one model update reevaluates attention/visibility. Other states, other sources, and later-arriving results are excluded. The viewer's same result control becomes Mark as unread for a known acknowledged target in any state, using the displayed result or the acknowledged latest result if history is unavailable. Deletion persists before the local record changes; it preserves current execution/requests, archive/project facts, activity, geometry, and other result identities.
+
+Four [AcknowledgmentActionsTests](../../../Tests/CanvasRuntimeTests/AcknowledgmentActionsTests.swift) cover hidden Finished results and source-isolated restart persistence, newer results after the bulk click, busy/empty/idempotent bulk behavior, seven note states for exact-target reversal, history-loading guards, unavailable-history fallback, and unrelated-target rejection. A SQLite trigger rejects the last batch insert after earlier writes to prove whole-batch rollback and unchanged model state; a delete-rejection trigger proves failed reversal retains its record in memory and storage. Removing the trigger allows reversal and restart restores the result as unread. Existing single-result Finished-only/race tests still pass.
+
+The full offline run passed **100 executed Swift tests** (35 core, 68 runtime reported, with three opt-in checks skipped). Release compilation with one job and bundle signature passed. Fresh isolated demo captures `.build/verification/acknowledge-all-demo.png` and `.build/verification/mark-as-unread-demo.png` were inspected: the toolbar label fits; the second, pre-acknowledged fixture shows Idle, Mark as unread, no remaining review count, and disabled empty bulk action. These captures verify presentation; command/transaction behavior is exercised by the model/storage tests, not by native button events. Strict OpenSpec/whitespace and 122 affected local links passed. No installed desktop checks or real-source acknowledgment was performed.
+
+| Correction | Contract | Evidence |
+| --- | --- | --- |
+| Add Acknowledge all to the top bar | [Explicit bulk acknowledgment](specs/session-attention/spec.md#requirement-explicit-bulk-acknowledgment), [Canvas-first window controls](specs/canvas-workspace/spec.md#requirement-canvas-first-window-controls) | Hidden-state/project/search cases, source isolation, exact snapshot identities, post-click results, atomic rollback, full regressions, and toolbar capture. |
+| Reverse acknowledgment from the same viewer button | [Reverse explicit acknowledgment](specs/session-attention/spec.md#requirement-reverse-explicit-acknowledgment) | Seven-state exact-target reversal, unavailable-history fallback, delete failure, restart persistence, and Mark as unread capture. |
+
 ### Automatic cached-result recovery, 2026-10-25
 
 The user confirmed that opening a session recovered Finished but requested the same state for unopened notes with saved Completed results. `cachedResultsResolveInBackgroundWithoutOpeningSessions` first failed for both paged and legacy sources: no viewer was opened and the notes remained Unknown. Same-source cached results now seed a bounded candidate queue after inventory discovery; each latest-turn check reuses the prior revision/file/live-state validation. Results are hints for checking, not proof of inactivity or acknowledgment. Individual callbacks update the workspace without another inventory read.
