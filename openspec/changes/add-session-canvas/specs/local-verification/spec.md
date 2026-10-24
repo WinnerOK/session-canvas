@@ -51,6 +51,7 @@ Routine checks SHALL use fixtures and demo captures. Saved-inventory tests SHALL
 #### Scenario: Run an authorized bounded live check
 - **WHEN** the user authorizes a live check and the launcher receives one explicit session ID
 - **THEN** desktop subscriptions are restricted to that ID, while the application uses isolated Canvas storage and submits no turn or acknowledgment
+- **AND** automatic cached-result recovery is restricted to the same ID
 - **AND** a host watchdog bounds the process to 45 seconds, refuses an already busy host, and stops only the verification process group on sustained CPU, memory growth, or host loss
 
 #### Scenario: A live check overloads the host

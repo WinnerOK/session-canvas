@@ -187,6 +187,32 @@ When neither current execution nor verified latest-history evidence establishes 
 - **WHEN** reconnection establishes a previously unseen terminal result
 - **THEN** that result is recorded and the note displays Finished if no higher-priority state applies
 
+### Requirement: Automatic recovery for cached terminal results
+After discovery, the system SHALL automatically recheck non-archived Unknown sessions with a cached terminal result and missing local evidence. It SHALL use one sequential worker with at least one second between logical checks, reuse latest-history validation, cache attempts by source/file/result revision, and cancel on disconnect. Updates SHALL NOT open viewers, acknowledge results, or reload the full inventory per check.
+
+#### Scenario: Resolve unopened cached-result sessions
+- **WHEN** the confirmed source inventory contains Unknown sessions with saved Completed results but no local history
+- **THEN** discovery returns before background checks, and each verified terminal latest turn updates its note to Finished without opening that session
+- **AND** counts and visibility update immediately while selection, history, activity, project membership, geometry, and acknowledgment are preserved
+- **AND** cached results come only from the same source identity and do not themselves prove completion
+
+#### Scenario: Bound automatic history recovery
+- **WHEN** multiple cached-result sessions need checking
+- **THEN** at most one check is in flight, checks start at least one second apart, and repeated snapshots coalesce queued sessions
+- **AND** paged APIs request one latest turn; legacy fallback discards full transcript entries instead of retaining a second history cache
+- **AND** active/requesting, archived/internal, no-result, and known later-local-work sessions are excluded
+- **AND** an explicit verification session scope also limits background checks
+
+#### Scenario: Cache errors and invalidate changed evidence
+- **WHEN** an automatic check succeeds or fails for the same source revision, rollout fingerprint, and result identity
+- **THEN** ordinary refresh does not repeat it; a failure leaves the note Unknown without an automatic retry loop
+- **AND** changed evidence or reconnect permits a new check; manual latest-history reload remains available
+
+#### Scenario: Close during automatic recovery
+- **WHEN** the source closes, reconnects, or loses its RPC connection with queued or in-flight checks
+- **THEN** the worker stops and delayed replies do not publish into the current workspace
+- **AND** background recovery never resumes a turn, navigates to Codex, answers a request, or acknowledges a result
+
 ### Requirement: Repeated and stale observations do not regress state
 The system SHALL reconcile observations by source session, turn, result, and revision identity. Duplicate terminal observations SHALL NOT create extra results or reset acknowledgment. A stale observation SHALL NOT override newer authoritative execution or request state.
 

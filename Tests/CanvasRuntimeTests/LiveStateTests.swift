@@ -106,6 +106,25 @@ struct LiveStateTests {
         }
     }
 
+    @Test func backgroundRecoverySkipsAnActiveDesktopSession() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let database = try CanvasDatabase(path: path)
+        var cached = Workspace()
+        cached.reconcile(sessions: [Session(id: "live", title: "Active", latestResult: SessionResult(id: "old", outcome: .completed, text: "Saved"))], projects: [])
+        try database.save(cached, source: "codex-local:" + fixture.folder.path)
+        let model = ApplicationModel(demo: false, storagePath: path)
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        #expect(await eventually { model.workspace.sessions.first?.execution == .running })
+        try await Task.sleep(for: .milliseconds(1100))
+        #expect(!FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-reads").path))
+        #expect(model.workspace.sessions.first?.execution == .running)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_LIVE_DESKTOP"] == "1"))
     func installedDesktopFeedsLiveStateIntoTheApplication() async throws {
         let id = try #require(ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_OBSERVED_SESSION"])
@@ -164,6 +183,7 @@ struct LiveStateTests {
         for line in sys.stdin:
             m=json.loads(line)
             if "id" not in m: continue
+            if m["method"] == "thread/turns/list": (pathlib.Path(__file__).parent/"history-reads").touch()
             result={"codexHome":str(pathlib.Path(__file__).parent)} if m["method"]=="initialize" else {"data":[] if m.get("params",{}).get("archived") else [{"id":"live","name":"Current session","source":"appServer","status":{"type":"notLoaded"}}],"nextCursor":None} if m["method"] == "thread/list" else {"data":[{"id":"old", "status":"completed", "items":[]}],"nextCursor":None} if m["method"] == "thread/turns/list" else {}
             print(json.dumps({"id":m["id"],"result":result}),flush=True)
         """#

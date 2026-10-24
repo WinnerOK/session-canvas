@@ -223,6 +223,16 @@ final class ApplicationModel: ObservableObject {
                 for i in self.workspace.sessions.indices { self.workspace.sessions[i].execution = .unknown }
                 self.closeHiddenSelection()
             }
+            next.onSessionObservation = { [weak self] observation, baseline in
+                guard let self, self.generation == token,
+                      let index = self.workspace.sessions.firstIndex(where: { $0.id == observation.id }),
+                      self.workspace.sessions[index].revision == baseline.revision,
+                      self.workspace.sessions[index].latestResult?.id == baseline.latestResult?.id,
+                      self.workspace.sessions[index].requests.isEmpty,
+                      self.workspace.sessions[index].execution == .unknown || self.workspace.sessions[index].stateIsFromHistory else { return }
+                self.applyHistoryObservation(observation, at: index)
+                self.closeHiddenSelection(); self.persist()
+            }
             try await next.connect()
             guard generation == token else { return }
             if next.sourceID != cachedSourceID {
@@ -231,6 +241,7 @@ final class ApplicationModel: ObservableObject {
                 visibility = try database?.visibility(source: next.sourceID) ?? CanvasVisibility()
                 for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
             }
+            next.restoreCachedResults(workspace.sessions)
             connected = true
             connectionStatus = next.connectionStatus; hasLiveState = next.hasLiveState
             await refresh()
@@ -308,16 +319,7 @@ final class ApplicationModel: ObservableObject {
             nextHistoryCursor = page.nextCursor
             if !older, let i = workspace.sessions.firstIndex(where: { $0.id == id }), workspace.sessions[i] == baseline {
                 if let observation = page.sessionObservation, observation.id == id {
-                    // Keep local geometry/membership/archive facts; current live work outranks saved history.
-                    if workspace.sessions[i].requests.isEmpty && (workspace.sessions[i].execution == .unknown || workspace.sessions[i].stateIsFromHistory) {
-                        workspace.sessions[i].execution = observation.execution
-                        workspace.sessions[i].requests = observation.requests
-                        workspace.sessions[i].savedState = observation.savedState
-                        workspace.sessions[i].unknownReason = observation.unknownReason
-                    }
-                    workspace.sessions[i].latestResult = observation.latestResult
-                    workspace.sessions[i].revision = observation.revision
-                    workspace.sessions[i].updatedAt = observation.updatedAt
+                    applyHistoryObservation(observation, at: i)
                 } else if let result = page.entries.compactMap(\.result).last {
                     workspace.sessions[i].latestResult = result
                 }
@@ -325,6 +327,18 @@ final class ApplicationModel: ObservableObject {
                 closeHiddenSelection()
             }
         } catch { if generation == token && selectedSessionID == id { historyError = error.localizedDescription } }
+    }
+    private func applyHistoryObservation(_ observation: Session, at index: Int) {
+        // Keep local geometry/membership/archive facts; current live work outranks saved history.
+        if workspace.sessions[index].requests.isEmpty && (workspace.sessions[index].execution == .unknown || workspace.sessions[index].stateIsFromHistory) {
+            workspace.sessions[index].execution = observation.execution
+            workspace.sessions[index].requests = observation.requests
+            workspace.sessions[index].savedState = observation.savedState
+            workspace.sessions[index].unknownReason = observation.unknownReason
+        }
+        workspace.sessions[index].latestResult = observation.latestResult
+        workspace.sessions[index].revision = observation.revision
+        workspace.sessions[index].updatedAt = observation.updatedAt
     }
     func canAcknowledge(_ result: SessionResult, sessionID: String) -> Bool {
         guard selectedSessionID == sessionID, !isLoadingHistory,

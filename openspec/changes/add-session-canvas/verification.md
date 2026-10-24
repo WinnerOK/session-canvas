@@ -48,6 +48,18 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 ## Evidence scope and entry points
 
+### Automatic cached-result recovery, 2026-10-25
+
+The user confirmed that opening a session recovered Finished but requested the same state for unopened notes with saved Completed results. `cachedResultsResolveInBackgroundWithoutOpeningSessions` first failed for both paged and legacy sources: no viewer was opened and the notes remained Unknown. Same-source cached results now seed a bounded candidate queue after inventory discovery; each latest-turn check reuses the prior revision/file/live-state validation. Results are hints for checking, not proof of inactivity or acknowledgment. Individual callbacks update the workspace without another inventory read.
+
+Five new tests verify paged/legacy automatic recovery and Finished counts with no selection/history/acknowledgment changes, stable placement, at least one second between checks, one-turn paged requests, no per-result inventory reload, no repeated checks after refresh, cached failures and source-revision invalidation, queued/in-flight close cancellation, explicit session scope, and exclusion of an active isolated desktop session. Archived/internal sessions are absent from request logs. An in-progress latest turn remains Unknown. Legacy background responses discard transcript entries and result search is lazy; no full viewer cache is populated by recovery. Routine verification uses fixtures only and makes no new live-host load/safety claim.
+
+The final full offline run passed **96 executed Swift tests** (35 core, 64 runtime reported, with three opt-in checks skipped). Release compilation with one job, bundle signature, strict OpenSpec validation, whitespace, and 118 affected local links passed. The existing presentation is unchanged; automatic unopened-note state/count updates are covered by the source-to-model fixtures rather than a new static demo image. Existing full-inventory/prolonged-host and real archive/restore UI acceptance gates remain open.
+
+| Correction | Contract | Evidence |
+| --- | --- | --- |
+| Apply completion to unopened cached-result sessions automatically | [Automatic recovery for cached terminal results](specs/session-attention/spec.md#requirement-automatic-recovery-for-cached-terminal-results) | The paged/legacy source-to-model test first reproduced unopened Unknown notes, then verified Finished and counts through paced background updates, preserved acknowledgment/geometry/selection, and no inventory reload per observation. Failure, revision, cancellation, active-session, and scope checks bound the worker. |
+
 ### Latest-history state recovery, 2026-10-25
 
 The user's Unknown notes showed Completed · review result while remaining ineligible for acknowledgment. `latestHistoryRestoresFinishedWithoutLocalRollout` first reproduced that exact combination for both paged and legacy history: loading the latest completed turn updated only latestResult, leaving execution Unknown and the history-missing reason intact. The fix returns a validated latest-turn session observation with the transcript, applies it without replacing concurrent workspace/live changes, and retains it in the source's revision/file cache. A terminal latest turn now establishes saved Idle and derives Finished until explicit acknowledgment. Older/cached results alone do not bypass Unknown.
