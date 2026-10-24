@@ -2,11 +2,12 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("verify_local", Path(__file__).resolve().parents[1] / "verify-local.py")
 verify = importlib.util.module_from_spec(spec)
@@ -39,20 +40,64 @@ class VerificationTests(unittest.TestCase):
             verify.parser().parse_args(["preview", "--executable", "/bin/sh"])
 
     def test_real_source_is_explicit_even_if_inherited(self):
-        with patch.dict(os.environ, {"SESSION_CANVAS_TEST_REAL_SOURCE": "1", "SESSION_CANVAS_TEST_LIVE_DESKTOP": "1", "SESSION_CANVAS_TEST_CAPTURE_CREATION": "/outside.png"}):
+        with patch.dict(os.environ, {"SESSION_CANVAS_TEST_REAL_SOURCE": "1", "SESSION_CANVAS_TEST_LIVE_DESKTOP": "1", "SESSION_CANVAS_TEST_OBSERVED_SESSION": "inherited", "SESSION_CANVAS_TEST_CAPTURE_CREATION": "/outside.png"}):
             self.assertNotIn("SESSION_CANVAS_TEST_REAL_SOURCE", verify.environment())
             self.assertNotIn("SESSION_CANVAS_TEST_CAPTURE_CREATION", verify.environment(True))
             self.assertEqual(verify.environment(True)["SESSION_CANVAS_TEST_REAL_SOURCE"], "1")
             self.assertNotIn("SESSION_CANVAS_TEST_LIVE_DESKTOP", verify.environment())
             self.assertNotIn("SESSION_CANVAS_TEST_LIVE_DESKTOP", verify.environment(True))
             self.assertEqual(verify.environment(True, True)["SESSION_CANVAS_TEST_LIVE_DESKTOP"], "1")
+            self.assertNotIn("SESSION_CANVAS_TEST_OBSERVED_SESSION", verify.environment(True, True))
+            self.assertEqual(verify.environment(True, True, "chosen")["SESSION_CANVAS_TEST_OBSERVED_SESSION"], "chosen")
 
     def test_live_desktop_cannot_be_enabled_for_a_broad_run(self):
         for arguments in (["test", "--live-desktop"], ["test", "--real-source", "--live-desktop"],
-                          ["test", "--real-source", "--live-desktop", "--filter", "LiveStateTests"]):
+                          ["test", "--real-source", "--live-desktop", "--filter", "LiveStateTests"],
+                          ["test", "--real-source", "--live-desktop", "--filter", "installedDesktopFeedsLiveStateIntoTheApplication"]):
             with self.subTest(arguments=arguments), patch.object(verify.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 verify.main(arguments)
             run.assert_not_called()
+
+    def test_live_guard_stops_only_its_group_when_host_cpu_rises(self):
+        child = Mock(pid=999, returncode=None)
+        child.poll.return_value = None
+        samples = [(0, 0, 100), (0.5, 0, 100), (1, 0.5, 100), (1.5, 1, 100)]
+        with tempfile.TemporaryDirectory() as folder, patch.object(verify, "OUTPUT", Path(folder)), \
+             patch.object(verify.subprocess, "check_output", return_value="123 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT\n"), \
+             patch.object(verify.subprocess, "Popen", return_value=child) as popen, \
+             patch.object(verify, "host_sample", side_effect=samples), \
+             patch.object(verify.time, "sleep"), patch.object(verify.time, "monotonic", return_value=0), \
+             patch.object(verify.os, "killpg") as kill, contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, "Host load guard"):
+                verify.run_live_test(["fixed-test-command"], {})
+            kill.assert_called_once_with(999, verify.signal.SIGTERM)
+            self.assertTrue(popen.call_args.kwargs["start_new_session"])
+            report = json.loads(next(Path(folder).glob("live-watch-*.json")).read_text())
+            self.assertEqual(report["status"], "failed_or_stopped")
+
+    def test_live_guard_reports_success_without_signalling_host(self):
+        child = Mock(pid=999, returncode=0)
+        child.poll.side_effect = [None, 0]
+        samples = [(0, 0, 100), (0.5, 0, 100), (1, 0.01, 105), (1.5, 0.01, 105)]
+        with tempfile.TemporaryDirectory() as folder, patch.object(verify, "OUTPUT", Path(folder)), \
+             patch.object(verify.subprocess, "check_output", return_value="123 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT\n"), \
+             patch.object(verify.subprocess, "Popen", return_value=child), patch.object(verify, "host_sample", side_effect=samples), \
+             patch.object(verify.time, "sleep"), patch.object(verify.time, "monotonic", return_value=0), \
+             patch.object(verify.os, "killpg") as kill, contextlib.redirect_stdout(io.StringIO()):
+            verify.run_live_test(["fixed-test-command"], {})
+            kill.assert_not_called()
+            report = json.loads(next(Path(folder).glob("live-watch-*.json")).read_text())
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["peak_cpu_percent"], 2)
+
+    def test_live_guard_refuses_to_start_on_a_busy_host(self):
+        with patch.object(verify.subprocess, "check_output", return_value="123 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT\n"), \
+             patch.object(verify.subprocess, "Popen") as popen, \
+             patch.object(verify, "host_sample", side_effect=[(0, 0, 100), (0.5, 0.5, 100)]), \
+             patch.object(verify.time, "sleep"):
+            with self.assertRaisesRegex(ValueError, "already busy"):
+                verify.run_live_test(["fixed-test-command"], {})
+            popen.assert_not_called()
 
     def test_invalid_output_is_rejected_before_subprocesses(self):
         with patch.object(verify.subprocess, "run") as run, self.assertRaises(ValueError):

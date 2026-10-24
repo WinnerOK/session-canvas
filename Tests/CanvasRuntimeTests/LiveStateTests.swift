@@ -5,6 +5,18 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct LiveStateTests {
+    @Test func singleSessionScopePreventsUnrelatedDesktopSubscriptions() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try await fixture.waitUntilReady()
+        let source = CodexSource(mode: .history, settings: fixture.settings, observedSessionIDs: ["unrelated"])
+        defer { source.close() }
+        try await source.connect()
+        _ = try await source.snapshot()
+        #expect(await eventually { source.hasLiveState })
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(!FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("subscription-times").path))
+    }
     @Test func subscriptionsArePacedOnAnIsolatedSocket() async throws {
         let fixture = try LiveFixture()
         defer { fixture.remove() }
@@ -75,12 +87,15 @@ struct LiveStateTests {
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_LIVE_DESKTOP"] == "1"))
     func installedDesktopFeedsLiveStateIntoTheApplication() async throws {
-        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        let id = try #require(ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_OBSERVED_SESSION"])
+        let model = ApplicationModel(demo: false, storagePath: ":memory:", observedSessionIDs: [id])
         model.settings = .defaults
         defer { model.shutdown() }
         await model.connect()
-        #expect(await eventually { model.hasLiveState && model.workspace.sessions.contains { $0.execution == .running } })
+        #expect(await eventually { model.hasLiveState && model.workspace.sessions.contains { $0.id == id && $0.execution == .running } })
+        try await Task.sleep(for: .seconds(2))
         let live = model.workspace.sessions.filter { $0.execution != .unknown && !$0.stateIsFromHistory }
+        #expect(live.allSatisfy { $0.id == id })
         print("Desktop feed: \(model.connectionStatus), live connection \(model.hasLiveState), \(live.count) observed sessions, \(live.filter { $0.execution == .running }.count) running.")
     }
 

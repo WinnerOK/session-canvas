@@ -45,8 +45,13 @@ Routine checks SHALL use fixtures and demo captures. Saved-inventory tests SHALL
 - **THEN** saved inventory and isolated-server checks can run while the installed desktop observer remains disabled
 
 #### Scenario: Attempt a broad live test
-- **WHEN** --live-desktop is supplied without the exact installedDesktopFeedsLiveStateIntoTheApplication filter and --real-source
+- **WHEN** --live-desktop is supplied without the exact installedDesktopFeedsLiveStateIntoTheApplication filter, --real-source, or an explicit --observe-session ID
 - **THEN** the launcher rejects the command before starting subprocesses
+
+#### Scenario: Run an authorized bounded live check
+- **WHEN** the user authorizes a live check and the launcher receives one explicit session ID
+- **THEN** desktop subscriptions are restricted to that ID, while the application uses isolated Canvas storage and submits no turn or acknowledgment
+- **AND** a host watchdog bounds the process to 45 seconds, refuses an already busy host, and stops only the verification process group on sustained CPU, memory growth, or host loss
 
 #### Scenario: A live check overloads the host
 - **WHEN** the user reports excessive CPU or an application failure during a live check
