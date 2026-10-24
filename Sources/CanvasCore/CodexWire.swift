@@ -54,7 +54,7 @@ public enum CodexWire {
         }
         return Session(id: id, title: value["name"].string ?? "Untitled session", cwd: value["cwd"].string ?? "",
                        execution: execution, requests: requests,
-                       latestResult: value["turns"].array.reversed().compactMap { result($0, sessionID: id) }.first,
+                       latestResult: value["turns"].array.reversed().lazy.compactMap { result($0, sessionID: id) }.first,
                        updatedAt: Date(timeIntervalSince1970: value["updatedAt"].number ?? 0),
                        revision: String(value["updatedAt"].number ?? 0))
     }

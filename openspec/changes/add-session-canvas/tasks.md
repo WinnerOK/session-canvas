@@ -156,6 +156,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 12.2 Preserve newer unfinished/unsupported turns, pending requests, live execution, and source/workspace revisions against older history; keep archive/project/geometry/acknowledgment independent and exclude older pages from recovery.
 - [x] 12.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without connecting to the installed desktop.
 
+## 13. Automatic cached-result recovery
+
+- [x] 13.1 Reproduce unopened cached Completed notes staying Unknown; seed same-source result hints and automatically verify missing local evidence after discovery, publishing individual state updates without viewer/inventory reloads or acknowledgment.
+- [x] 13.2 Use one worker and at least one second between checks, request one latest turn when supported, discard legacy transcript entries, cache successful/failed attempts by source/file/result revision, exclude active/requesting/archived/internal/no-result/later-work sessions, honor explicit session scope, and cancel queued/in-flight publication on close/reconnect/disconnect.
+- [x] 13.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without live desktop testing.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

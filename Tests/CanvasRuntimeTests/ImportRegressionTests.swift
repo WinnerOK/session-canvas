@@ -7,6 +7,138 @@ import CanvasCore
 @Suite(.serialized) @MainActor
 struct ImportRegressionTests {
     @Test(arguments: [false, true])
+    func cachedResultsResolveInBackgroundWithoutOpeningSessions(legacy: Bool) async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        if legacy { try Data().write(to: fixture.folder.appendingPathComponent("legacy-history")) }
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let database = try CanvasDatabase(path: path)
+        var cached = Workspace()
+        cached.reconcile(sessions: ["normal", "named-review", "unassigned", "archived", "guardian"].map {
+            Session(id: $0, title: $0, latestResult: SessionResult(id: $0 + "/last/completed", outcome: .completed, text: "Saved result"), updatedAt: Date(timeIntervalSince1970: 1), revision: "1.0", isArchived: $0 == "archived")
+        }, projects: [])
+        let sourceID = "codex-local:" + fixture.folder.path
+        try database.save(cached, source: sourceID)
+        let model = ApplicationModel(demo: false, storagePath: path)
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        let placements = model.workspace.placements
+        #expect(model.workspace.sessions.first { $0.id == "normal" }?.execution == .unknown)
+        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<100 {
+            if !model.isRefreshing { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let inventoryCount = try String(contentsOf: fixture.folder.appendingPathComponent("inventories"), encoding: .utf8)
+        for _ in 0..<100 {
+            let reads = (try? String(contentsOf: fixture.folder.appendingPathComponent("read-log"), encoding: .utf8)) ?? ""
+            if reads.contains("unassigned") && ["normal", "named-review"].allSatisfy({ id in model.workspace.sessions.first { $0.id == id }?.state(acknowledged: []) == .finished }) { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(model.workspace.sessions.first { $0.id == "normal" }?.state(acknowledged: []) == .finished)
+        #expect(model.workspace.sessions.first { $0.id == "named-review" }?.state(acknowledged: []) == .finished)
+        #expect(model.stateCounts[.finished] == 2)
+        #expect(model.workspace.sessions.first { $0.id == "unassigned" }?.execution == .unknown)
+        #expect(model.workspace.sessions.first { $0.id == "archived" }?.isArchived == true)
+        #expect(model.selectedSessionID == nil)
+        #expect(model.history.isEmpty)
+        #expect(model.acknowledgments.isEmpty)
+        #expect(model.workspace.placements == placements)
+        #expect(try database.acknowledgments(source: sourceID).isEmpty)
+        let log = fixture.folder.appendingPathComponent("read-log")
+        let reads = (try? String(contentsOf: log, encoding: .utf8).split(separator: "\n")) ?? []
+        #expect(!reads.contains { $0.contains("guardian") || $0.contains("archived") })
+        let records = try reads.map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        let checks = records.filter { $0["method"].string == (legacy ? "thread/read" : "thread/turns/list") }
+        #expect(checks.compactMap { $0["id"].string } == ["named-review", "normal", "unassigned"])
+        if !legacy { #expect(checks.allSatisfy { $0["limit"].number == 1 }) }
+        let times = checks.compactMap { $0["time"].number }
+        for (a, b) in zip(times, times.dropFirst()) { #expect(b - a >= 0.95) }
+        #expect(try String(contentsOf: fixture.folder.appendingPathComponent("inventories"), encoding: .utf8) == inventoryCount)
+        await model.refresh()
+        try await Task.sleep(for: .milliseconds(1100))
+        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count == records.count)
+    }
+
+    @Test func backgroundFailuresAreCachedUntilTheSourceRevisionChanges() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-rollout"))
+        try Data().write(to: fixture.folder.appendingPathComponent("reject-history"))
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        source.restoreCachedResults([Session(id: "normal", title: "Cached", latestResult: SessionResult(id: "r", outcome: .completed, text: "Saved"))])
+        var updates = 0
+        source.onSessionObservation = { _, _ in updates += 1 }
+        try await source.connect()
+        _ = try await source.snapshot()
+        let log = fixture.folder.appendingPathComponent("read-log")
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: log.path) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count == 1)
+        #expect(try await source.snapshot().sessions.first { $0.id == "normal" }?.execution == .unknown)
+        _ = try await source.snapshot()
+        try await Task.sleep(for: .milliseconds(1100))
+        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count == 1)
+        #expect(updates == 0)
+        try Data().write(to: fixture.folder.appendingPathComponent("active"))
+        _ = try await source.snapshot()
+        for _ in 0..<100 {
+            if (try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count) == 2 { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count == 2)
+    }
+
+    @Test func backgroundRecoveryHonorsTheExplicitSessionScope() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false, observedSessionIDs: ["unassigned"])
+        defer { source.close() }
+        source.restoreCachedResults(["normal", "unassigned"].map { Session(id: $0, title: $0, latestResult: SessionResult(id: "r", outcome: .completed, text: "Saved")) })
+        try await source.connect()
+        _ = try await source.snapshot()
+        let log = fixture.folder.appendingPathComponent("read-log")
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: log.path) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try await Task.sleep(for: .milliseconds(1100))
+        let records = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        #expect(records.compactMap { $0["id"].string } == ["unassigned"])
+    }
+
+    @Test(arguments: [false, true]) func closingSourceStopsQueuedAndInFlightRecovery(inFlight: Bool) async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-rollout"))
+        try Data().write(to: fixture.folder.appendingPathComponent("block-history"))
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        source.restoreCachedResults([Session(id: "normal", title: "Cached", latestResult: SessionResult(id: "r", outcome: .completed, text: "Saved"))])
+        var updates = 0
+        source.onSessionObservation = { _, _ in updates += 1 }
+        try await source.connect()
+        _ = try await source.snapshot()
+        if inFlight {
+            for _ in 0..<100 {
+                if FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path) { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path))
+        }
+        source.close()
+        try await Task.sleep(for: .milliseconds(1100))
+        #expect(updates == 0)
+        if !inFlight { #expect(!FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("read-log").path)) }
+    }
+
+    @Test(arguments: [false, true])
     func latestHistoryRestoresFinishedWithoutLocalRollout(legacy: Bool) async throws {
         let fixture = try SourceFixture()
         defer { fixture.remove() }
@@ -325,6 +457,7 @@ private struct SourceFixture {
         home = pathlib.Path(__file__).parent
         archived_ids = {"archived"}
         reads = 0
+        inventories = 0
         for line in sys.stdin:
             request = json.loads(line)
             if "id" not in request:
@@ -333,6 +466,8 @@ private struct SourceFixture {
             if method == "initialize":
                 result = {"codexHome": str(home)}
             elif method == "thread/list":
+                inventories += 1
+                (home / "inventories").write_text(str(inventories))
                 def session(ident, source, **extra):
                     path = home / "sessions" / (ident + ".jsonl")
                     path.parent.mkdir(exist_ok=True)
@@ -340,7 +475,7 @@ private struct SourceFixture {
                     records = [{"type":"session_meta", "payload":{"id":ident}}, {"type":"event_msg", "payload":{"type":"task_started" if active else "task_complete", "turn_id":"last"}}]
                     content = "".join(json.dumps(v) + "\n" for v in records)
                     if not path.exists() or path.read_text() != content: path.write_text(content)
-                    listed_path = home / "sessions" / "unavailable.jsonl" if ident == "normal" and (home / "missing-rollout").exists() else path
+                    listed_path = home / "sessions" / "unavailable.jsonl" if (home / "missing-all-rollouts").exists() or ident == "normal" and (home / "missing-rollout").exists() else path
                     return dict(id=ident, name="Guardian review" if ident != "normal" else "My work", source=source, cwd="/Projects/existing", path=str(listed_path), updatedAt=2 if ident == "normal" and (home / "active").exists() else 1, **extra)
                 if request.get("params", {}).get("archived"):
                     result = {"data": [] if (home / "omit-archived").exists() else [session(ident, "cli") for ident in archived_ids], "nextCursor": None}
@@ -349,6 +484,11 @@ private struct SourceFixture {
                 else:
                     result = {"data": [s for s in [session("normal", "cli"), session("guardian", {"subAgent": {"other": "guardian"}}), session("review", {"subAgent": "review"}), session("named-review", "appServer")] if s["id"] not in archived_ids], "nextCursor": "page2"}
             elif method == "thread/turns/list":
+                with (home / "read-log").open("a") as log:
+                    log.write(json.dumps({"id": request["params"]["threadId"], "limit": request["params"]["limit"], "time": time.monotonic(), "method": method}) + "\n")
+                if (home / "reject-history").exists():
+                    print(json.dumps({"id": request["id"], "error": {"code": -32000}}), flush=True)
+                    continue
                 if (home / "legacy-history").exists():
                     print(json.dumps({"id": request["id"], "error": {"code": -32601}}), flush=True)
                     continue
@@ -366,7 +506,10 @@ private struct SourceFixture {
                 turns = json.loads((home / "history-turns.json").read_text()) if (home / "history-turns.json").exists() else [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}]
                 result = {"data": turns, "nextCursor": None}
             elif method == "thread/read":
-                turns = list(reversed(json.loads((home / "history-turns.json").read_text()))) if (home / "history-turns.json").exists() else [{"id":"last", "status":"completed", "items":[]}]
+                with (home / "read-log").open("a") as log:
+                    log.write(json.dumps({"id": request["params"]["threadId"], "time": time.monotonic(), "method": method}) + "\n")
+                ident = request["params"]["threadId"]
+                turns = list(reversed(json.loads((home / "history-turns.json").read_text()))) if (home / "history-turns.json").exists() else [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}]
                 result = {"thread":{"id":request["params"]["threadId"], "name":"My work", "cwd":"/Projects/existing", "updatedAt":1, "status":{"type":"notLoaded"}, "turns":turns}}
             elif method in ["thread/archive", "thread/unarchive"]:
                 if (home / "reject-archive").exists():

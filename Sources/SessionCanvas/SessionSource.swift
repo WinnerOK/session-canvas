@@ -39,6 +39,8 @@ protocol SessionSource: AnyObject {
     var hiddenSessionIDs: Set<String> { get }
     var onChange: (() -> Void)? { get set }
     var onDisconnect: (() -> Void)? { get set }
+    var onSessionObservation: ((Session, Session) -> Void)? { get set }
+    func restoreCachedResults(_ sessions: [Session])
     func connect() async throws
     func snapshot() async throws -> (sessions: [Session], projects: [Project])
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage
@@ -50,6 +52,8 @@ protocol SessionSource: AnyObject {
 }
 
 extension SessionSource {
+    var onSessionObservation: ((Session, Session) -> Void)? { get { nil } set {} }
+    func restoreCachedResults(_ sessions: [Session]) {}
     var canArchive: Bool { false }
     func setArchived(sessionID: String, archived: Bool) async throws { throw CanvasError.message("Archiving is unavailable for this source.") }
     var creationUnavailableReason: String { "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect." }
@@ -69,6 +73,7 @@ final class CodexSource: SessionSource {
     private(set) var creationUnavailableReason = "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect."
     var onChange: (() -> Void)?
     var onDisconnect: (() -> Void)?
+    var onSessionObservation: ((Session, Session) -> Void)?
     private let settings: ConnectionSettings
     private let rpc = RPCConnection()
     private let desktop = DesktopRuntime()
@@ -86,6 +91,16 @@ final class CodexSource: SessionSource {
     private var savedObservations: [String: Session] = [:]
     private var savedFileRevisions: [String: String] = [:]
     private var historyObservationVersions: [String: UUID] = [:]
+    private var cachedResults: [String: SessionResult] = [:]
+    private struct StateCheckKey: Equatable {
+        var revision: String
+        var fileRevision: String
+        var resultID: String
+    }
+    private var pendingStateChecks: [String: StateCheckKey] = [:]
+    private var attemptedStateChecks: [String: StateCheckKey] = [:]
+    private var stateCheckTask: Task<Void, Never>?
+    private var stateCheckGeneration = UUID()
     private var rolloutPaths: [String: String] = [:]
     private var codexHome: String
     private var desktopProjects: DesktopProjectCatalog?
@@ -104,11 +119,12 @@ final class CodexSource: SessionSource {
         // History and shared observations of the same local Codex store share acknowledgment/layout identity.
         self.codexHome = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
         self.sourceID = "codex-local:" + self.codexHome
-        rpc.onDisconnect = { [weak self] in self?.onDisconnect?() }
+        rpc.onDisconnect = { [weak self] in self?.stopStateRecovery(); self?.onDisconnect?() }
         rpc.onMessage = { [weak self] in self?.notification($0) }
         desktop.onChange = { [weak self] in self?.onChange?() }
     }
     func connect() async throws {
+        stopStateRecovery(); attemptedStateChecks = [:]
         var args = ["app-server"]
         if mode == .shared {
             args += ["proxy"]
@@ -124,6 +140,9 @@ final class CodexSource: SessionSource {
             canCreate = true
         }
         if mode == .history && observeDesktop { desktop.start(codexHome: codexHome) }
+    }
+    func restoreCachedResults(_ sessions: [Session]) {
+        for session in sessions { if let result = session.latestResult { cachedResults[session.id] = result } }
     }
     func snapshot() async throws -> (sessions: [Session], projects: [Project]) {
         var result: [String: Session] = [:]
@@ -145,7 +164,7 @@ final class CodexSource: SessionSource {
                     session.archived = archived
                     serverProjectsBySession[session.id] = value["projectId"].string
                     if let path = value["path"].string { rolloutPaths[session.id] = path }
-                    session.latestResult = previous[session.id]?.latestResult
+                    session.latestResult = previous[session.id]?.latestResult ?? cachedResults[session.id] ?? session.latestResult
                     result[session.id] = session
                 }
                 cursor = response["nextCursor"].string
@@ -168,15 +187,58 @@ final class CodexSource: SessionSource {
             return current.execution != .running && current.requests.isEmpty
         }
         for offset in stride(from: 0, to: candidates.count, by: 8) {
-            await withTaskGroup(of: Session.self) { group in
+            await withTaskGroup(of: (Session, UUID?).self) { group in
                 for candidate in candidates[offset..<min(offset + 8, candidates.count)] {
-                    group.addTask { @MainActor in await self.recoverSavedState(candidate) }
+                    let historyVersion = historyObservationVersions[candidate.id]
+                    group.addTask { @MainActor in (await self.recoverSavedState(candidate), historyVersion) }
                 }
-                for await observed in group { savedObservations[observed.id] = observed }
+                for await (observed, version) in group {
+                    // A background/API reply may land between a file task finishing and its result being consumed.
+                    if historyObservationVersions[observed.id] == version { savedObservations[observed.id] = observed }
+                }
             }
         }
         let sessions = previous.values.map { applyingObservations(to: $0) }
+        scheduleStateRecovery(sessions)
         return (sessions.sorted { $0.updatedAt > $1.updatedAt }, desktopProjects?.projects ?? [])
+    }
+    private func stateCheckKey(_ session: Session) -> StateCheckKey? {
+        guard observedSessionIDs?.contains(session.id) != false,
+              !session.isArchived, session.execution == .unknown, session.requests.isEmpty,
+              session.unknownReason == .historyMissing, let result = session.latestResult else { return nil }
+        return StateCheckKey(revision: session.revision, fileRevision: rolloutRevision(sessionID: session.id), resultID: result.id)
+    }
+    private func scheduleStateRecovery(_ sessions: [Session]) {
+        pendingStateChecks = [:]
+        for session in sessions {
+            if let key = stateCheckKey(session), attemptedStateChecks[session.id] != key { pendingStateChecks[session.id] = key }
+        }
+        guard stateCheckTask == nil, !pendingStateChecks.isEmpty else { return }
+        let generation = stateCheckGeneration
+        stateCheckTask = Task { [weak self] in
+            defer { if self?.stateCheckGeneration == generation { self?.stateCheckTask = nil } }
+            while !Task.isCancelled {
+                // One request at a time, at least one second apart; let discovery return first.
+                do { try await Task.sleep(for: .seconds(1)) } catch { break }
+                guard let self, self.stateCheckGeneration == generation,
+                      let id = self.pendingStateChecks.keys.sorted().first,
+                      let key = self.pendingStateChecks.removeValue(forKey: id) else { break }
+                guard let baseline = self.previous[id], self.stateCheckKey(self.applyingObservations(to: baseline)) == key,
+                      self.attemptedStateChecks[id] != key else { continue }
+                self.attemptedStateChecks[id] = key
+                do {
+                    let page = try await self.readHistory(sessionID: id, cursor: nil, limit: 1, stateOnly: true)
+                    guard !Task.isCancelled, self.stateCheckGeneration == generation else { break }
+                    if let observation = page.sessionObservation { self.onSessionObservation?(observation, baseline) }
+                } catch {
+                    // Keep Unknown and suppress automatic retries until evidence changes or reconnect.
+                }
+            }
+        }
+    }
+    private func stopStateRecovery() {
+        stateCheckGeneration = UUID()
+        stateCheckTask?.cancel(); stateCheckTask = nil; pendingStateChecks = [:]
     }
     private func applyingObservations(to session: Session) -> Session {
         var session = session
@@ -230,10 +292,13 @@ final class CodexSource: SessionSource {
         onChange?()
     }
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage {
+        try await readHistory(sessionID: sessionID, cursor: cursor, limit: 12)
+    }
+    private func readHistory(sessionID: String, cursor: String?, limit: Int, stateOnly: Bool = false) async throws -> HistoryPage {
         let baseline = previous[sessionID]
         let fileRevision = rolloutRevision(sessionID: sessionID)
         if supportsPagedHistory != false {
-            var params: [String: JSONValue] = ["threadId": .string(sessionID), "limit": .number(12), "sortDirection": .string("desc"), "itemsView": .string("full")]
+            var params: [String: JSONValue] = ["threadId": .string(sessionID), "limit": .number(Double(limit)), "sortDirection": .string("desc"), "itemsView": .string("full")]
             if let cursor { params["cursor"] = .string(cursor) }
             do {
                 let value = try await rpc.request("thread/turns/list", params)
@@ -241,7 +306,7 @@ final class CodexSource: SessionSource {
                 guard case .array = value["data"] else { throw CanvasError.message("Codex returned an unsupported history format.") }
                 let turns = Array(value["data"].array.reversed())
                 let observation = cursor == nil ? observeLatestHistory(sessionID: sessionID, turns: turns, baseline: baseline, fileRevision: fileRevision) : nil
-                return HistoryPage(entries: CodexWire.history(turns, sessionID: sessionID), nextCursor: value["nextCursor"].string, sessionObservation: observation)
+                return HistoryPage(entries: stateOnly ? [] : CodexWire.history(turns, sessionID: sessionID), nextCursor: value["nextCursor"].string, sessionObservation: observation)
             } catch let error as RPCFailure where [-32600, -32601, -32603].contains(error.code) { supportsPagedHistory = false }
         }
         // CLI 0.146.1 supports only legacy thread/read history. Paginate the returned entries locally.
@@ -253,8 +318,10 @@ final class CodexSource: SessionSource {
                 guard thread["id"].string == sessionID else { throw CanvasError.message("Codex returned history for a different session.") }
                 let session = try CodexWire.session(thread, live: mode == .shared)
                 if cursor == nil { observation = observeLatestHistory(sessionID: sessionID, turns: thread["turns"].array, baseline: baseline, fileRevision: fileRevision, metadata: session) }
+                if stateOnly { return HistoryPage(entries: [], sessionObservation: observation) }
                 legacyHistory[sessionID] = CodexWire.history(thread["turns"].array, sessionID: sessionID)
             } catch {
+                if stateOnly { throw error }
                 guard let path = rolloutPaths[sessionID] else { throw error }
                 let home = codexHome
                 legacyHistory[sessionID] = try await Task.detached(priority: .userInitiated) {
@@ -280,7 +347,7 @@ final class CodexSource: SessionSource {
         guard var session = metadata ?? baseline else { return nil }
         session.archived = baseline?.archived
         session.projectID = baseline?.projectID
-        session.latestResult = turns.reversed().compactMap { CodexWire.result($0, sessionID: sessionID) }.first ?? baseline?.latestResult
+        session.latestResult = turns.reversed().lazy.compactMap { CodexWire.result($0, sessionID: sessionID) }.first ?? baseline?.latestResult
         previous[sessionID] = session
         var saved = session
         let terminal = turns.last.flatMap { CodexWire.result($0, sessionID: sessionID) } != nil
@@ -421,7 +488,7 @@ final class CodexSource: SessionSource {
         // Notifications are signals to re-read authoritative metadata; never answer server approval requests.
         if method.hasPrefix("thread/") || method == "turn/completed" || method == "turn/started" || method == "serverRequest/resolved" { onChange?() }
     }
-    func close() { desktop.stop(); rpc.stop(); creationWorker?.stop(); runtimeStatus.removeAll(); activeTurnIDs.removeAll() }
+    func close() { stopStateRecovery(); desktop.stop(); rpc.stop(); creationWorker?.stop(); runtimeStatus.removeAll(); activeTurnIDs.removeAll() }
 }
 
 @MainActor
