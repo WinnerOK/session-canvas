@@ -109,6 +109,18 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 8.4 Document the stable direct command for future Codex chats and synchronize the local-verification contract, guide, and strict validation.
 - [x] 8.5 Add the general launcher prefix to the main default.rules allow list after the repeated-prompt report; verify the exact reported command and changed preview parameters against that file, run the targeted regression, and document that existing chats need startup reload. File matching alone does not prove prompt-free execution.
 
+## 9. Session lifecycle visibility
+
+- [x] 9.1 Reproduce unloaded terminal sessions remaining Unknown before viewer opening, hydrate stable saved results during discovery, preserve live priority, and explain uncertain/missing histories.
+- [x] 9.2 Bound bulk rollout reads, verify source identity/paths and incomplete appends, invalidate saved evidence on later work/file changes, and cache unchanged evidence.
+- [x] 9.2.1 Reproduce the desktop subscription echo storm, ignore own echoes, deduplicate other-owner refollows, and move writes off the main thread; check both own and other-observer echoes.
+- [x] 9.2.2 Pace/coalesce subscriptions, disable desktop observation in saved-inventory tests, isolate the live test behind a separate exact-filter opt-in, and cap default build jobs after the reported CPU/crash incident; verify these boundaries using fixtures only.
+- [x] 9.3 Include archived discovery and implement source-confirmed archive/restore from session menus and viewer, protecting active, Unknown, and unreviewed sessions.
+- [x] 9.4 Display one-unit source activity on notes and relative/exact time in the viewer, refreshing without manufacturing activity.
+- [x] 9.5 Persist archive hiding and idle timeout per source, preserve geometry/acknowledgment, protect non-Idle states, and reevaluate visibility on time/activity changes.
+- [x] 9.6 Complete offline core/runtime regressions, demo capture, release build, signature, strict OpenSpec/whitespace/link validation, and record earlier installed-source observations and the failed live run separately. Further live verification is deferred after the user's safety correction.
+- [ ] 9.7 Complete real-host archive/restore UI acceptance across host versions; fixtures and isolated server verification do not establish every live-host flow.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

@@ -6,6 +6,25 @@ Let the user inspect and acknowledge existing session results, continue in Codex
 
 ## ADDED Requirements
 
+### Requirement: Viewer displays source activity time
+The session viewer SHALL display relative last activity and its exact local date and time, using the same source timestamp as the note. Opening the viewer SHALL NOT update source activity or acknowledge the result.
+
+#### Scenario: Inspect last activity
+- **WHEN** the user clicks a session note
+- **THEN** the viewer shows the same relative activity label plus the full timestamp when available
+
+### Requirement: Archive and restore from the canvas
+Session menus and the viewer SHALL offer Archive session or Unarchive session using the source API. Archiving SHALL require a connected capable source and refreshed Idle eligibility with no unreviewed latest result. Local archive state SHALL change only after confirmation. History, geometry, membership, and acknowledgment SHALL be preserved; errors SHALL retain the note.
+
+#### Scenario: Archive reviewed work
+- **WHEN** the user archives a currently Idle session with its latest result acknowledged
+- **THEN** the same source identity becomes archived and follows the saved visibility settings
+- **AND** showing archived sessions allows restoring it at the same position
+
+#### Scenario: Archive is unsafe or rejected
+- **WHEN** the session is active, Unknown, Finished with an unreviewed result, changes before submission, or the source rejects archive
+- **THEN** no optimistic archive or acknowledgment is saved and the current note is retained
+
 ### Requirement: Clicking opens the existing session viewer
 A primary click on a note, or its keyboard open action, SHALL open a viewer for that same session identity. Returning to the canvas SHALL preserve the viewport and layout. A completed drag SHALL NOT trigger the open action.
 

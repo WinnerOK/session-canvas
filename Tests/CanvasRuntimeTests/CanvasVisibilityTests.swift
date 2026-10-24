@@ -44,6 +44,8 @@ struct CanvasVisibilityTests {
         model.setStateVisible(.running, false)
         model.setStateVisible(.unknown, false)
         model.setProjectVisible("research", false)
+        model.setIdleTimeout(.oneWeek)
+        model.setHideArchived(false)
         let expected = model.visibility
         #expect(model.workspace == original)
         model.shutdown()
@@ -54,7 +56,8 @@ struct CanvasVisibilityTests {
         let database = try CanvasDatabase(path: path)
         #expect(try database.visibility(source: "another-source") == CanvasVisibility())
         restored.showAllSessions()
-        #expect(try database.visibility(source: restored.sourceID) == CanvasVisibility())
+        var all = CanvasVisibility(); all.hideArchived = false
+        #expect(try database.visibility(source: restored.sourceID) == all)
         restored.shutdown()
     }
 
@@ -114,6 +117,57 @@ struct CanvasVisibilityTests {
         #expect(model.pendingSessions.isEmpty)
         #expect(model.errorMessage != nil)
         model.shutdown()
+    }
+
+    @Test func idleTimeoutReevaluatesWithTimeAndNewActivityWithoutMovingNotes() {
+        let model = fixture()
+        defer { model.shutdown() }
+        let now = Date(timeIntervalSince1970: 10000000)
+        for i in model.workspace.sessions.indices { model.workspace.sessions[i].updatedAt = now.addingTimeInterval(-3599) }
+        let original = model.workspace
+        model.updateActivityTime(now: now)
+        model.setIdleTimeout(.oneHour)
+        #expect(model.visibleSessions.count == 6)
+        model.selectedSessionID = "idle"
+        model.updateActivityTime(now: now.addingTimeInterval(1))
+        #expect(!model.visibleSessions.contains { $0.id == "idle" })
+        #expect(model.selectedSessionID == nil)
+        #expect(model.visibleSessions.count == 5)
+        #expect(model.workspace == original)
+        let i = model.workspace.sessions.firstIndex { $0.id == "idle" }!
+        model.workspace.sessions[i].updatedAt = now
+        #expect(model.visibleSessions.contains { $0.id == "idle" })
+        model.workspace.sessions[i].execution = .running
+        model.workspace.sessions[i].updatedAt = now.addingTimeInterval(-86400)
+        #expect(model.visibleSessions.contains { $0.id == "idle" })
+    }
+
+    @Test func archiveAndRestorePreserveIdentityGeometryAndAcknowledgment() async throws {
+        let model = ApplicationModel(demo: true, storagePath: ":memory:")
+        await model.connect()
+        defer { model.shutdown() }
+        let session = try #require(model.workspace.sessions.first { $0.id == "demo-state" })
+        #expect(!model.canArchive(session))
+        await model.toggleArchive(session.id)
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.isArchived == false)
+        model.openSession(session.id)
+        await model.loadHistory(older: false)
+        let result = try #require(model.history.compactMap(\.result).last)
+        model.acknowledge(result, sessionID: session.id)
+        let original = model.workspace
+        await model.toggleArchive(session.id)
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.isArchived == true)
+        #expect(!model.visibleSessions.contains { $0.id == session.id })
+        #expect(model.workspace.placements == original.placements)
+        #expect(model.workspace.regions == original.regions)
+        #expect(model.selectedSessionID == nil)
+        model.setHideArchived(false)
+        #expect(model.visibleSessions.contains { $0.id == session.id })
+        await model.toggleArchive(session.id)
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.isArchived == false)
+        #expect(model.acknowledgments[session.id]?.contains(result.id) == true)
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.updatedAt == session.updatedAt)
+        #expect(!model.canArchive(try #require(model.workspace.sessions.first { $0.id == "demo-native" })))
     }
 
     private func fixture() -> ApplicationModel {

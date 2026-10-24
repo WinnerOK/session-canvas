@@ -13,7 +13,8 @@ Canonical vocabulary lives in [GLOSSARY.md](../GLOSSARY.md). The behavioral cont
 - Current state follows the actual desktop runtime automatically; another reader's unloaded state does not erase live activity.
 - Finished remains until the user explicitly acknowledges a result while viewing the session. Acknowledge is available only for Finished sessions with a loaded, unacknowledged result; opening alone never acknowledges it.
 - Project regions represent actual project identity and explicit membership, independently of working folders. Where the source supports confirmed moves, dropping into a region assigns the session and dropping outside removes membership; unsupported real-source moves remain disabled.
-- Search, independently hidden attention states, and individually hidden projects combine. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
+- Search, independently hidden attention states, and individually hidden projects combine with archive hiding and an Idle-age timeout. Lifecycle filters protect active, uncertain, and unreviewed sessions. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
+- Unloaded sessions with identity-verified latest terminal evidence recover Finished/Idle without opening the viewer; current desktop state takes priority. Missing local history remains Unknown with a reason. Notes show one-unit last source activity, with relative and exact time in the viewer.
 - At distant zooms, project areas replace member notes. Names are readable/truncated only when meaningful text fits; smaller areas show no text. Regions do not jump or reflow. Their areas remain draggable with all member notes, including hidden notes.
 - The top toolbar contains New Session, Fit to Content, and Full Screen. The workspace heading/tagline/header panel is removed, and the native sidebar is toggleable.
 - Clicking a note opens that same session's read-only history, newest first. Acknowledge result, Open in Codex, Reload history, and pagination remain above the scrolling transcript.
@@ -27,13 +28,13 @@ These resolve unspecified behavior for the first version; they are design choice
 | Topic | Default | Reason |
 | --- | --- | --- |
 | Delivery | Native Mac-only SwiftUI/AppKit companion app, selected by the user | Native platform experience with an independent session-source boundary |
-| Scope | One user, one local Codex source, one persistent canvas; non-archived user sessions, excluding Guardian and other internal agent sessions | Existing user sessions must appear without internal automation clutter |
+| Scope | One user, one local Codex source, one persistent canvas; user sessions including optionally visible archives, excluding Guardian and other internal agent sessions | Existing user sessions must appear without internal automation clutter |
 | Membership | Zero or one actual Codex project per session | A note has one spatial home |
 | Regions | One rectangular region per project; interiors cannot overlap or nest | Every drop has at most one target |
 | Drop target | The note's center at pointer release, in canvas coordinates; edges count as outside | Small partial overlaps do not create ambiguous membership |
 | Region editing | Move/resize regions; carry member notes on move; resize must retain member centers | Organizing a region must not become accidental mass reassignment |
 | Overview | Original project bounds, readable truncated name when it fits, otherwise area only; click to zoom, drag to move | Zoom must not reflow geometry or make small project areas immovable |
-| Visibility | Per-source hidden attention states and projects; search is transient; omit empty visible projects | Reduce clutter without altering source sessions, membership, or layout |
+| Visibility | Per-source hidden attention states/projects, hide archived by default, Idle timeout Never by default; transient search | Reduce clutter without altering source membership, acknowledgment, or layout; lifecycle filters protect non-Idle states |
 | Historical results | Latest known terminal result starts unacknowledged unless this app has an acknowledgment for it | Do not silently declare old work reviewed |
 | After acknowledgment | Neutral Idle when no work or request is pending | The note remains available for future turns |
 | Failures and stops | Finished plus an outcome label: Completed, Failed, or Stopped | A stopped turn still has an outcome to inspect |
@@ -151,6 +152,6 @@ Source observations include a renamed session, new session, changed execution st
 
 ## Boundary of the first version
 
-Pan, zoom, fit-to-content, note dragging, project-region geometry, local layout persistence, existing-session synchronization, session creation, result viewing, acknowledgment, and native navigation are included. Collaboration, arbitrary drawing, links between notes, multiple canvases, archive/delete controls, and replying to Codex or approving its requests inside the canvas viewer are deferred.
+Pan, zoom, fit-to-content, note dragging, project-region geometry, local layout persistence, existing-session synchronization, session creation, result viewing, acknowledgment, native navigation, archive/restore controls, activity timestamps, and safe lifecycle hiding are included. Collaboration, arbitrary drawing, links between notes, multiple canvases, deletion, and replying to Codex or approving its requests inside the canvas viewer are deferred.
 
 The behavioral specifications describe the intended contract, including acceptance work that remains open. [Verification coverage](../openspec/changes/add-session-canvas/verification.md) distinguishes the implemented corrections from full native workflow, existing-session membership mutation, and durable uncertain-operation recovery gates. Demo evidence is not evidence of real desktop mutation support.

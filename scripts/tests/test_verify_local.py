@@ -14,6 +14,12 @@ spec.loader.exec_module(verify)
 
 
 class VerificationTests(unittest.TestCase):
+    def test_swift_build_concurrency_is_bounded(self):
+        args = verify.parser().parse_args(["test"])
+        command = verify.swift_command(args, "test")
+        self.assertEqual(command[command.index("--jobs") + 1], "2")
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            verify.parser().parse_args(["test", "--jobs", "0"])
     def test_outputs_reject_user_database_and_wrong_extension(self):
         for path, suffix in ((Path.home() / "Library/Application Support/Session Canvas/canvas.sqlite", ".sqlite"),
                              (verify.OUTPUT / "capture.sh", ".png")):
@@ -33,10 +39,20 @@ class VerificationTests(unittest.TestCase):
             verify.parser().parse_args(["preview", "--executable", "/bin/sh"])
 
     def test_real_source_is_explicit_even_if_inherited(self):
-        with patch.dict(os.environ, {"SESSION_CANVAS_TEST_REAL_SOURCE": "1", "SESSION_CANVAS_TEST_CAPTURE_CREATION": "/outside.png"}):
+        with patch.dict(os.environ, {"SESSION_CANVAS_TEST_REAL_SOURCE": "1", "SESSION_CANVAS_TEST_LIVE_DESKTOP": "1", "SESSION_CANVAS_TEST_CAPTURE_CREATION": "/outside.png"}):
             self.assertNotIn("SESSION_CANVAS_TEST_REAL_SOURCE", verify.environment())
             self.assertNotIn("SESSION_CANVAS_TEST_CAPTURE_CREATION", verify.environment(True))
             self.assertEqual(verify.environment(True)["SESSION_CANVAS_TEST_REAL_SOURCE"], "1")
+            self.assertNotIn("SESSION_CANVAS_TEST_LIVE_DESKTOP", verify.environment())
+            self.assertNotIn("SESSION_CANVAS_TEST_LIVE_DESKTOP", verify.environment(True))
+            self.assertEqual(verify.environment(True, True)["SESSION_CANVAS_TEST_LIVE_DESKTOP"], "1")
+
+    def test_live_desktop_cannot_be_enabled_for_a_broad_run(self):
+        for arguments in (["test", "--live-desktop"], ["test", "--real-source", "--live-desktop"],
+                          ["test", "--real-source", "--live-desktop", "--filter", "LiveStateTests"]):
+            with self.subTest(arguments=arguments), patch.object(verify.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                verify.main(arguments)
+            run.assert_not_called()
 
     def test_invalid_output_is_rejected_before_subprocesses(self):
         with patch.object(verify.subprocess, "run") as run, self.assertRaises(ValueError):

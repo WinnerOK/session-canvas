@@ -92,6 +92,15 @@ struct ContentView: View {
                     ForEach([NoteState.running, .waiting, .permission, .finished, .idle, .unknown], id: \.rawValue) { state in
                         attentionRow(state, count: model.stateCounts[state, default: 0])
                     }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("VISIBILITY").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
+                        Toggle("Hide archived sessions", isOn: Binding(get: { model.visibility.hideArchived }, set: { model.setHideArchived($0) }))
+                            .toggleStyle(.checkbox)
+                        Picker("Hide Idle after", selection: Binding(get: { model.visibility.idleTimeout }, set: { model.setIdleTimeout($0) })) {
+                            ForEach(IdleTimeout.allCases, id: \.self) { Text($0.label).tag($0) }
+                        }
+                        Text("Active sessions, Unknown, and results to review stay visible.").font(.caption2).foregroundStyle(.secondary)
+                    }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 20)
                     HStack {
                         Text("PROJECTS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
                         Spacer()
@@ -171,6 +180,11 @@ struct SessionViewer: View {
                         Text("SESSION").font(.system(size: 9, weight: .semibold)).tracking(1.8).foregroundStyle(.tertiary)
                         Text(session.title).font(.title3.weight(.semibold)).textSelection(.enabled)
                         Label(model.state(session).label, systemImage: model.state(session).symbol).font(.caption).foregroundStyle(Color(nsColor: model.state(session).color))
+                        Text("Last activity · \(model.activityLabel(session))").font(.caption).foregroundStyle(.secondary)
+                        if session.updatedAt.timeIntervalSince1970 > 0 {
+                            Text(session.updatedAt.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                        if session.isArchived { Label("Archived", systemImage: "archivebox").font(.caption).foregroundStyle(.secondary) }
                     }
                     Spacer()
                     Button { model.selectedSessionID = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Close viewer")
@@ -186,7 +200,7 @@ struct SessionViewer: View {
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 if model.mode == .history {
-                    Label(session.execution == .unknown ? "Saved history · session is not loaded in Codex" : "Live state from Codex desktop", systemImage: session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                    Label(session.execution == .unknown ? session.unknownReason?.label ?? "Current state unavailable" : session.stateIsFromHistory ? "State from saved history" : "Live state from Codex desktop", systemImage: session.stateIsFromHistory || session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ViewThatFits(in: .horizontal) {
@@ -196,6 +210,10 @@ struct SessionViewer: View {
                             HStack(spacing: 8) { openInCodexButton(session); reloadButton }
                         }
                     }
+                    Button(session.isArchived ? "Unarchive session" : "Archive session", systemImage: session.isArchived ? "tray.and.arrow.up" : "archivebox") {
+                        Task { await model.toggleArchive(session.id) }
+                    }.disabled(!model.canArchive(session))
+                        .help("Archive Idle sessions after acknowledging their result. Active and Unknown sessions cannot be archived here.")
                     if let latest = session.latestResult, !model.history.contains(where: { $0.result?.id == latest.id }) {
                         Button("View latest result") { Task { await model.loadHistory(older: false) } }
                             .buttonStyle(.link).font(.caption).disabled(model.isLoadingHistory)

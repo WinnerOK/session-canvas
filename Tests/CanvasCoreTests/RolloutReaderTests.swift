@@ -3,6 +3,28 @@ import Testing
 @testable import CanvasCore
 
 @Suite struct RolloutReaderTests {
+    @Test func discoverySummaryUsesLatestTerminalEvidenceAndRejectsLaterWork() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home.appendingPathComponent("sessions"), withIntermediateDirectories: true)
+        let file = home.appendingPathComponent("sessions/record.jsonl")
+        let identity = #"{"type":"session_meta","payload":{"id":"s"}}"# + "\n"
+        let terminal = #"{"type":"event_msg","payload":{"type":"task_complete","turn_id":"t","last_agent_message":"Done"}}"# + "\n"
+        // The identity is beyond the bounded tail; only its verified first record is read.
+        let padding = String(repeating: " ", count: 300000) + "\n"
+        try (identity + padding + terminal).write(to: file, atomically: true, encoding: .utf8)
+        let summary = try RolloutReader.summary(path: file.path, codexHome: home.path, sessionID: "s")
+        #expect(summary.execution == .idle)
+        #expect(summary.result?.id == "s/t/completed")
+        let next = #"{"type":"event_msg","payload":{"type":"task_started","turn_id":"next"}}"# + "\n"
+        try (identity + padding + terminal + next).write(to: file, atomically: true, encoding: .utf8)
+        #expect(try RolloutReader.summary(path: file.path, codexHome: home.path, sessionID: "s").execution == .unknown)
+        try (identity + terminal + next.trimmingCharacters(in: .newlines)).write(to: file, atomically: true, encoding: .utf8)
+        #expect(try RolloutReader.summary(path: file.path, codexHome: home.path, sessionID: "s").execution == .unknown)
+        try (identity + padding + terminal.trimmingCharacters(in: .newlines)).write(to: file, atomically: true, encoding: .utf8)
+        #expect(try RolloutReader.summary(path: file.path, codexHome: home.path, sessionID: "s").execution == .unknown)
+        #expect(throws: (any Error).self) { try RolloutReader.summary(path: file.path, codexHome: home.path, sessionID: "other") }
+    }
     @Test func onlyVerifiedDialogueAndTerminalEvidenceAreDisplayed() throws {
         var parser = RolloutReader.Parser(sessionID: "s")
         try consume(#"{"type":"session_meta","payload":{"id":"s","base_instructions":"hidden instructions"}}"#, into: &parser)

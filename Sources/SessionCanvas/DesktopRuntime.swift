@@ -17,6 +17,11 @@ final class DesktopRuntime {
     private var wanted: Set<String> = []
     private var states: [String: DesktopObservation] = [:]
     private var records: [String: (owner: String, revision: Double, state: JSONValue)] = [:]
+    private var refollowedOwners: [String: Set<String>] = [:]
+    private let writer = DispatchQueue(label: "session-canvas.desktop-writer")
+    private var pendingFollowing: [String: Bool] = [:]
+    private var followTask: Task<Void, Never>?
+    private var followGeneration = UUID()
 
     func start(codexHome: String) {
         stop()
@@ -35,7 +40,7 @@ final class DesktopRuntime {
         let added = ids.subtracting(wanted)
         let removed = wanted.subtracting(ids)
         wanted = ids
-        for id in removed { follow(id, false); states.removeValue(forKey: id); records.removeValue(forKey: id) }
+        for id in removed { follow(id, false); states.removeValue(forKey: id); records.removeValue(forKey: id); refollowedOwners.removeValue(forKey: id) }
         for id in added { follow(id, true) }
     }
 
@@ -43,7 +48,9 @@ final class DesktopRuntime {
         guard let state = states[session.id] else { return session }
         var result = session
         result.execution = state.execution; result.requests = state.requests
+        result.savedState = false
         if let latest = state.result { result.latestResult = latest }
+        if state.result != nil { result.unknownReason = nil }
         return result
     }
 
@@ -91,14 +98,36 @@ final class DesktopRuntime {
         guard let handle, let payload = try? JSONEncoder().encode(message), payload.count <= 64 * 1024 * 1024 else { return }
         var length = UInt32(payload.count).littleEndian
         var data = withUnsafeBytes(of: &length) { Data($0) }; data.append(payload)
-        do { try handle.write(contentsOf: data) } catch { disconnected() }
+        let frame = data
+        writer.async { [weak self] in
+            do { try handle.write(contentsOf: frame) }
+            catch {
+                Task { @MainActor in
+                    guard let self, self.handle === handle else { return }
+                    self.disconnected()
+                }
+            }
+        }
     }
 
     private func follow(_ id: String, _ following: Bool) {
-        guard let clientID else { return }
-        send(.object(["type": .string("broadcast"), "method": .string("thread-stream-following-changed"),
-                      "sourceClientId": .string(clientID), "version": .number(1),
-                      "params": .object(["conversationId": .string(id), "hostId": .string("local"), "following": .bool(following)])]))
+        guard clientID != nil else { return }
+        pendingFollowing[id] = following
+        guard followTask == nil else { return }
+        let generation = followGeneration
+        followTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.followGeneration == generation, let clientID = self.clientID,
+                      let id = self.pendingFollowing.keys.sorted().first,
+                      let following = self.pendingFollowing.removeValue(forKey: id) else { break }
+                self.send(.object(["type": .string("broadcast"), "method": .string("thread-stream-following-changed"),
+                    "sourceClientId": .string(clientID), "version": .number(1),
+                    "params": .object(["conversationId": .string(id), "hostId": .string("local"), "following": .bool(following)])]))
+                // Coalesce duplicates and avoid a burst of hundreds of desktop subscriptions.
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if self?.followGeneration == generation { self?.followTask = nil }
+        }
     }
 
     private func receive(_ data: Data) {
@@ -134,11 +163,12 @@ final class DesktopRuntime {
             onChange?()
             return
         }
-        guard type == "broadcast", clientID != nil else { return }
+        guard type == "broadcast", let clientID, message["sourceClientId"].string != clientID else { return }
         let params = message["params"]
         if method == "client-status-changed", params["status"].string == "disconnected", let owner = params["clientId"].string {
             let ids = records.filter { $0.value.owner == owner }.map(\.key)
             for id in ids { records.removeValue(forKey: id); states.removeValue(forKey: id) }
+            for id in refollowedOwners.keys { refollowedOwners[id]?.remove(owner) }
             if !ids.isEmpty { onChange?() }
             return
         }
@@ -149,7 +179,13 @@ final class DesktopRuntime {
         }
         if method == "thread-stream-following-changed", message["version"].number == 1, params["following"] == .bool(true) {
             // A desktop window connected or acquired a new thread after our initial inventory.
+            guard let owner = message["sourceClientId"].string,
+                  refollowedOwners[id, default: []].insert(owner).inserted else { return }
             follow(id, true)
+            return
+        }
+        if method == "thread-stream-following-changed", params["following"] == .bool(false), let owner = message["sourceClientId"].string {
+            refollowedOwners[id]?.remove(owner)
             return
         }
         guard method == "thread-stream-state-changed" else { return }
@@ -182,9 +218,11 @@ final class DesktopRuntime {
 
     private func disconnected() {
         handshakeTask?.cancel()
+        followGeneration = UUID()
+        followTask?.cancel(); followTask = nil; pendingFollowing.removeAll()
         handle?.readabilityHandler = nil
         try? handle?.close(); handle = nil; buffer.removeAll()
-        clientID = nil; connected = false; records.removeAll(); states.removeAll()
+        clientID = nil; connected = false; records.removeAll(); states.removeAll(); refollowedOwners.removeAll()
         onChange?()
     }
 

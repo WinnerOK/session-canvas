@@ -221,7 +221,7 @@ final class CanvasNSView: NSView {
             guard titleHeight >= lineHeight(titleFont) else { return }
             text(session.title, in: NSRect(x: rect.minX + inset, y: rect.minY + inset, width: rect.width - inset * 2, height: titleHeight), font: titleFont, color: .labelColor, lines: .byWordWrapping)
             let stateFont = NSFont.systemFont(ofSize: 10)
-            text(state.label, in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
+            text(state.label + " · " + model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
             return
         }
         let inset = 16 * scale
@@ -238,7 +238,8 @@ final class CanvasNSView: NSView {
             footer = seen ? "Result acknowledged" : "\(result.outcome.label) · review result"
         } else if !session.cwd.isEmpty { footer = URL(fileURLWithPath: session.cwd).lastPathComponent }
         else { footer = model.mode == .demo ? "Demo session" : "Codex session" }
-        text(footer, in: NSRect(x: rect.minX + inset, y: rect.maxY - 30 * scale, width: rect.width - inset * 2, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
+        text((session.isArchived ? "Archived · " : "") + footer, in: NSRect(x: rect.minX + inset, y: rect.minY + 100 * scale, width: rect.width - inset * 2, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
+        text(model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - 25 * scale, width: rect.width - inset * 2 - 18 * scale, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
         if state == .finished {
             text("↗", in: NSRect(x: rect.maxX - 32 * scale, y: rect.maxY - 32 * scale, width: 16 * scale, height: 16 * scale), font: .systemFont(ofSize: 13 * scale), color: state.color)
         }
@@ -356,6 +357,10 @@ final class CanvasNSView: NSView {
             if model.mode != .demo {
                 let native = NSMenuItem(title: "Open in Codex", action: #selector(openNativeContext), keyEquivalent: ""); native.target = self; native.representedObject = id; menu.addItem(native)
             }
+            if let session = model.workspace.sessions.first(where: { $0.id == id }) {
+                let archive = NSMenuItem(title: session.isArchived ? "Unarchive session" : "Archive session", action: #selector(archiveContext), keyEquivalent: "")
+                archive.target = self; archive.isEnabled = model.canArchive(session); menu.addItem(archive)
+            }
             let move = NSMenu(title: "Move to project")
             move.autoenablesItems = false
             for project in model.visibleProjects {
@@ -373,6 +378,7 @@ final class CanvasNSView: NSView {
     }
     @objc private func moveContext(_ sender: NSMenuItem) { if let id = contextSession { model.moveToProject(id: id, projectID: sender.representedObject as? String) } }
     @objc private func openNativeContext() { if let session = model.workspace.sessions.first(where: { $0.id == contextSession }) { model.openInCodex(session) } }
+    @objc private func archiveContext() { if let id = contextSession { Task { await model.toggleArchive(id) } } }
     @objc private func createContext() { model.beginCreation(at: contextPoint) }
     @objc private func fitAction() { fitContent() }
     @objc private func zoomContextProject() { if let id = contextProject { focusProject(id) } }
@@ -412,7 +418,7 @@ final class CanvasNSView: NSView {
             let element = CanvasAccessibilityElement()
             element.setAccessibilityRole(.button)
             element.setAccessibilityParent(self)
-            element.setAccessibilityLabel(session.title + ", " + model.state(session).label)
+            element.setAccessibilityLabel(session.title + ", " + model.state(session).label + ", last activity " + model.activityLabel(session) + (session.isArchived ? ", archived" : ""))
             if let window {
                 let local = screen(placement.rect)
                 element.setAccessibilityFrame(window.convertToScreen(convert(local, to: nil)))

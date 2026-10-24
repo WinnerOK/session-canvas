@@ -51,7 +51,7 @@ The canvas SHALL support panning in every direction, zooming around a focal poin
 - **AND** hidden member notes are not independently clickable in the overview
 
 ### Requirement: Existing sessions appear once
-At session-detail zoom, the system SHALL display exactly one note for each eligible non-archived user session matching the current filters or temporarily revealed after creation. It SHALL use stable source identity, show the current title and note state, and use Untitled session when no title is available.
+At session-detail zoom, the system SHALL display exactly one note for each eligible user session matching the current filters or temporarily revealed after creation. It SHALL use stable source identity, show the current title and note state, and use Untitled session when no title is available. Archived sessions SHALL remain in discovery and retain geometry for optional display and restoration.
 
 #### Scenario: Multiple pages and repeated observations
 - **WHEN** discovery returns several pages and later repeats a previously discovered session
@@ -147,7 +147,7 @@ Session title, execution, and acknowledgment updates SHALL refresh the existing 
 - **THEN** its existing note updates its title and state at the same position
 
 ### Requirement: Inventory gaps do not remove notes
-The system SHALL retain known notes during disconnects, incomplete discovery, or unavailable inventory pages. It SHALL hide a note only on authoritative evidence that its session is archived, removed, or an excluded internal agent session, preserving layout for archived sessions that later return.
+The system SHALL retain known notes during disconnects, incomplete discovery, or unavailable inventory pages. Source removal SHALL require authoritative evidence of deletion or internal-agent exclusion. Archive visibility SHALL use confirmed source archive state and the lifecycle visibility settings, preserving geometry for restoration.
 
 #### Scenario: Refresh fails partway through discovery
 - **WHEN** the source disconnects before the final inventory page is read
@@ -155,7 +155,32 @@ The system SHALL retain known notes during disconnects, incomplete discovery, or
 
 #### Scenario: Archive and restore outside the canvas
 - **WHEN** the source confirms a known session was archived and subsequently restored
-- **THEN** its note is hidden while archived and restored to its saved position if that position still matches its membership
+- **THEN** its note follows archive visibility settings and is restored to its saved position if that position still matches its membership
+
+### Requirement: Persisted archive and idle-age visibility
+The sidebar SHALL offer Hide archived sessions, enabled by default, and Hide Idle after with Never (default), 15 minutes, 1 hour, 1 day, 1 week, and 1 month. These settings SHALL combine with existing search, attention, and project filters, persist per source, and leave membership, geometry, and acknowledgment unchanged. A month SHALL mean 30 days. Show all sessions SHALL disable lifecycle hiding as well as clear existing filters.
+
+#### Scenario: Expire an idle session
+- **WHEN** a known Idle session reaches the chosen interval since its source activity timestamp
+- **THEN** its note leaves the visible set on the next clock update within 30 seconds and its viewer closes
+- **AND** new source activity or a higher-priority state makes it eligible again without changing its saved placement
+
+#### Scenario: Protect work and unreviewed results
+- **WHEN** archive or age hiding would exclude Running, Waiting for you, Permission required, Unknown, or Finished with an unacknowledged result
+- **THEN** lifecycle hiding keeps that session eligible regardless of age or archive state
+- **AND** existing explicit attention/project/search filters retain their established semantics
+
+#### Scenario: Restore visibility
+- **WHEN** the user disables archive hiding, chooses Never, or selects Show all sessions
+- **THEN** the corresponding hidden notes and nonempty project areas return at their saved positions
+
+### Requirement: Compact source activity age
+Each detailed session note SHALL show last source activity using one largest unit: whole minutes, hours, days, then the capped label 1 month ago at 30 days and beyond. Polling, viewing, acknowledgment, and archive changes SHALL NOT manufacture a newer activity timestamp. Labels SHALL refresh within 30 seconds without requiring manual refresh; missing timestamps SHALL display Activity unavailable and SHALL NOT expire a session by age.
+
+#### Scenario: Format activity age
+- **WHEN** activity was 15 minutes, 75 minutes, or 25 hours ago
+- **THEN** the labels are 15m ago, 1h ago, and 1d ago respectively, with no smaller unit
+- **AND** activity from 30 or more days ago displays 1 month ago, and future timestamps clamp to 0m ago
 
 ### Requirement: Notes remain understandable without color
 Every note SHALL expose its full title and note-state text to assistive technology. The UI SHALL provide a state legend and a keyboard action to open a focused note. Truncated visual titles SHALL have a way to reveal the full title.

@@ -154,6 +154,7 @@ Use `scripts/verify-local.py` as the single build/test/native-preview entry poin
 
 The launcher executes fixed subprocess argument lists, directs SwiftPM/module caches under `.build`, and exposes explicit installed-source opt-in. Preview rebuilds/signs the bundle and defaults to a fresh demo database and PNG under `.build/verification`. Resolve explicit SQLite/PNG outputs against verification, temporary, and Codex visualization roots before starting any subprocess. Preserve the real application database. A bounded capture must produce a fresh PNG and a successful process exit; stale files are not verification evidence. This development permission is independent of permission requests displayed by the product's session viewer.
 
+
 ## Risks / Trade-offs
 
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
@@ -166,6 +167,18 @@ The launcher executes fixed subprocess argument lists, directs SwiftPM/module ca
 - [Viewer history rendering grows into a second chat client] → Keep it read-only and delegate continuation, input responses, and permission approval to native Codex.
 
 ## Migration Plan
+
+### Session lifecycle visibility and saved evidence
+
+Discovery includes separate paginated active and archived inventories. Archive is a source fact, independent of acknowledgment. Archive/unarchive uses the bundled server's `thread/archive` and `thread/unarchive` contracts; only confirmed responses update local state. The model refreshes and rechecks current revision and Idle eligibility before archive. Active, Unknown, and unreviewed sessions cannot be archived from Canvas. Failures preserve the note; no Codex database is edited.
+
+For unloaded sessions, read a bounded 64 KiB identity header and 256 KiB tail from the exact inventory-provided rollout path under the connected home's sessions/archived_sessions roots. Ignore partial first/tail lines and reject mismatched identity and escaping symlinks. The latest structured terminal event establishes saved Idle plus a stable result; later starts/user messages/work records invalidate Idle. Ambiguous or unavailable evidence remains Unknown, with an explanation when local history is missing. Never infer completion from silence, unload, or assistant prose. Cache by inventory revision and precise file modification time/size/inode, with at most eight parallel observations. If no exact local path is available, retain Unknown rather than issuing unbounded per-session RPC reads during discovery. Desktop observations override saved evidence and viewer provenance distinguishes them. Ignore our own subscription broadcasts and deduplicate refollows by other owner/session; reset on disconnect or unfollow. Serialize socket writes off the main actor to avoid backpressure freezing the UI.
+
+CanvasVisibility adds backward-compatible hideArchived (default true) and IdleTimeout (default Never). A lifecycle predicate protects all non-Idle states and sessions lacking result evidence, then applies archive and source-age settings. Existing explicit search/state/project filters still compose normally. The clock refreshes age labels/visibility every 30 seconds; it never writes a source activity timestamp. All visible project/count/accessibility/fit projections use the resulting visible set. Show all sessions disables both lifecycle filters. The creation reveal continues to bypass these filters without changing saved choices.
+
+After the reported live-test CPU/crash incident, verification defaults to fixtures/demo and two build jobs. Saved inventory disables desktop observation. A live observer has a separate exact-filter launcher switch and requires per-run user authorization, as does desktop-source preview. Own/other-owner echoes are suppressed and subscription requests are coalesced and paced to ten per second. Real-host safety remains an open gate; fixture success does not establish that the reported crash is resolved on the user's host.
+
+Activity labels use floored minutes/hours/days and cap at 1 month ago after 30 days. Missing source timestamps remain visible and show Activity unavailable; future timestamps clamp to 0m ago. The viewer also presents the exact local timestamp. Session payloads add optional archive/provenance/reason fields and visibility decoding supplies defaults, preserving existing schema-version-2 geometry and acknowledgment without a destructive migration.
 
 Retain existing canvas data and stable source-qualified IDs. SQLite schema version 2 adds a separate visibility table without resetting the workspace or acknowledgments. Cached internal-agent notes are removed from the canvas after structured source identification; underlying Codex sessions are untouched. Source titles, project membership, and live state reconcile without reordering unrelated geometry. First load discovers actual projects and non-archived user sessions without implicit acknowledgment.
 
