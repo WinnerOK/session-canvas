@@ -267,3 +267,59 @@ Every note SHALL expose its full title and note-state text to assistive technolo
 - **WHEN** the user focuses a note and invokes its open action
 - **THEN** the corresponding session viewer opens and exposes the session's title and state
 - **AND** color is not required to determine the note's state
+
+### Requirement: Search matches session titles without changing stored organization
+Find a session SHALL apply a localized case-insensitive substring match to session titles. Empty search SHALL match all titles. Search SHALL compose with attention/project/age visibility, remain transient rather than stored in SQLite, and leave geometry, membership, and acknowledgment unchanged. Changing search SHALL end the temporary creation reveal.
+
+#### Scenario: Find matching titles
+- **WHEN** the user enters part of a title with different capitalization
+- **THEN** all matching sessions remain eligible under the other visibility filters, including separate sessions with the same title
+- **AND** body text, working folders, and project names are not additional search fields
+
+#### Scenario: Clear or restart search
+- **WHEN** the user clears search or starts a new application instance
+- **THEN** the title restriction is removed without restoring hidden attention states or projects
+- **AND** Show all sessions additionally resets the other visibility filters
+
+### Requirement: Workspace counters explain their scope
+All sessions SHALL count known current-source user sessions; canvas/project counters SHALL count visible sessions/projects. Attention counts SHALL apply search/project/age rules before attention-state exclusions. Results to review SHALL count visible sessions with an unread latest result, including higher-priority states. Visible counters SHALL include creation reveal. Acknowledge all SHALL retain its separate all-Finished scope.
+
+#### Scenario: Hide a populated attention state
+- **WHEN** the user unchecks Finished
+- **THEN** its row can still show how many Finished sessions match the remaining filters while canvas/project counts exclude them
+- **AND** All sessions continues to count the known inventory
+
+#### Scenario: Review counts differ from bulk targets
+- **WHEN** an unread result belongs to a visible Running or Unknown session
+- **THEN** it contributes to results to review without becoming eligible for Acknowledge all
+- **AND** the canvas footer also displays the current viewport zoom percentage
+
+### Requirement: Native navigation inputs remain discoverable
+The app SHALL expose pan/zoom gestures and native shortcuts for creation, refresh, connection settings, fit, and visibility reset. Tab/Shift + Tab SHALL cycle rendered notes and overview projects; Return/keypad Enter SHALL activate focus. Escape SHALL cancel active canvas drag/resize previews. These controls SHALL preserve the corresponding pointer-command behavior.
+
+#### Scenario: Use native gestures and commands
+- **WHEN** the user scrolls, drags the background, or uses Space + drag
+- **THEN** the canvas pans; pinch or Command + scroll instead zooms around the pointer
+- **AND** Command + N creates, Command + R refreshes, Command + comma opens Connection Settings, Command + 0 fits content, and Command + 1 shows all sessions
+
+#### Scenario: Navigate without clicking a note
+- **WHEN** the canvas has keyboard focus and the user presses Tab or Shift + Tab followed by Return
+- **THEN** focus cycles in the corresponding direction through the rendered items and opens the selected note's viewer or zooms into the selected overview project
+- **AND** project members replaced by an overview are not separate focus targets
+
+#### Scenario: Cancel a geometry preview
+- **WHEN** the user presses Escape while moving a note, moving/resizing a region, or panning by drag
+- **THEN** the uncommitted preview is discarded without changing stored geometry or source membership
+
+### Requirement: Note detail adapts to available scale
+Notes SHALL adapt from detailed title/state/activity/footer to compact whole-line text or distant shapes without changing geometry or source facts. Detailed footers SHALL prioritize pending moves, result outcome/review status, then working folder/source label. Selection and keyboard focus SHALL have a visible outline.
+
+#### Scenario: Zoom through note detail levels
+- **WHEN** the user zooms out from detailed notes
+- **THEN** intermediate notes use compact title/state/activity text, and very distant unassigned notes may show only their colored shape
+- **AND** detailed notes show state text/icon/color and use the working folder's last component or source label when no result or move is known
+
+#### Scenario: Inspect a reviewed or unread result without opening history
+- **WHEN** a note has a known latest result at detailed zoom
+- **THEN** it shows Result acknowledged or the terminal outcome with review result, while an archived note shows the outcome without implying acknowledgment
+- **AND** a running or requesting note retains its higher-priority state even when its footer describes an older result

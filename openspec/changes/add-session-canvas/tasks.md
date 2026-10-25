@@ -172,9 +172,11 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 
 ## 17. Existing-session project membership API
 
+The 17:53 live-store correction in section 23 supersedes the earlier inference from isolated backend tests. Those tests established SQLite metadata persistence, not a desktop membership transition.
+
 - [x] 17.1 Verify the installed 0.164.0-alpha.11.1 schema and isolated actual server for metadata/update projectId assignment, reassignment, and empty-string removal; preserve exact session/cwd and start no turn.
-- [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, and retain remote exclusions. Scoped verified confirmation in section 20 supersedes the initial blanket server-precedence rule.
-- [x] 17.3 Keep confirmed coordinates pending, prevent duplicate session moves, commit only confirmed identities/membership, reconcile failed/ambiguous outcomes without mutation replay, and retain state/requests/review/viewport.
+- [ ] 17.2 Enable real-source moves only through an API that actually changes desktop membership; version/project metadata checks are insufficient. The current adapter disables this capability.
+- [ ] 17.3 Verify actual desktop assignment/reassignment/removal, independent desktop readback, preserved execution context, and failure/conflict handling before committing real-source coordinates. Generic model/demo pending behavior is implemented; the real API path remains open.
 - [x] 17.4 Complete full offline regressions, isolated adapter verification, release/signature and SDD/link/whitespace checks, then update delivery evidence. Atomic preflight/write races, durable pending recovery, and live-host move presentation remain explicitly unverified.
 
 ## 18. Compact square-oriented Rearrange
@@ -192,7 +194,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 ## 20. Preserve desktop membership during API discovery
 
 - [x] 20.1 Reproduce a desktop-assigned session becoming unassigned on API null; confirm the real saved project catalog still exists using read-only counts and test recovery of a previously flattened Canvas snapshot.
-- [x] 20.2 Preserve explicit desktop membership by default; replace capability-based precedence with typed per-session verified confirmation, persist/restore it per source, include desktop membership in revisions, and permanently invalidate it after observed desktop changes.
+- [x] 20.2 Preserve explicit desktop membership by default and include it in revisions. The initial persisted backend-confirmation override is removed by section 23; old confirmation payloads still decode but cannot override desktop facts.
 - [x] 20.3 Cover legacy-assigned and projectless move/removal round trips, SQLite confirmation restoration, unrelated edits, later desktop changes and nonresurrection, stale/rejected/unknown moves, and the clean installed-server adapter.
 - [x] 20.4 Complete full offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update delivery evidence without observing or mutating the user's desktop sessions.
 
@@ -214,6 +216,19 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 22.1 Preserve four generated light alternatives and their original prompts; record the user's selection of the original blue session-cards image.
 - [x] 22.2 Export standard 1×/2× native icon sizes and package the selected ICNS resource and metadata before signing in the shared local/release builder.
 - [x] 22.3 Verify bundle resource lookup, icon representations and appearance, the signed local build, packaging checks, strict OpenSpec/whitespace checks, and affected documentation links; record actual evidence.
+
+## 23. Backend persistence is not a desktop project move
+
+- [x] 23.1 Inspect the 17:53 recording and reproduce the exact split on the existing test chat in the user's real Codex; compare with the standard Codex API action and restore original membership without starting a turn or observing desktop streams.
+- [x] 23.2 Remove backend/version-based move enablement and legacy confirmation overrides. Reject unsupported moves before writes; retain local positioning and disabled project controls, and reconcile external desktop changes.
+- [x] 23.3 Complete the failing-then-passing regression, corrected actual-source readback, offline suite, release/signature, strict SDD/whitespace, and local-link checks; record evidence and source limitations.
+- [ ] 23.4 Restore automatic real-source project moves through a verified API-only desktop channel. Standalone app-tools access currently closes the connection; the user declined Accessibility/UI automation. This gate remains open.
+
+## 24. Complete functional SDD coverage
+
+- [x] 24.1 Inventory the native application, domain/source modules, developer tools, and distribution workflows against existing requirements and regression entry points; retain explicit acceptance gaps.
+- [x] 24.2 Add source-connection and missing search/count/input/note/history/overview/probe scenarios, record the function-to-contract map, and align proposal/design/README/native guidance with current disabled real-source project moves.
+- [x] 24.3 Validate all OpenSpec artifacts strictly, check whitespace and affected local links/anchors, and record documentation-only evidence without claiming a new native/live test pass.
 
 ## Workflow follow-up
 

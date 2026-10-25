@@ -64,6 +64,27 @@ The viewer SHALL show the session title, current note state, and read-only sourc
 - **THEN** the viewer shows an error and a retry action
 - **AND** it does not offer acknowledgment for the unloaded result
 
+### Requirement: Read-only history has a bounded display contract
+The viewer SHALL show selectable dialogue, plans, and terminal outcomes with role labels, omitting arbitrary tool payloads and hidden reasoning. Missing response text SHALL use an error or explicit fallback. History SHALL prefer paged API, then unsupported-method legacy fallback, then validated exact local rollout on read failure. Empty loaded history SHALL be explained. Old selection/source replies SHALL NOT replace the current viewer.
+
+#### Scenario: Inspect dialogue alongside tool work
+- **WHEN** source history contains user/assistant dialogue, plans, and tool calls
+- **THEN** the viewer shows the supported dialogue/plan entries as selectable text and omits arbitrary tool inputs/outputs
+- **AND** the terminal outcome remains reviewable even when it has only an error or no recorded response text
+
+#### Scenario: An empty session loads successfully
+- **WHEN** history loads successfully without messages
+- **THEN** the viewer shows No messages have been recorded yet rather than a load failure or fabricated result
+
+#### Scenario: The history API is older than paginated history
+- **WHEN** the server rejects the paged method as unsupported
+- **THEN** the adapter uses legacy reading and presents local pages of the returned history through the same viewer controls
+- **AND** a rollout fallback validates source path and session identity before showing content
+
+#### Scenario: Switch selection while loading
+- **WHEN** the user opens another session or switches sources before a history request returns
+- **THEN** the old reply cannot populate or acknowledge the newly selected viewer
+
 ### Requirement: Viewer controls remain above history
 Acknowledge result or Mark as unread, Open in Codex, Reload history, and pagination controls SHALL remain in a fixed panel above the transcript. The panel SHALL adapt to narrow viewer widths without clipping button labels.
 
@@ -104,6 +125,11 @@ The viewer SHALL provide Open in Codex using a verified native-navigation mechan
 #### Scenario: The native navigation request fails
 - **WHEN** Open in Codex cannot dispatch through the configured navigation mechanism
 - **THEN** the viewer shows a retryable navigation error and preserves the session's acknowledgment and execution state
+
+#### Scenario: Native navigation settings are invalid
+- **WHEN** the configured template omits {id}, yields a scheme other than codex, or no application handles the resulting URL
+- **THEN** navigation is rejected with guidance to correct Connection Settings
+- **AND** valid navigation percent-encodes the exact session identity before substituting it into the template
 
 ### Requirement: Context menu starts creation at the clicked location
 Right-clicking canvas background or a project area SHALL offer New session, including in the distant overview when project labels are hidden. Choosing it SHALL open a creation dialog that remembers the clicked world-coordinate location, with the containing region's project selected or no project outside all regions. A keyboard-accessible New session action SHALL provide the same flow.

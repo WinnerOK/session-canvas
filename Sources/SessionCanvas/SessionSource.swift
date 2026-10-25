@@ -67,7 +67,7 @@ extension SessionSource {
 final class CodexSource: SessionSource {
     let mode: SourceMode
     private(set) var sourceID: String
-    private(set) var canAssignProject = false
+    let canAssignProject = false
     let canArchive = true
     private(set) var canCreate = false
     private(set) var creationUnavailableReason = "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect."
@@ -106,7 +106,6 @@ final class CodexSource: SessionSource {
     private var desktopProjects: DesktopProjectCatalog?
     private var serverProjectsBySession: [String: String] = [:]
     private var knownServerMemberships: Set<String> = []
-    private var projectConfirmations: [String: ProjectMembershipConfirmation] = [:]
     private var creating = false
     private var creationWorker: RPCConnection?
     private let workingDirectoryBase: URL
@@ -140,20 +139,12 @@ final class CodexSource: SessionSource {
         // Keep older/custom servers usable for browsing without sending an unverified create.
         if mode == .history, let response = try? await rpc.request("project/list", ["limit": .number(1)]), case .array = response["data"] {
             canCreate = true
-            canAssignProject = Self.supportsProjectMoves(userAgent: initialized["userAgent"].string ?? "")
         }
         if mode == .history && observeDesktop { desktop.start(codexHome: codexHome) }
     }
     func restoreCachedResults(_ sessions: [Session]) {
         for session in sessions {
             if let result = session.latestResult { cachedResults[session.id] = result }
-            if let confirmation = session.projectMembershipConfirmation {
-                projectConfirmations[session.id] = confirmation
-                if !knownServerMemberships.contains(session.id) {
-                    serverProjectsBySession[session.id] = confirmation.serverProjectID
-                    knownServerMemberships.insert(session.id)
-                }
-            }
         }
     }
     func snapshot() async throws -> (sessions: [Session], projects: [Project]) {
@@ -190,7 +181,7 @@ final class CodexSource: SessionSource {
         }
         for id in result.keys {
             result[id]?.projectID = mappedProjectID(for: id)
-            result[id]?.projectMembershipConfirmation = currentProjectConfirmation(for: id)
+            result[id]?.projectMembershipConfirmation = nil
         }
         for (id, value) in result { previous[id] = value }
         hiddenSessionIDs.formUnion(hidden)
@@ -198,7 +189,7 @@ final class CodexSource: SessionSource {
         // Reapply assignments for retained sessions too, including external project moves/removals.
         for id in previous.keys {
             previous[id]?.projectID = mappedProjectID(for: id)
-            previous[id]?.projectMembershipConfirmation = currentProjectConfirmation(for: id)
+            previous[id]?.projectMembershipConfirmation = nil
         }
         let availableIDs = Set(previous.keys)
         desktop.observe(observedSessionIDs.map { availableIDs.intersection($0) } ?? availableIDs)
@@ -368,7 +359,7 @@ final class CodexSource: SessionSource {
         guard var session = metadata ?? baseline else { return nil }
         session.archived = baseline?.archived
         session.projectID = baseline?.projectID
-        session.projectMembershipConfirmation = baseline?.projectMembershipConfirmation
+        session.projectMembershipConfirmation = nil
         session.latestResult = turns.reversed().lazy.compactMap { CodexWire.result($0, sessionID: sessionID) }.first ?? baseline?.latestResult
         previous[sessionID] = session
         var saved = session
@@ -380,105 +371,24 @@ final class CodexSource: SessionSource {
         savedFileRevisions[sessionID] = fileRevision
         return applyingObservations(to: session)
     }
-    static func supportsProjectMoves(userAgent: String) -> Bool {
-        // The generated 0.164.0-alpha.11.1 schema and isolated server verify projectId
-        // on metadata/update. Older servers can silently ignore unknown fields.
-        // Without a parent Codex originator override, initialization uses our client
-        // name as the prefix; the version after it is still the server's version.
-        let pattern = #"^(?:Codex Desktop|codex_cli_rs|session_canvas)/(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+)\.(\d+))?(?: |$)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: userAgent, range: NSRange(userAgent.startIndex..., in: userAgent)) else { return false }
-        func number(_ index: Int) -> Int? { Range(match.range(at: index), in: userAgent).flatMap { Int(userAgent[$0]) } }
-        guard let major = number(1), let minor = number(2), let patch = number(3) else { return false }
-        if major != 0 { return major > 0 }
-        if minor != 164 { return minor > 164 }
-        if patch != 0 { return patch > 0 }
-        guard let alpha = number(4), let build = number(5) else { return true }
-        return alpha > 11 || alpha == 11 && build >= 1
-    }
     private func mappedProjectID(for id: String) -> String? {
-        desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id],
-                                   confirmation: currentProjectConfirmation(for: id))
-    }
-    private func currentProjectConfirmation(for id: String) -> ProjectMembershipConfirmation? {
-        guard var confirmation = projectConfirmations[id], let catalog = desktopProjects else { return nil }
-        guard confirmation.desktopRevision == catalog.membershipRevision(for: id) else {
-            projectConfirmations.removeValue(forKey: id)
-            return nil
-        }
-        if knownServerMemberships.contains(id) { confirmation.serverProjectID = serverProjectsBySession[id] }
-        return confirmation
+        // Desktop membership is authoritative. Backend-only projectId changes and
+        // old Canvas confirmations do not prove a move in the running Codex app.
+        desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id])
     }
     private func decodeSession(_ value: JSONValue) throws -> Session {
         var session = try CodexWire.session(value, live: mode == .shared)
-        if canAssignProject && value.object.keys.contains("projectId") {
+        if mode == .history && value.object.keys.contains("projectId") {
             session.revision += "|project:" + (value["projectId"].string ?? "none")
             session.revision += "|desktop:" + (desktopProjects?.membershipRevision(for: session.id) ?? "unassigned")
         }
         return session
     }
-    private func recordMembership(_ thread: JSONValue, sessionID: String) throws {
-        guard thread["id"].string == sessionID, thread.object.keys.contains("projectId"),
-              thread["projectId"] == .null || thread["projectId"].string != nil else {
-            throw CanvasError.message("Codex did not return confirmed session membership. Refresh before retrying the move.")
-        }
-        knownServerMemberships.insert(sessionID)
-        serverProjectsBySession[sessionID] = thread["projectId"].string
-        previous[sessionID]?.projectID = mappedProjectID(for: sessionID)
-    }
     func assign(sessionID: String, projectID: String?, revision: String) async throws -> Session {
-        guard canAssignProject, let baseline = previous[sessionID], baseline.revision == revision else {
-            throw CanvasError.message("Project moves require a current session and a supported desktop Codex connection. Refresh or reconnect before retrying.")
-        }
-        if let catalog = try DesktopProjectCatalog.read(codexHome: codexHome) { desktopProjects = catalog }
-        guard let catalog = desktopProjects, catalog.allowsLocalMembership(for: sessionID) else {
-            throw CanvasError.message("This session has no confirmed local project membership. Organize it in its owning Codex host.")
-        }
-        let desktopRevision = catalog.membershipRevision(for: sessionID)
-        let serverID: String?
-        if let projectID {
-            guard let mapped = desktopProjects?.serverProjectID(for: projectID) else { throw CanvasError.message("That project has no confirmed local Codex identity. Refresh before retrying.") }
-            let project = try await rpc.request("project/read", ["projectId": .string(mapped)])["project"]
-            guard project["id"].string == mapped else { throw CanvasError.message("Codex could not confirm the destination project.") }
-            serverID = mapped
-        } else { serverID = nil }
-        let before = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(false)])["thread"]
-        let expectedServerID = knownServerMemberships.contains(sessionID) ? serverProjectsBySession[sessionID] : baseline.projectID.flatMap { catalog.serverProjectID(for: $0) }
-        try recordMembership(before, sessionID: sessionID)
-        guard before["projectId"].string == expectedServerID,
-              try decodeSession(before).revision == revision,
-              before["cwd"].string == baseline.cwd else {
-            throw CanvasError.message("The session changed before the move. Its current Codex project was retained; refresh and try again.")
-        }
-        var mutationError: Error?
-        do { _ = try await rpc.request("thread/metadata/update", ["threadId": .string(sessionID), "projectId": .string(serverID ?? "")]) }
-        catch {
-            mutationError = error
-            if let failure = error as? RPCFailure, [-32601, -32602].contains(failure.code) { canAssignProject = false }
-        }
-        // Read back even after a rejected/lost reply. Never repeat a mutation to discover
-        // its outcome, and never resume or alter the session's execution settings.
-        let after: JSONValue
-        do {
-            after = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(false)])["thread"]
-            try recordMembership(after, sessionID: sessionID)
-        } catch {
-            throw CanvasError.message("The project move could not be confirmed. Refresh to reconcile Codex membership before retrying; the request was not repeated.")
-        }
-        guard after["projectId"].string == serverID, after["cwd"] == before["cwd"] else {
-            throw CanvasError.message(mutationError == nil ? "Codex did not retain the requested project. Its current membership will be refreshed." : "Codex rejected the project move. Its current membership will be refreshed.")
-        }
-        projectConfirmations[sessionID] = ProjectMembershipConfirmation(desktopRevision: desktopRevision, serverProjectID: serverID)
-        guard mappedProjectID(for: sessionID) == projectID else { throw CanvasError.message("Desktop project membership changed during the move. Its current assignment will be refreshed.") }
-        var confirmed = try decodeSession(after)
-        confirmed.projectID = projectID
-        confirmed.projectMembershipConfirmation = currentProjectConfirmation(for: sessionID)
-        // Metadata-only organization does not replace current work/result evidence.
-        confirmed.execution = baseline.execution; confirmed.requests = baseline.requests
-        confirmed.latestResult = previous[sessionID]?.latestResult ?? baseline.latestResult
-        confirmed.archived = baseline.archived
-        previous[sessionID] = confirmed
-        return applyingObservations(to: confirmed)
+        // The installed CLI persists backend metadata, while Codex desktop keeps
+        // its own project membership. Version checks and readback of that same
+        // backend cannot establish desktop support. Do not issue a ghost move.
+        throw CanvasError.message("This Codex connection cannot move chats between projects. Move the chat in Codex; its project will sync here.")
     }
     func creationDirectory(projectID: String) -> String? { desktopProjects?.rootPaths(for: projectID).first }
     func create(title: String, prompt: String, projectID: String?, cwd: String) async throws -> CreatedSession {

@@ -6,274 +6,140 @@ import CanvasCore
 @Suite(.serialized)
 @MainActor
 struct ProjectMembershipTests {
-    @Test func supportedMovesDoNotEraseDesktopProjectsWhenServerMembershipIsNull() async throws {
+    @Test func backendConfirmationCannotStandInForDesktopMembership() async throws {
         let fixture = try MembershipFixture()
         defer { fixture.remove() }
-        let file = fixture.folder.appendingPathComponent(".codex-global-state.json")
-        var state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
-        state["projectless-thread-ids"] = []
-        state["thread-project-assignments"] = ["existing": ["projectKind": "local", "projectId": "a"]]
-        try JSONSerialization.data(withJSONObject: state).write(to: file)
-        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-        defer { source.close() }
-        try await source.connect()
-        #expect(source.canAssignProject)
-        let snapshot = try await source.snapshot(), sessions = snapshot.sessions
-        #expect(sessions.first { $0.id == "existing" }?.projectID == "a")
-        // Recover an existing Canvas snapshot flattened by the previous bug.
-        let storage = fixture.folder.appendingPathComponent("canvas.sqlite").path
-        var cached = Workspace()
-        cached.reconcile(sessions: sessions, projects: snapshot.projects)
-        for index in cached.sessions.indices { cached.sessions[index].projectID = nil }
-        cached.viewport = Viewport(origin: Point(11, 17), zoom: 0.42)
-        try CanvasDatabase(path: storage).save(cached, source: source.sourceID)
-        let model = ApplicationModel(demo: false, storagePath: storage)
+        // Captured from the real failure: backend says A, desktop says projectless.
+        try fixture.patch(["projectId": "server-a"])
+        let model = ApplicationModel(demo: false, storagePath: fixture.folder.appendingPathComponent("canvas.sqlite").path)
         model.settings = fixture.settings
         await model.connect()
         defer { model.shutdown() }
         model.showAllSessions()
-        #expect(model.workspace.sessions.first { $0.id == "existing" }?.projectID == "a")
-        #expect(model.visibleProjects.contains { $0.id == "a" })
-        #expect(model.workspace.project(at: model.workspace.placements["existing"]!.center) == "a")
-        #expect(model.workspace.viewport == cached.viewport)
+        #expect(!model.canAssignProject)
+        let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
+        let placement = model.workspace.placements[session.id]
+        model.moveToProject(id: session.id, projectID: "a")
+        #expect(model.errorMessage != nil)
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == nil)
+        #expect(model.workspace.placements[session.id] == placement)
+        #expect(model.pendingSessions.isEmpty)
+        let stored = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: fixture.folder.appendingPathComponent("thread.json")))
+        #expect(stored["projectId"].string == "server-a")
         #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
-    }
-
-    @Test func verifiedMoveConfirmationDoesNotOverrideLaterDesktopChanges() async throws {
-        let fixture = try MembershipFixture()
-        defer { fixture.remove() }
-        try fixture.desktopMembership("a")
-        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-        defer { source.close() }
-        try await source.connect()
-        var session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
-        session = try await source.assign(sessionID: session.id, projectID: "b", revision: session.revision)
-        #expect(session.projectID == "b")
-        #expect(session.projectMembershipConfirmation != nil)
-        // Unrelated catalog edits do not invalidate this session's proof.
-        let file = fixture.folder.appendingPathComponent(".codex-global-state.json")
-        var state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
-        state["thread-project-assignments"] = ["existing": ["projectKind": "local", "projectId": "a"],
-                                               "unrelated": ["projectKind": "local", "projectId": "b"]]
-        try JSONSerialization.data(withJSONObject: state).write(to: file)
-        #expect(try await source.snapshot().sessions.first { $0.id == session.id }?.projectID == "b")
-        try fixture.desktopMembership(nil)
-        let changed = try #require(try await source.snapshot().sessions.first { $0.id == session.id })
-        #expect(changed.projectID == nil)
-        #expect(changed.projectMembershipConfirmation == nil)
-        #expect(changed.revision != session.revision)
-        // Old confirmation cannot regain authority after a restart.
-        let restart = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-        defer { restart.close() }
-        try await restart.connect()
-        restart.restoreCachedResults([session])
-        #expect(try await restart.snapshot().sessions.first { $0.id == session.id }?.projectID == nil)
-        // Returning to an old legacy value cannot resurrect a discarded proof.
-        try fixture.desktopMembership("a")
-        #expect(try await source.snapshot().sessions.first { $0.id == session.id }?.projectID == "a")
-        #expect(try await restart.snapshot().sessions.first { $0.id == session.id }?.projectID == "a")
-    }
-
-    @Test func moveSupportRequiresVerifiedDesktopVersion() {
-        for version in ["0.164.0-alpha.11.1", "0.164.0", "0.165.0-alpha.1.0", "1.0.0"] {
-            #expect(CodexSource.supportsProjectMoves(userAgent: "Codex Desktop/" + version + " (Mac OS; arm64)"))
-            #expect(CodexSource.supportsProjectMoves(userAgent: "session_canvas/" + version + " (Mac OS; arm64) dumb (session_canvas; 0.1.0)"))
-        }
-        for agent in ["", "custom/1.0.0", "Codex Desktop/0.163.0-alpha.11.2", "Codex Desktop/0.164.0-alpha.10.9", "Codex Desktop/0.164.0-alpha.11.0", "session_canvas/0.163.0-alpha.11.2 (Mac OS) dumb (session_canvas; 0.1.0)", "session_canvas/0.1.0 (Mac OS)"] {
-            #expect(!CodexSource.supportsProjectMoves(userAgent: agent))
-        }
     }
 
     @Test(arguments: [false, true])
-    func existingMembershipMovesRoundTripAndOverrideStaleDesktopCache(desktopAssigned: Bool) async throws {
+    func oldBackendConfirmationsCannotOverrideDesktopAfterRestart(desktopAssigned: Bool) async throws {
         let fixture = try MembershipFixture()
         defer { fixture.remove() }
         if desktopAssigned { try fixture.desktopMembership("a") }
-        let metadata = try Data(contentsOf: fixture.folder.appendingPathComponent(".codex-global-state.json"))
+        try fixture.patch(["projectId": "server-b"])
         let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
         defer { source.close() }
         try await source.connect()
-        #expect(source.canAssignProject)
-        var session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
-        let cwd = session.cwd
-        let targets: [String?] = desktopAssigned ? ["b", nil, "a"] : ["a", "b", nil]
-        for target in targets {
-            let confirmed = try await source.assign(sessionID: session.id, projectID: target, revision: session.revision)
-            #expect(confirmed.projectID == target)
-            #expect(confirmed.id == session.id && confirmed.cwd == cwd)
-            session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
-            #expect(session.projectID == target)
-            let restart = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-            try await restart.connect()
-            var saved = Workspace(); saved.sessions = [session]
-            let database = try CanvasDatabase(path: fixture.folder.appendingPathComponent("confirmation.sqlite").path)
-            try database.save(saved, source: source.sourceID)
-            restart.restoreCachedResults(try database.load(source: source.sourceID).sessions)
-            #expect(try await restart.snapshot().sessions.first { $0.id == "existing" }?.projectID == target)
-            restart.close()
-        }
-        #expect(try Data(contentsOf: fixture.folder.appendingPathComponent(".codex-global-state.json")) == metadata)
-        let requests = try fixture.requests()
-        #expect(requests.filter { $0["method"].string == "thread/metadata/update" }.map { $0["params"]["projectId"].string } == targets.map { $0.map { "server-" + $0 } ?? "" })
-        #expect(requests.allSatisfy { !["thread/start", "thread/resume", "turn/start", "thread/settings/update"].contains($0["method"].string ?? "") })
-        #expect(requests.filter { $0["method"].string == "thread/metadata/update" }.allSatisfy { Set($0["params"].object.keys) == ["threadId", "projectId"] })
+        var cached = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
+        let catalog = try #require(try DesktopProjectCatalog.read(codexHome: fixture.folder.path))
+        cached.projectID = "b"
+        cached.projectMembershipConfirmation = ProjectMembershipConfirmation(desktopRevision: catalog.membershipRevision(for: cached.id), serverProjectID: "server-b")
+        cached.latestResult = SessionResult(id: "reviewed-result", outcome: .completed, text: "Retained result")
+        var workspace = Workspace(); workspace.sessions = [cached]
+        let database = try CanvasDatabase(path: fixture.folder.appendingPathComponent("old-confirmation.sqlite").path)
+        try database.save(workspace, source: source.sourceID)
+        let restored = try database.load(source: source.sourceID).sessions
+        #expect(restored.first?.projectMembershipConfirmation != nil)
+        let restart = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { restart.close() }
+        try await restart.connect()
+        restart.restoreCachedResults(restored)
+        let recovered = try #require(try await restart.snapshot().sessions.first { $0.id == cached.id })
+        #expect(recovered.projectID == (desktopAssigned ? "a" : nil))
+        #expect(recovered.projectMembershipConfirmation == nil)
+        #expect(recovered.latestResult == cached.latestResult)
+        #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
     }
 
-    @Test(arguments: ["revision", "membership", "remote", "unknown-project", "wrong-identity"])
-    func preflightRejectsStaleOrUnconfirmedMoves(_ reason: String) async throws {
+    @Test func externalDesktopMovesRemainAuthoritativeOverStaleBackend() async throws {
         let fixture = try MembershipFixture()
         defer { fixture.remove() }
+        try fixture.desktopMembership("a")
+        try fixture.patch(["projectId": "server-b"])
         let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
         defer { source.close() }
         try await source.connect()
-        let session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
-        if reason == "revision" { try fixture.patch(["updatedAt": 2]) }
-        if reason == "membership" { try fixture.patch(["projectId": "server-b"]) }
-        if reason == "wrong-identity" { try fixture.behavior("wrong-identity") }
-        if reason == "remote" { try fixture.metadata(remote: true) }
-        await #expect(throws: (any Error).self) {
-            try await source.assign(sessionID: session.id, projectID: reason == "unknown-project" ? "missing" : "a", revision: session.revision)
+        var session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
+        #expect(session.projectID == "a")
+        for target in ["b", nil, "a"] as [String?] {
+            try fixture.desktopMembership(target)
+            let next = try #require(try await source.snapshot().sessions.first { $0.id == session.id })
+            #expect(next.projectID == target)
+            #expect(next.revision != session.revision)
+            #expect(next.id == session.id && next.cwd == session.cwd)
+            session = next
         }
         #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
     }
 
-    @Test(arguments: ["reject", "ignore", "lost-applied", "closed-applied", "unreadable"])
-    func mutationsAreVerifiedWithoutRepeatingThem(_ behavior: String) async throws {
+    @Test func unavailableMovesPreserveLocalGeometryAndExposeDisabledMenu() async throws {
         let fixture = try MembershipFixture()
         defer { fixture.remove() }
-        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-        defer { source.close() }
-        try await source.connect()
-        let session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
-        try fixture.behavior(behavior)
-        if behavior == "lost-applied" {
-            let confirmed = try await source.assign(sessionID: session.id, projectID: "a", revision: session.revision)
-            #expect(confirmed.projectID == "a")
-        } else {
-            await #expect(throws: (any Error).self) { try await source.assign(sessionID: session.id, projectID: "a", revision: session.revision) }
-        }
-        #expect(try fixture.requests().filter { $0["method"].string == "thread/metadata/update" }.count == 1)
-        if behavior == "closed-applied" || behavior == "unreadable" {
-            try fixture.behavior("normal")
-            let restarted = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
-            try await restarted.connect()
-            // An unverified outcome is not a stored confirmation. The backend write
-            // survives, while discovery keeps the explicit desktop projectless fact.
-            #expect(try await restarted.snapshot().sessions.first { $0.id == "existing" }?.projectID == nil)
-            let stored = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: fixture.folder.appendingPathComponent("thread.json")))
-            #expect(stored["projectId"].string == "server-a")
-            restarted.close()
-        }
-    }
-
-    @Test func modelDropConfirmsMembershipAndPersistsCoordinates() async throws {
-        let fixture = try MembershipFixture()
-        defer { fixture.remove() }
-        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
-        let model = ApplicationModel(demo: false, storagePath: path)
-        model.settings = fixture.settings
-        await model.connect()
-        defer { model.shutdown() }
-        #expect(model.canAssignProject)
-        model.showAllSessions()
-        let before = model.workspace.placements["existing"]
-        let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
-        let region = try #require(model.workspace.regions["a"])
-        let point = Point(region.x + Placement.width + 32, region.y + 64)
-        model.moveNote(id: session.id, position: point, expectedRevision: session.revision)
-        #expect(model.pendingSessions.contains(session.id))
-        #expect(model.workspace.placements[session.id] == before)
-        model.moveToProject(id: session.id, projectID: "b")
-        for _ in 0..<100 {
-            if model.pendingSessions.isEmpty { break }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        #expect(model.pendingSessions.isEmpty)
-        #expect(model.errorMessage == nil)
-        #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == "a")
-        #expect(model.workspace.placements[session.id]?.position == point)
-        #expect(try fixture.requests().filter { $0["method"].string == "thread/metadata/update" }.count == 1)
-        model.shutdown()
-        let restarted = ApplicationModel(demo: false, storagePath: path)
-        restarted.settings = fixture.settings
-        await restarted.connect()
-        defer { restarted.shutdown() }
-        #expect(restarted.workspace.sessions.first { $0.id == session.id }?.projectID == "a")
-        #expect(restarted.workspace.placements[session.id]?.position == point)
-        // The explicit project menu can target a filtered/empty region, unlike a
-        // spatial drop onto an invisible area. Execution/review/viewport stay local.
-        let index = try #require(restarted.workspace.sessions.firstIndex { $0.id == session.id })
-        restarted.workspace.sessions[index].execution = .running
-        restarted.workspace.sessions[index].requests = ["approval": .permission]
-        restarted.workspace.sessions[index].latestResult = SessionResult(id: "old", outcome: .completed, text: "Prior result")
-        restarted.acknowledgments[session.id] = ["old"]
-        restarted.workspace.viewport = Viewport(origin: Point(11, 17), zoom: 1)
-        let beforeMove = restarted.workspace.sessions[index], viewport = restarted.workspace.viewport
-        restarted.setProjectVisible("b", false)
-        _ = NSApplication.shared
-        let canvas = CanvasNSView(model: restarted)
-        canvas.frame = NSRect(x: 0, y: 0, width: 1000, height: 700)
-        let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
-        window.contentView = canvas
-        canvas.update()
-        let screen = viewport.screen(try #require(restarted.workspace.placements[session.id]).center)
-        let event = try #require(NSEvent.mouseEvent(with: .rightMouseDown,
-            location: canvas.convert(NSPoint(x: screen.x, y: screen.y), to: nil), modifierFlags: [], timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
-        let menu = try #require(canvas.menu(for: event))
-        let move = try #require(menu.items.first { $0.title == "Move to project" }?.submenu)
-        let item = try #require(move.items.first { $0.representedObject as? String == "b" })
-        #expect(item.isEnabled)
-        #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
-        let pending = try #require(canvas.menu(for: event)?.items.first { $0.title == "Move to project" }?.submenu)
-        #expect(pending.items.allSatisfy { !$0.isEnabled })
-        for _ in 0..<100 {
-            if restarted.pendingSessions.isEmpty { break }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        let moved = try #require(restarted.workspace.sessions.first { $0.id == session.id })
-        #expect(moved.projectID == "b")
-        #expect(moved.cwd == beforeMove.cwd && moved.execution == beforeMove.execution && moved.requests == beforeMove.requests && moved.latestResult == beforeMove.latestResult)
-        #expect(restarted.acknowledgments[session.id] == ["old"])
-        #expect(restarted.workspace.viewport == viewport)
-        #expect(restarted.errorMessage == nil)
-    }
-
-    @Test(arguments: ["reject", "external"])
-    func failedModelDropReconcilesActualMembership(_ behavior: String) async throws {
-        let fixture = try MembershipFixture()
-        defer { fixture.remove() }
+        try fixture.desktopMembership("a")
         let model = ApplicationModel(demo: false, storagePath: ":memory:")
         model.settings = fixture.settings
         await model.connect()
         defer { model.shutdown() }
         model.showAllSessions()
         let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
-        let before = model.workspace.placements[session.id]
-        let others = model.workspace.placements.filter { $0.key != session.id }
-        if behavior == "external" {
-            try fixture.patch(["projectId": "server-b"])
-            try fixture.desktopMembership("b")
-        }
-        else { try fixture.behavior("reject") }
-        let region = try #require(model.workspace.regions["a"])
-        model.moveNote(id: session.id, position: Point(region.x + 16, region.y + 64), expectedRevision: session.revision)
-        for _ in 0..<100 {
-            if model.pendingSessions.isEmpty { break }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        #expect(model.pendingSessions.isEmpty)
-        #expect(model.errorMessage != nil)
-        #expect(model.workspace.placements.filter { $0.key != session.id } == others)
-        if behavior == "external" {
-            #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == "b")
-            #expect(model.workspace.project(at: model.workspace.placements[session.id]!.center) == "b")
-            #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
-        } else { #expect(model.workspace.placements[session.id] == before) }
+        let placement = try #require(model.workspace.placements[session.id])
+        let local = Point(placement.position.x + 8, placement.position.y + 8)
+        model.moveNote(id: session.id, position: local, expectedRevision: session.revision)
+        #expect(model.workspace.placements[session.id]?.position == local)
+        #expect(model.errorMessage == nil)
+        model.moveToProject(id: session.id, projectID: "b")
+        #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == "a")
+        #expect(model.workspace.placements[session.id]?.position == local)
+        #expect(model.errorMessage?.contains("Move the chat in Codex") == true)
+        _ = NSApplication.shared
+        let canvas = CanvasNSView(model: model)
+        canvas.frame = NSRect(x: 0, y: 0, width: 1000, height: 700)
+        let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = canvas
+        canvas.update()
+        let screen = model.workspace.viewport.screen(try #require(model.workspace.placements[session.id]).center)
+        let event = try #require(NSEvent.mouseEvent(with: .rightMouseDown, location: canvas.convert(NSPoint(x: screen.x, y: screen.y), to: nil),
+            modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        let actions = try #require(canvas.menu(for: event)?.items.first { $0.title == "Move to project" }?.submenu)
+        #expect(actions.items.allSatisfy { !$0.isEnabled })
+        #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
-    func installedServerPersistsExistingSessionProjectMovesInIsolation() async throws {
+    func installedDesktopMembershipReadbackRejectsBackendOnlySupport() async throws {
+        let source = CodexSource(mode: .history, settings: .defaults, observeDesktop: false, observedSessionIDs: [])
+        defer { source.close() }
+        try await source.connect()
+        #expect(!source.canAssignProject)
+        let home = String(source.sourceID.dropFirst("codex-local:".count))
+        let catalog = try #require(try DesktopProjectCatalog.read(codexHome: home))
+        let snapshot = try await source.snapshot()
+        let session = try #require(snapshot.sessions.sorted { $0.id < $1.id }.first {
+            catalog.allowsLocalMembership(for: $0.id) && catalog.membershipRevision(for: $0.id) != "unassigned"
+        })
+        let actual = session.projectID
+        var old = session
+        let other = try #require(catalog.projects.first { $0.id != actual })
+        old.projectID = other.id
+        old.projectMembershipConfirmation = ProjectMembershipConfirmation(desktopRevision: catalog.membershipRevision(for: old.id), serverProjectID: catalog.serverProjectID(for: other.id))
+        source.restoreCachedResults([old])
+        let recovered = try #require(try await source.snapshot().sessions.first { $0.id == session.id })
+        #expect(recovered.projectID == actual)
+        #expect(recovered.projectMembershipConfirmation == nil)
+        #expect(recovered.cwd == session.cwd)
+        print("Installed desktop membership matches the source; no mutation or desktop observation requested.")
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
+    func installedServerMetadataDoesNotEnableDesktopProjectMoves() async throws {
         let home = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("canvas-membership-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
@@ -331,25 +197,17 @@ struct ProjectMembershipTests {
             "local-projects": ["a": ["id": "a", "name": "A", "rootPaths": [connectedHome]], "b": ["id": "b", "name": "B", "rootPaths": [connectedHome]]],
             "app-server-project-id-by-legacy-project-id-by-host": ["local:" + connectedHome: ["a": projects[0], "b": projects[1]]]]
         try JSONSerialization.data(withJSONObject: metadata).write(to: home.appendingPathComponent(".codex-global-state.json"))
+        let bytes = try Data(contentsOf: home.appendingPathComponent(".codex-global-state.json"))
         let source = CodexSource(mode: .history, settings: ConnectionSettings(executable: wrapper.path, socket: "", nativeURLTemplate: "codex://threads/{id}"), observeDesktop: false)
         defer { source.close() }
         try await source.connect()
-        #expect(source.canAssignProject)
-        _ = try await source.snapshot()
-        var session = try await source.create(title: "Isolated source membership", prompt: "", projectID: nil, cwd: connectedHome).session
-        let original = session
-        for target in ["a", "b", nil] as [String?] {
-            session = try await source.assign(sessionID: session.id, projectID: target, revision: session.revision)
-            #expect(session.projectID == target)
-            #expect(session.id == original.id && session.cwd == original.cwd)
-            #expect(try await source.snapshot().sessions.first { $0.id == session.id }?.projectID == target)
-            try await connect()
-            let read = try await rpc.request("thread/read", ["threadId": .string(session.id), "includeTurns": .bool(false)])["thread"]
-            #expect(read["projectId"].string == target.map { projects[$0 == "a" ? 0 : 1] })
-            #expect(read["cwd"].string == original.cwd)
-            #expect(read["turns"].array.isEmpty)
-            await rpc.stopAndWait()
+        // The actual server proved only SQLite metadata persistence. An isolated
+        // home has no desktop which could confirm the visible project transfer.
+        #expect(!source.canAssignProject)
+        await #expect(throws: (any Error).self) {
+            try await source.assign(sessionID: id, projectID: "b", revision: "")
         }
+        #expect(try Data(contentsOf: home.appendingPathComponent(".codex-global-state.json")) == bytes)
     }
 }
 

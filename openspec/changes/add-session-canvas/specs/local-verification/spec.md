@@ -1,5 +1,13 @@
 ## ADDED Requirements
 
+### Requirement: Diagnostic probes report structural evidence
+The repository SHALL provide read-only probes for saved inventory/history, one explicitly selected desktop session, and native rollout parsing. Probe output SHALL contain capability/state/structure or entry/result counts rather than conversation text or arbitrary child-process diagnostics. The native rollout probe SHALL validate path and session identity through the same reader as the app and return failure when validation fails. Live observation SHALL retain the per-run authorization rule.
+
+#### Scenario: Verify saved-history parsing
+- **WHEN** SessionCanvasProbe receives an exact rollout path, Codex home, and session identity
+- **THEN** successful output reports verified identity and dialogue/terminal counts without printing dialogue
+- **AND** invalid identity/path or parsing failure returns a nonzero exit status with no conversation content
+
 ### Requirement: Stable authorized local verification command
 Development tooling SHALL provide one direct Python launcher for building, testing, and previewing the current checkout. A user-authorized Codex command-prefix rule SHALL cover its absolute path with varying supported arguments, while retaining the workspace sandbox and other command rules. The launcher SHALL accept a bounded set of operations without arbitrary shell-command passthrough.
 
