@@ -424,6 +424,7 @@ final class ApplicationModel: ObservableObject {
                     throw CanvasError.message("The session moved to another project while this request was pending. Its current membership will be refreshed.")
                 }
                 workspace.sessions[index].projectID = confirmed.projectID
+                workspace.sessions[index].projectMembershipConfirmation = confirmed.projectMembershipConfirmation
                 workspace.sessions[index].revision = confirmed.revision
                 workspace.sessions[index].updatedAt = confirmed.updatedAt
                 workspace.placements[id] = proposed
