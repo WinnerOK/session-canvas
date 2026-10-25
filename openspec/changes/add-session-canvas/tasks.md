@@ -172,7 +172,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 ## 17. Existing-session project membership API
 
 - [x] 17.1 Verify the installed 0.164.0-alpha.11.1 schema and isolated actual server for metadata/update projectId assignment, reassignment, and empty-string removal; preserve exact session/cwd and start no turn.
-- [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, retain remote exclusions, and prefer current explicit server membership over stale local caches.
+- [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, and retain remote exclusions. Scoped verified confirmation in section 20 supersedes the initial blanket server-precedence rule.
 - [x] 17.3 Keep confirmed coordinates pending, prevent duplicate session moves, commit only confirmed identities/membership, reconcile failed/ambiguous outcomes without mutation replay, and retain state/requests/review/viewport.
 - [x] 17.4 Complete full offline regressions, isolated adapter verification, release/signature and SDD/link/whitespace checks, then update delivery evidence. Atomic preflight/write races, durable pending recovery, and live-host move presentation remain explicitly unverified.
 
@@ -181,6 +181,19 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 18.1 Replace fixed three/six-column note grids with adaptive physical-size grids; prefer the smallest longer side, then bounding area and wider orientation, retaining Attention/activity/identity row order.
 - [x] 18.2 Pack differently sized project envelopes with deterministic non-rotating free-space reuse and eight width candidates; preserve hidden offsets, fixed nonparticipants, viewport, and atomic persistence.
 - [x] 18.3 Complete shape/density/order/collision/idempotence and model/storage regressions, full offline tests, release/signature, native demo inspection, and strict OpenSpec/whitespace/local-link checks. Keep exact optimum and live-desktop acceptance outside this evidence.
+
+## 19. Native-launch membership detection
+
+- [x] 19.1 Inspect the 16:14 recording and reproduce the unsupported-move guard with an isolated installed server after removing the inherited originator override; distinguish successful raw API moves from disabled adapter support.
+- [x] 19.2 Accept the exact native Canvas user-agent prefix while retaining server-version thresholds and unknown/older/shared guards; use the native form in source/model fixtures and the clean environment in installed verification.
+- [x] 19.3 Complete affected and full offline checks, clean-launch installed-server regression, release/signature and strict SDD/whitespace/link checks; record the missed environment assumption and deliver the fix without live-desktop observation.
+
+## 20. Preserve desktop membership during API discovery
+
+- [x] 20.1 Reproduce a desktop-assigned session becoming unassigned on API null; confirm the real saved project catalog still exists using read-only counts and test recovery of a previously flattened Canvas snapshot.
+- [x] 20.2 Preserve explicit desktop membership by default; replace capability-based precedence with typed per-session verified confirmation, persist/restore it per source, include desktop membership in revisions, and permanently invalidate it after observed desktop changes.
+- [x] 20.3 Cover legacy-assigned and projectless move/removal round trips, SQLite confirmation restoration, unrelated edits, later desktop changes and nonresurrection, stale/rejected/unknown moves, and the clean installed-server adapter.
+- [x] 20.4 Complete full offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update delivery evidence without observing or mutating the user's desktop sessions.
 
 ## Workflow follow-up
 

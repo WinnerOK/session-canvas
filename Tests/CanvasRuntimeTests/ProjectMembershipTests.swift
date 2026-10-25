@@ -6,18 +6,89 @@ import CanvasCore
 @Suite(.serialized)
 @MainActor
 struct ProjectMembershipTests {
+    @Test func supportedMovesDoNotEraseDesktopProjectsWhenServerMembershipIsNull() async throws {
+        let fixture = try MembershipFixture()
+        defer { fixture.remove() }
+        let file = fixture.folder.appendingPathComponent(".codex-global-state.json")
+        var state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        state["projectless-thread-ids"] = []
+        state["thread-project-assignments"] = ["existing": ["projectKind": "local", "projectId": "a"]]
+        try JSONSerialization.data(withJSONObject: state).write(to: file)
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        #expect(source.canAssignProject)
+        let snapshot = try await source.snapshot(), sessions = snapshot.sessions
+        #expect(sessions.first { $0.id == "existing" }?.projectID == "a")
+        // Recover an existing Canvas snapshot flattened by the previous bug.
+        let storage = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        var cached = Workspace()
+        cached.reconcile(sessions: sessions, projects: snapshot.projects)
+        for index in cached.sessions.indices { cached.sessions[index].projectID = nil }
+        cached.viewport = Viewport(origin: Point(11, 17), zoom: 0.42)
+        try CanvasDatabase(path: storage).save(cached, source: source.sourceID)
+        let model = ApplicationModel(demo: false, storagePath: storage)
+        model.settings = fixture.settings
+        await model.connect()
+        defer { model.shutdown() }
+        model.showAllSessions()
+        #expect(model.workspace.sessions.first { $0.id == "existing" }?.projectID == "a")
+        #expect(model.visibleProjects.contains { $0.id == "a" })
+        #expect(model.workspace.project(at: model.workspace.placements["existing"]!.center) == "a")
+        #expect(model.workspace.viewport == cached.viewport)
+        #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
+    }
+
+    @Test func verifiedMoveConfirmationDoesNotOverrideLaterDesktopChanges() async throws {
+        let fixture = try MembershipFixture()
+        defer { fixture.remove() }
+        try fixture.desktopMembership("a")
+        let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        var session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
+        session = try await source.assign(sessionID: session.id, projectID: "b", revision: session.revision)
+        #expect(session.projectID == "b")
+        #expect(session.projectMembershipConfirmation != nil)
+        // Unrelated catalog edits do not invalidate this session's proof.
+        let file = fixture.folder.appendingPathComponent(".codex-global-state.json")
+        var state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        state["thread-project-assignments"] = ["existing": ["projectKind": "local", "projectId": "a"],
+                                               "unrelated": ["projectKind": "local", "projectId": "b"]]
+        try JSONSerialization.data(withJSONObject: state).write(to: file)
+        #expect(try await source.snapshot().sessions.first { $0.id == session.id }?.projectID == "b")
+        try fixture.desktopMembership(nil)
+        let changed = try #require(try await source.snapshot().sessions.first { $0.id == session.id })
+        #expect(changed.projectID == nil)
+        #expect(changed.projectMembershipConfirmation == nil)
+        #expect(changed.revision != session.revision)
+        // Old confirmation cannot regain authority after a restart.
+        let restart = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
+        defer { restart.close() }
+        try await restart.connect()
+        restart.restoreCachedResults([session])
+        #expect(try await restart.snapshot().sessions.first { $0.id == session.id }?.projectID == nil)
+        // Returning to an old legacy value cannot resurrect a discarded proof.
+        try fixture.desktopMembership("a")
+        #expect(try await source.snapshot().sessions.first { $0.id == session.id }?.projectID == "a")
+        #expect(try await restart.snapshot().sessions.first { $0.id == session.id }?.projectID == "a")
+    }
+
     @Test func moveSupportRequiresVerifiedDesktopVersion() {
         for version in ["0.164.0-alpha.11.1", "0.164.0", "0.165.0-alpha.1.0", "1.0.0"] {
             #expect(CodexSource.supportsProjectMoves(userAgent: "Codex Desktop/" + version + " (Mac OS; arm64)"))
+            #expect(CodexSource.supportsProjectMoves(userAgent: "session_canvas/" + version + " (Mac OS; arm64) dumb (session_canvas; 0.1.0)"))
         }
-        for agent in ["", "custom/1.0.0", "Codex Desktop/0.163.0-alpha.11.2", "Codex Desktop/0.164.0-alpha.10.9", "Codex Desktop/0.164.0-alpha.11.0"] {
+        for agent in ["", "custom/1.0.0", "Codex Desktop/0.163.0-alpha.11.2", "Codex Desktop/0.164.0-alpha.10.9", "Codex Desktop/0.164.0-alpha.11.0", "session_canvas/0.163.0-alpha.11.2 (Mac OS) dumb (session_canvas; 0.1.0)", "session_canvas/0.1.0 (Mac OS)"] {
             #expect(!CodexSource.supportsProjectMoves(userAgent: agent))
         }
     }
 
-    @Test func existingMembershipMovesRoundTripAndOverrideStaleDesktopCache() async throws {
+    @Test(arguments: [false, true])
+    func existingMembershipMovesRoundTripAndOverrideStaleDesktopCache(desktopAssigned: Bool) async throws {
         let fixture = try MembershipFixture()
         defer { fixture.remove() }
+        if desktopAssigned { try fixture.desktopMembership("a") }
         let metadata = try Data(contentsOf: fixture.folder.appendingPathComponent(".codex-global-state.json"))
         let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
         defer { source.close() }
@@ -25,7 +96,8 @@ struct ProjectMembershipTests {
         #expect(source.canAssignProject)
         var session = try #require(try await source.snapshot().sessions.first { $0.id == "existing" })
         let cwd = session.cwd
-        for target in ["a", "b", nil] as [String?] {
+        let targets: [String?] = desktopAssigned ? ["b", nil, "a"] : ["a", "b", nil]
+        for target in targets {
             let confirmed = try await source.assign(sessionID: session.id, projectID: target, revision: session.revision)
             #expect(confirmed.projectID == target)
             #expect(confirmed.id == session.id && confirmed.cwd == cwd)
@@ -33,12 +105,16 @@ struct ProjectMembershipTests {
             #expect(session.projectID == target)
             let restart = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
             try await restart.connect()
+            var saved = Workspace(); saved.sessions = [session]
+            let database = try CanvasDatabase(path: fixture.folder.appendingPathComponent("confirmation.sqlite").path)
+            try database.save(saved, source: source.sourceID)
+            restart.restoreCachedResults(try database.load(source: source.sourceID).sessions)
             #expect(try await restart.snapshot().sessions.first { $0.id == "existing" }?.projectID == target)
             restart.close()
         }
         #expect(try Data(contentsOf: fixture.folder.appendingPathComponent(".codex-global-state.json")) == metadata)
         let requests = try fixture.requests()
-        #expect(requests.filter { $0["method"].string == "thread/metadata/update" }.map { $0["params"]["projectId"].string } == ["server-a", "server-b", ""])
+        #expect(requests.filter { $0["method"].string == "thread/metadata/update" }.map { $0["params"]["projectId"].string } == targets.map { $0.map { "server-" + $0 } ?? "" })
         #expect(requests.allSatisfy { !["thread/start", "thread/resume", "turn/start", "thread/settings/update"].contains($0["method"].string ?? "") })
         #expect(requests.filter { $0["method"].string == "thread/metadata/update" }.allSatisfy { Set($0["params"].object.keys) == ["threadId", "projectId"] })
     }
@@ -81,7 +157,11 @@ struct ProjectMembershipTests {
             try fixture.behavior("normal")
             let restarted = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
             try await restarted.connect()
-            #expect(try await restarted.snapshot().sessions.first { $0.id == "existing" }?.projectID == "a")
+            // An unverified outcome is not a stored confirmation. The backend write
+            // survives, while discovery keeps the explicit desktop projectless fact.
+            #expect(try await restarted.snapshot().sessions.first { $0.id == "existing" }?.projectID == nil)
+            let stored = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: fixture.folder.appendingPathComponent("thread.json")))
+            #expect(stored["projectId"].string == "server-a")
             restarted.close()
         }
     }
@@ -171,7 +251,10 @@ struct ProjectMembershipTests {
         let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
         let before = model.workspace.placements[session.id]
         let others = model.workspace.placements.filter { $0.key != session.id }
-        if behavior == "external" { try fixture.patch(["projectId": "server-b"]) }
+        if behavior == "external" {
+            try fixture.patch(["projectId": "server-b"])
+            try fixture.desktopMembership("b")
+        }
         else { try fixture.behavior("reject") }
         let region = try #require(model.workspace.regions["a"])
         model.moveNote(id: session.id, position: Point(region.x + 16, region.y + 64), expectedRevision: session.revision)
@@ -201,6 +284,8 @@ struct ProjectMembershipTests {
         home = str(pathlib.Path(__file__).parent)
         os.environ["CODEX_HOME"] = home
         os.environ["CODEX_SQLITE_HOME"] = home
+        # Finder-launched Canvas has no parent Codex originator override.
+        os.environ.pop("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", None)
         executable = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
         os.execv(executable, [executable] + sys.argv[1:])
         """#
@@ -288,7 +373,7 @@ private struct MembershipFixture {
             method, params = req["method"], req.get("params", {})
             behavior = (home / "behavior").read_text() if (home / "behavior").exists() else "normal"
             error = None
-            if method == "initialize": result = {"codexHome": str(home), "userAgent": "Codex Desktop/0.164.0-alpha.11.1 (Mac OS; arm64)"}
+            if method == "initialize": result = {"codexHome": str(home), "userAgent": "session_canvas/0.164.0-alpha.11.1 (Mac OS; arm64) dumb (session_canvas; 0.1.0)"}
             elif method == "project/list": result = {"data": []}
             elif method == "project/read": result = {"project": {"id": params["projectId"]}}
             elif method == "thread/list":
@@ -324,6 +409,13 @@ private struct MembershipFixture {
             "thread-project-membership-host-ids": remote ? ["existing": "remote-host"] : [:],
             "app-server-project-id-by-legacy-project-id-by-host": ["local:" + folder.path: ["a": "server-a", "b": "server-b"]]]
         try JSONSerialization.data(withJSONObject: state).write(to: folder.appendingPathComponent(".codex-global-state.json"))
+    }
+    func desktopMembership(_ projectID: String?) throws {
+        let file = folder.appendingPathComponent(".codex-global-state.json")
+        var state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+        state["projectless-thread-ids"] = projectID == nil ? ["existing"] : []
+        state["thread-project-assignments"] = projectID.map { ["existing": ["projectKind": "local", "projectId": $0]] } ?? [:]
+        try JSONSerialization.data(withJSONObject: state).write(to: file)
     }
     func patch(_ fields: [String: Any]) throws {
         let file = folder.appendingPathComponent("thread.json")
