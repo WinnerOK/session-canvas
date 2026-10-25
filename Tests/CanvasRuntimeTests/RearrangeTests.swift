@@ -24,6 +24,11 @@ struct RearrangeTests {
         model.workspace.placements["free"] = Placement(Point(0, 700))
         model.workspace.placements["search-hidden"] = Placement(Point(0, 700))
         model.workspace.placements["expired"] = Placement(Point(-700, 900))
+        let projectDelta = Point(3000, 4000)
+        model.workspace.regions["canvas"] = model.workspace.regions["canvas"]!.translated(projectDelta)
+        for session in model.workspace.sessions where session.projectID == "canvas" {
+            model.workspace.placements[session.id] = Placement(model.workspace.placements[session.id]!.position + projectDelta)
+        }
         model.workspace.viewport = Viewport(origin: Point(13, -93), zoom: 0.42)
         model.updateActivityTime(now: now)
         model.setStateVisible(.finished, false)
@@ -54,7 +59,13 @@ struct RearrangeTests {
         #expect(model.selectedSessionID == "demo-native")
         #expect(model.history == history)
         #expect(model.workspace.regions["research"] == original.regions["research"])
-        for (id, placement) in original.placements where !visible.contains(id) { #expect(model.workspace.placements[id] == placement) }
+        let carriedDelta = Point(model.workspace.regions["canvas"]!.x - original.regions["canvas"]!.x,
+                                 model.workspace.regions["canvas"]!.y - original.regions["canvas"]!.y)
+        #expect(carriedDelta != Point(0, 0))
+        for (id, placement) in original.placements where !visible.contains(id) {
+            let isCarried = original.sessions.first { $0.id == id }?.projectID == "canvas"
+            #expect(model.workspace.placements[id]?.position == placement.position + (isCarried ? carriedDelta : Point(0, 0)))
+        }
         for id in visible {
             let placement = try #require(model.workspace.placements[id])
             #expect(model.workspace.placements.allSatisfy { $0.key == id || !placement.rect.intersects($0.value.rect) })

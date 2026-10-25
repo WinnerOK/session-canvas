@@ -27,20 +27,20 @@ import Testing
         #expect(try CanvasRearranger.arrange(result, visibleSessionIDs: Set(workspace.sessions.map(\.id))) == result)
     }
 
-    @Test func hiddenNotesStayFixedAndVisibleOverlapsAreRepaired() throws {
+    @Test func hiddenMembersTravelWithTheirProjectAndVisibleOverlapsAreRepaired() throws {
         var workspace = Workspace()
-        workspace.projects = [Project(id: "p", name: "Pinned"), Project(id: "q", name: "Movable")]
-        workspace.regions = ["p": Rect(0, 0, 760, 580), "q": Rect(5000, 0, 760, 580)]
+        workspace.projects = [Project(id: "p", name: "First"), Project(id: "q", name: "Second")]
+        workspace.regions = ["p": Rect(3000, 4000, 760, 580), "q": Rect(5000, 0, 760, 580)]
         workspace.sessions = [note("p-hidden", project: "p"), note("p-visible", project: "p", execution: .running),
                               note("q-visible", project: "q", execution: .running), note("hidden"), note("visible", execution: .running)]
-        workspace.placements = ["p-hidden": Placement(Point(16, 64)), "p-visible": Placement(Point(16, 64)),
+        workspace.placements = ["p-hidden": Placement(Point(3016, 4064)), "p-visible": Placement(Point(3016, 4064)),
                                 "q-visible": Placement(Point(5100, 100)), "hidden": Placement(Point(0, 700)), "visible": Placement(Point(0, 700))]
         let moving: Set<String> = ["p-visible", "q-visible", "visible"]
         let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: moving)
-        #expect(result.placements["p-hidden"] == workspace.placements["p-hidden"])
+        let delta = Point(result.regions["p"]!.x - workspace.regions["p"]!.x, result.regions["p"]!.y - workspace.regions["p"]!.y)
+        #expect(delta != Point(0, 0))
+        #expect(result.placements["p-hidden"]!.position == workspace.placements["p-hidden"]!.position + delta)
         #expect(result.placements["hidden"] == workspace.placements["hidden"])
-        #expect(result.regions["p"]!.x == workspace.regions["p"]!.x)
-        #expect(result.regions["p"]!.y == workspace.regions["p"]!.y)
         #expect(result.placements["p-visible"] != workspace.placements["p-visible"])
         try verify(result, moving: moving)
         #expect(try CanvasRearranger.arrange(result, visibleSessionIDs: moving) == result)
@@ -55,6 +55,29 @@ import Testing
         let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: ids)
         #expect(result.placements.values.allSatisfy { $0.position.y >= 9999990 })
         try verify(result, moving: ids)
+    }
+
+    @Test func carriedHiddenFootprintsAndInternalOffsetsArePreserved() throws {
+        var workspace = Workspace()
+        workspace.projects = [Project(id: "p", name: "Moving"), Project(id: "q", name: "Hidden project")]
+        workspace.regions = ["p": Rect(5000, 5000, 760, 580), "q": Rect(1000, 0, 300, 240)]
+        workspace.sessions = [note("a", project: "p"), note("b", project: "p"), note("v", project: "p", execution: .running),
+                              note("q-hidden", project: "q"), note("unassigned-hidden")]
+        workspace.placements = ["a": Placement(Point(4950, 5000)), "b": Placement(Point(4960, 5010)),
+                                "v": Placement(Point(5100, 5100)), "q-hidden": Placement(Point(1016, 64)),
+                                "unassigned-hidden": Placement(Point(-40, 0))]
+        let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: ["v"])
+        let delta = Point(result.regions["p"]!.x - 5000, result.regions["p"]!.y - 5000)
+        for id in ["a", "b"] {
+            #expect(result.placements[id]!.position == workspace.placements[id]!.position + delta)
+            for other in ["q-hidden", "unassigned-hidden"] { #expect(!result.placements[id]!.rect.intersects(result.placements[other]!.rect)) }
+        }
+        #expect(result.placements["b"]!.position - result.placements["a"]!.position == Point(10, 10))
+        #expect(result.regions["q"] == workspace.regions["q"])
+        #expect(result.placements["q-hidden"] == workspace.placements["q-hidden"])
+        #expect(result.placements["unassigned-hidden"] == workspace.placements["unassigned-hidden"])
+        try verify(result, moving: ["v"])
+        #expect(try CanvasRearranger.arrange(result, visibleSessionIDs: ["v"]) == result)
     }
 
     @Test func noVisibleSessionsDoesNotChangeGeometry() throws {
@@ -89,14 +112,18 @@ import Testing
         #expect(reviewed.sessions == workspace.sessions)
     }
 
-    @Test func blockedPinnedProjectsAndInvalidGeometryFailWithoutMutatingInput() throws {
+    @Test func projectsWithHiddenMembersCanLeaveBlockedOriginsAndInvalidGeometryIsRejected() throws {
         var workspace = Workspace()
-        workspace.projects = [Project(id: "p", name: "Pinned")]
+        workspace.projects = [Project(id: "p", name: "Movable")]
         workspace.regions = ["p": Rect(0, 0, 300, 240), "below": Rect(0, 240, 300, 240), "right": Rect(300, 0, 300, 240)]
         workspace.sessions = [note("hidden", project: "p"), note("visible", project: "p", execution: .running)]
         workspace.placements = ["hidden": Placement(Point(16, 64)), "visible": Placement(Point(16, 64))]
         let original = workspace
-        #expect(throws: (any Error).self) { try CanvasRearranger.arrange(workspace, visibleSessionIDs: ["visible"]) }
+        let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: ["visible"])
+        #expect(result.regions["p"] != workspace.regions["p"])
+        #expect(result.regions["below"] == workspace.regions["below"])
+        #expect(result.regions["right"] == workspace.regions["right"])
+        try verify(result, moving: ["visible"])
         #expect(workspace == original)
         workspace.placements["visible"] = Placement(Point(.nan, 0))
         #expect(throws: (any Error).self) { try CanvasRearranger.arrange(workspace, visibleSessionIDs: ["visible"]) }

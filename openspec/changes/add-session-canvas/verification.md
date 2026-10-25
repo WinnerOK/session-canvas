@@ -48,7 +48,21 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 ## Evidence scope and entry points
 
+### Hidden members move with projects, 2026-10-25
+
+The user clarified that hidden cards may move together with their project. Every visible project now participates in Rearrange. Its hidden members keep their offsets from the original project origin and receive exactly the project's displacement; only visible members are independently sorted into cells. Hidden unassigned notes and projects without visible members stay fixed. The planner reserves an envelope around each area and any protruding hidden footprints, preventing new external overlaps while retaining preexisting hidden-hidden geometry within the same project.
+
+Updated core and model tests require nonzero movement of a project with hidden members, exact shared displacement, preserved internal offsets, unchanged nonparticipating geometry, idempotence, and restart persistence. A former blocked-origin case now succeeds by moving the project. A new case retains overlapping hidden members and their negative relative offsets while avoiding fixed notes and a fully hidden project. Source facts, viewer state, filtering, viewport, and save-failure rejection remain covered. This supersedes the initial anchored-project interpretation recorded below.
+
+The full offline run passed **109 executed Swift tests** (42 core, 70 runtime reported, with three opt-in checks skipped). Release compilation with one job, bundle signature, strict OpenSpec validation, whitespace, and 128 affected local links passed. The toolbar/presentation is unchanged apart from its tooltip; the clarified hidden-member translation is verified through core/model geometry assertions, not a new static capture. No installed desktop test or source mutation was performed.
+
+| Correction | Contract | Evidence |
+| --- | --- | --- |
+| Allow hidden cards to move with their project during Rearrange | [Explicit visible-session rearrangement](specs/canvas-workspace/spec.md#requirement-explicit-visible-session-rearrangement), [Region editing preserves membership](specs/project-regions/spec.md#requirement-region-editing-preserves-membership) | Shared displacement and local-offset tests, protruding footprints, hidden-hidden overlap retention, fixed nonparticipants, escaped blocked origins, idempotence, restart, and complete rejection on invalid geometry/storage failure. |
+
 ### Explicit visible-session rearrangement, 2026-10-25
+
+This section records the initial implementation before the user's subsequent permission to translate hidden project members. The current contract is described in the clarification above.
 
 The user's examples showed holes after state filtering and visible notes covering hidden notes. Rearrange now plans a compact local layout on explicit invocation: movable projects in source/sidebar order, unassigned notes below visible projects, and canonical Attention state / newest activity / stable-ID ordering inside each area. Only the current visible projection moves. Hidden note rectangles remain obstacles; projects containing hidden members keep their origins, while projects with no visible notes are untouched. This strict hidden-position rule can force gaps or make a valid plan impossible; such a plan is rejected in full with an explanation rather than translating hidden notes or changing membership. Ordinary manual project dragging still moves all members.
 

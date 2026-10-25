@@ -104,7 +104,7 @@ An authoritative membership change made outside the canvas SHALL relocate the af
 - **THEN** the app rejects the stale drop and reconciles the note to the authoritative membership
 
 ### Requirement: Region editing preserves membership
-The user SHALL be able to move and resize regions. Manual region movement SHALL carry all member notes by the same displacement. Resizing SHALL retain all member-note centers. Edits SHALL reject region overlaps or enclosed nonmember centers. Explicit Rearrange SHALL preserve hidden placements and anchor projects with hidden members while fitting visible notes. Geometry edits SHALL NOT issue membership mutations.
+The user SHALL be able to move and resize regions. Manual region movement SHALL carry all member notes by the same displacement. Resizing SHALL retain all member-note centers. Edits SHALL reject region overlaps or enclosed nonmember centers. Explicit Rearrange SHALL translate hidden members with their project while reflowing only visible members. Geometry edits SHALL NOT issue membership mutations.
 
 #### Scenario: Move an entire region
 - **WHEN** the user moves a region to a nonconflicting position
