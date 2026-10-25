@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 
@@ -26,9 +27,10 @@ except subprocess.TimeoutExpired:
     selected = [row for row in processes if int(row[0]) in descendants]
     (output / "processes.txt").write_text("\n".join(" ".join(row) for row in selected) + "\n")
     print("[DEBUG-ci-startup] Test startup timed out; capturing owned-process stacks", flush=True)
-    for pid, _, name in selected:
-        if "SessionCanvas" in name or int(pid) == process.pid:
-            subprocess.run(["sample", pid, "3", "-file", str(output / f"sample-{pid}.txt")], timeout=20, check=False)
+    for source in (root / ".build").glob("*/debug/SessionCanvasPackageTests.derived/runner.swift"):
+        shutil.copy2(source, output / "runner.swift")
+    for pid, _, _ in selected[:6]:
+        subprocess.run(["sample", pid, "3", "-file", str(output / f"sample-{pid}.txt")], timeout=20, check=False)
     os.killpg(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=5)
