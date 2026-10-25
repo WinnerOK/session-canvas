@@ -48,6 +48,14 @@ The system SHALL recognize completion, failure, and interruption as terminal out
 - **THEN** the note displays Finished with the Failed or Stopped outcome respectively
 - **AND** the result requires acknowledgment
 
+### Requirement: Project overview summarizes visible attention
+When space permits an attention dot, a project overview SHALL summarize only its visible members using Permission required, Waiting for you, Running, Finished, Archived, Unknown, then Idle priority. This project-level urgency order SHALL NOT replace the deterministic per-session state rules or Attention row order. Its count SHALL be the number of visible member sessions.
+
+#### Scenario: Hidden work does not dominate a visible overview
+- **WHEN** a project's permission-requesting session is filtered out and its visible members are Running and Finished
+- **THEN** its overview summarizes Running and counts only the visible members
+- **AND** restoring the permission-requesting member makes Permission required the overview summary
+
 ### Requirement: Waiting is not finishing
 The system SHALL use source-reported unresolved input and permission requests to identify waiting states. Pausing for such a request SHALL NOT create a terminal result. It SHALL NOT infer a request solely from words in an assistant message.
 

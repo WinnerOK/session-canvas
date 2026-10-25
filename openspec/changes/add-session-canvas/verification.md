@@ -20,6 +20,7 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 | User correction | Behavioral contract | Implementation / verification evidence |
 | --- | --- | --- |
+| Ensure every application function is described in SDD | [Functional coverage inventory](functional-coverage.md), [Source Connection](specs/source-connection/spec.md) and linked capability requirements | Section 24: complete implementation inventory, missing requirements/scenarios added, stale current-support claims corrected; documentation checks recorded below, application/live acceptance unchanged. |
 | A Canvas project move is not reflected in Codex | [Unsupported membership changes do not alter grouping](specs/project-regions/spec.md#requirement-unsupported-membership-changes-do-not-alter-grouping), [Project discovery uses explicit source identity](specs/project-regions/spec.md#requirement-project-discovery-uses-explicit-source-identity) | Section 23: authorized live split-store reproduction, native API differential and restoration; real-source mutation disabled before writes; legacy backend proof ignored; actual-source readback and regression checks. API-only automatic desktop moves remain open. |
 | Canvas content overflows above its frame | [Free-roam navigation: content crosses a viewport edge](specs/canvas-workspace/spec.md#requirement-free-roam-navigation) | E1: native bitmap comparison above/below the canvas, including shadows |
 | Guardian sessions crowd the workspace | [Internal agent sessions are excluded without source deletion](specs/canvas-workspace/spec.md#requirement-internal-agent-sessions-are-excluded-without-source-deletion) | E1: structured source/parent filtering, cached-note removal, ordinary Guardian-titled user session retained |
@@ -51,6 +52,16 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 | Run app tests in pull requests and create app releases in GitHub | [Pull requests verify the native application](specs/release-automation/spec.md#requirement-pull-requests-verify-the-native-application), [Release creation uses the verified source revision](specs/release-automation/spec.md#requirement-release-creation-uses-the-verified-source-revision), [Release assets identify their version and architecture](specs/release-automation/spec.md#requirement-release-assets-identify-their-version-and-architecture), [Packaging verifies distributable integrity](specs/release-automation/spec.md#requirement-packaging-verifies-distributable-integrity), [Release publication remains explicit](specs/release-automation/spec.md#requirement-release-publication-remains-explicit) | E12: reusable two-architecture CI passed on GitHub, manual/tag release workflow, version metadata, ZIP/checksum packaging, local archive checks, and workflow lint; actual draft upload remains open |
 
 ## Evidence scope and entry points
+
+### Functional completeness audit, 2026-10-25
+
+The [functional inventory](functional-coverage.md) maps application behavior, developer tooling, and distribution to seven capabilities, source files, and existing verification entry points. Code inspected at `3a5bcde` is unchanged by this task. Added the missing source lifecycle/settings/demo/refresh contract, exact search/counter/input/note presentation semantics, project-overview urgency, history content/fallback, diagnostic probe output, URL validation, and source project ordering.
+
+Corrected contradictory design/native-guide passages that still advertised backend metadata project moves or the old user-agent version gate. Real-source assignment remains disabled; explicit desktop facts precede backend fallback and legacy Canvas confirmations.
+
+The inventory contains **46 functional areas** across **7 capabilities**. This audit adds **16 requirements**; the full change now contains **89 requirements and 214 scenarios**. `openspec validate --all --strict` passed (1 change, no failures or warnings). `git diff --check` passed. A local-path/Markdown-heading check passed **399 local links, including 167 anchors, across all 13 affected Markdown files**.
+
+No application build, native capture, installed-source operation, live observation, or source mutation was performed for this documentation-only audit. Existing test references identify coverage entry points, not newly executed tests. All prior open acceptance gates remain open.
 
 ### PR 3 rebase onto current main, 2026-10-25
 
@@ -316,4 +327,4 @@ python3 -B -m unittest discover -s scripts/tests -v
 
 The --real-source option now inspects saved inventory without desktop IPC and enables isolated actual-server checks. The live-state test is separately gated by --live-desktop with the exact single-test filter and requires per-run user authorization. Desktop previews have the same authorization requirement; routine checks use fixtures/demo. The actual-server creation test isolates both home and SQLite directories and starts no turn. Normal toolchains can use standard SwiftPM commands or the launcher's --standard-toolchain option. See [verification safety](../../../docs/native-application.md#verification-safety).
 
-For changes to this contract, run `openspec validate add-session-canvas --strict`, check local document links, and review the matrix against the conversation and implementation. Strict validation checks artifact structure; it does not close the open acceptance gates or authorize archiving this change.
+For changes to this contract, run `openspec validate --all --strict`, check affected local document links/anchors, and review the correction matrix and [functional inventory](functional-coverage.md) against the implementation. Strict validation checks artifact structure; it does not close the open acceptance gates or authorize archiving this change.

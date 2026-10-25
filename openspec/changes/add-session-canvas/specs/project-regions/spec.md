@@ -18,6 +18,11 @@ The canvas SHALL display one region per visible source project, using stable pro
 - **WHEN** the source changes a project's name
 - **THEN** the existing region's label changes without creating another region or resetting its bounds
 
+#### Scenario: Preserve source project order in the sidebar
+- **WHEN** saved local metadata provides project-order entries
+- **THEN** the sidebar retains that order for visible projects, placing remaining projects afterward by localized name and stable identity
+- **AND** visibility changes do not rename or reorder the underlying project catalog
+
 ### Requirement: Project discovery uses explicit source identity
 Projects and memberships SHALL use explicit source identity, never cwd/name matching. Explicit desktop membership SHALL precede backend fallback. Backend null/different membership and legacy Canvas confirmations SHALL NOT override desktop assignments or explicit projectless markers. Remote/unknown exclusions SHALL persist. Unsupported metadata SHALL retain confirmed state and report an error. Desktop/server mapping SHALL use only the connected local home.
 

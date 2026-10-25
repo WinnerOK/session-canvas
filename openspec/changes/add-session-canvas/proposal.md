@@ -6,6 +6,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 
 ## What Changes
 
+- Specify connection preferences, desktop/shared/demo source selection, automatic/manual refresh, source-isolated restoration, connection feedback, and application shutdown. Index all implemented functions against requirements, code, and evidence in [functional-coverage.md](functional-coverage.md).
 - Display one persistent pan/zoom canvas of user sessions, including optional archive visibility. Exclude Guardian/internal agents by source/parent metadata without deleting them.
 - Recover saved terminal state during discovery or on reading the latest history page, including when local history is unavailable. Automatically recheck unresolved cached-result sessions in a paced background queue without opening them; newer work and current requests take priority. Show single-unit last activity on notes and relative plus exact activity time in the viewer. Offer archive/restore and persisted idle-age hiding, with Hide unknown checked by default to apply the same timeout to Unknown. Protect active work, pending requests, and unreviewed results from age hiding.
 - Clip drawing to the canvas. Put New Session/Rearrange/Fit/Full Screen and Acknowledge all in the top toolbar, remove the workspace heading/tagline/header panel, and make the native sidebar toggleable.
@@ -31,6 +32,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 - `session-attention`: Observable execution/request states, terminal outcomes, and explicit result acknowledgment.
 - `project-regions`: Project geometry and confirmed project membership through note placement.
 - `session-actions`: Session/result viewing, native Codex navigation, and contextual session creation.
+- `source-connection`: Startup/source selection, local connection preferences, refresh, status, isolated demo, bounded transport, and lifecycle.
 - `local-verification`: Bounded agent-driven build/test/native-preview commands and reusable local permission.
 - `release-automation`: Pull-request checks and versioned native macOS artifacts in reviewed GitHub Releases.
 

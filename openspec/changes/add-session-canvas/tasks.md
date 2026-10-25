@@ -224,6 +224,12 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 23.3 Complete the failing-then-passing regression, corrected actual-source readback, offline suite, release/signature, strict SDD/whitespace, and local-link checks; record evidence and source limitations.
 - [ ] 23.4 Restore automatic real-source project moves through a verified API-only desktop channel. Standalone app-tools access currently closes the connection; the user declined Accessibility/UI automation. This gate remains open.
 
+## 24. Complete functional SDD coverage
+
+- [x] 24.1 Inventory the native application, domain/source modules, developer tools, and distribution workflows against existing requirements and regression entry points; retain explicit acceptance gaps.
+- [x] 24.2 Add source-connection and missing search/count/input/note/history/overview/probe scenarios, record the function-to-contract map, and align proposal/design/README/native guidance with current disabled real-source project moves.
+- [x] 24.3 Validate all OpenSpec artifacts strictly, check whitespace and affected local links/anchors, and record documentation-only evidence without claiming a new native/live test pass.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

@@ -43,13 +43,14 @@ GitHub Actions runs application/tooling tests and release builds for Apple Silic
 - [Design and integration gate](openspec/changes/add-session-canvas/design.md)
 - [Implementation tasks](openspec/changes/add-session-canvas/tasks.md)
 - [Correction coverage and verification evidence](openspec/changes/add-session-canvas/verification.md)
+- [Complete SDD function inventory](openspec/changes/add-session-canvas/functional-coverage.md)
 
 The selected delivery is a native Mac-only companion with a session/result viewer, Acknowledge, and Open in Codex. The remaining desktop integration gate is tracked explicitly; demo interactions are not presented as verified desktop mutations.
 
-The behavioral specifications are [canvas-workspace](openspec/changes/add-session-canvas/specs/canvas-workspace/spec.md), [session-attention](openspec/changes/add-session-canvas/specs/session-attention/spec.md), [project-regions](openspec/changes/add-session-canvas/specs/project-regions/spec.md), [session-actions](openspec/changes/add-session-canvas/specs/session-actions/spec.md), [local-verification](openspec/changes/add-session-canvas/specs/local-verification/spec.md), and [release-automation](openspec/changes/add-session-canvas/specs/release-automation/spec.md).
+The behavioral specifications are [canvas-workspace](openspec/changes/add-session-canvas/specs/canvas-workspace/spec.md), [session-attention](openspec/changes/add-session-canvas/specs/session-attention/spec.md), [project-regions](openspec/changes/add-session-canvas/specs/project-regions/spec.md), [session-actions](openspec/changes/add-session-canvas/specs/session-actions/spec.md), [source-connection](openspec/changes/add-session-canvas/specs/source-connection/spec.md), [local-verification](openspec/changes/add-session-canvas/specs/local-verification/spec.md), and [release-automation](openspec/changes/add-session-canvas/specs/release-automation/spec.md). The [function inventory](openspec/changes/add-session-canvas/functional-coverage.md) links implemented behavior to these contracts and distinguishes inspected code from verified acceptance.
 
 Validate the proposal with OpenSpec 1.15.0:
 
 ```sh
-openspec validate add-session-canvas --strict
+openspec validate --all --strict
 ```
