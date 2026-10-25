@@ -1,6 +1,6 @@
 import Foundation
 
-/// An explicit local layout command. Hidden notes remain fixed obstacles, not spare cells.
+/// Reflow visible notes; hidden members retain their offsets while their project moves.
 public enum CanvasRearranger {
     private static let padding = 16.0, header = 64.0, gap = 16.0, areaGap = 64.0
     private static let stepX = Placement.width + gap, stepY = Placement.height + gap
@@ -14,8 +14,6 @@ public enum CanvasRearranger {
         }
         let ids = Set(moving.map(\.id))
         let byID = Dictionary(uniqueKeysWithValues: workspace.sessions.map { ($0.id, $0) })
-        let fixed = workspace.placements.filter { !ids.contains($0.key) }
-        let fixedRects = fixed.values.map(\.rect)
         let projectIDs = Set(moving.compactMap(\.projectID))
         guard projectIDs.isSubset(of: Set(workspace.projects.map(\.id))), projectIDs.allSatisfy({ workspace.regions[$0] != nil }) else {
             throw CanvasError.message("A session has no confirmed project area. Refresh before rearranging.")
@@ -29,71 +27,61 @@ public enum CanvasRearranger {
                 return $0.id < $1.id
             }
         }
-        let pinned = Set(workspace.sessions.filter { !ids.contains($0.id) }.compactMap(\.projectID))
-        let free = projectIDs.subtracting(pinned)
+        let carried = Set(workspace.sessions.filter { !ids.contains($0.id) && $0.projectID.map { projectIDs.contains($0) } == true }.map(\.id))
+        let changed = ids.union(carried)
+        let fixed = workspace.placements.filter { !changed.contains($0.key) }
         var next = workspace
-        for id in free { next.regions.removeValue(forKey: id) }
+        for id in projectIDs { next.regions.removeValue(forKey: id) }
 
-        // Keep anchored projects' origins; try a few widths before declaring fixed geometry blocked.
-        for project in workspace.projects where projectIDs.contains(project.id) && pinned.contains(project.id) {
-            let original = workspace.regions[project.id]!
-            let members = ordered(moving.filter { $0.projectID == project.id })
-            let hidden = fixed.filter { byID[$0.key]?.projectID == project.id }.values
-            let baseColumns = Int(max(1, min(3, (original.width - 2 * padding + gap) / stepX)))
-            var accepted = false
-            for columns in baseColumns...max(baseColumns, 6) {
-                let width = max(300, 2 * padding + Double(columns) * stepX - gap,
-                                hidden.map { min(original.width, $0.rect.x + $0.rect.width + padding - original.x) }.max() ?? 0)
-                let placements = try grid(members, origin: Point(original.x + padding, original.y + header), columns: columns, obstacles: fixedRects)
-                let bottom = max(placements.values.map { $0.rect.y + $0.rect.height + padding }.max() ?? original.y,
-                                 hidden.map { min(original.y + original.height, $0.rect.y + $0.rect.height + padding) }.max() ?? original.y)
-                let rect = Rect(original.x, original.y, width, max(240, bottom - original.y))
-                guard !next.regions.contains(where: { $0.key != project.id && $0.value.intersects(rect) }),
-                      fixed.allSatisfy({ rect.contains($0.value.center) == (byID[$0.key]?.projectID == project.id) }) else { continue }
-                next.regions[project.id] = rect
-                next.placements.merge(placements) { _, new in new }
-                accepted = true
-                break
-            }
-            guard accepted else {
-                throw CanvasError.message("Not enough space in \(project.name) without moving hidden sessions. Show more sessions or move surrounding areas, then rearrange again.")
-            }
-        }
-
+        var obstacles = Array(next.regions.values) + fixed.values.map(\.rect)
         var x = 0.0, y = 0.0, rowBottom = 0.0
-        for project in workspace.projects where free.contains(project.id) {
+        for project in workspace.projects where projectIDs.contains(project.id) {
+            let original = workspace.regions[project.id]!
+            let originalOrigin = Point(original.x, original.y)
             let members = ordered(moving.filter { $0.projectID == project.id })
-            let columns = min(3, members.count)
-            let local = try grid(members, origin: Point(padding, header), columns: columns, obstacles: [])
-            let width = max(300, 2 * padding + Double(columns) * stepX - gap)
-            let height = max(240, (local.values.map { $0.rect.y + $0.rect.height }.max() ?? header) + padding)
-            let obstacles = Array(next.regions.values) + fixedRects
+            let hidden = workspace.placements.filter { carried.contains($0.key) && byID[$0.key]?.projectID == project.id }
+                .mapValues { Placement($0.position - originalOrigin) }
+            let hiddenRects = hidden.values.map(\.rect)
+            let columns = min(3, members.count + hidden.count)
+            let local = try grid(members, origin: Point(padding, header), columns: columns, obstacles: hiddenRects)
+            let contents = Array(local.values) + Array(hidden.values)
+            let width = max(300, 2 * padding + Double(columns) * stepX - gap, (hiddenRects.map { $0.x + $0.width }.max() ?? 0) + padding)
+            let height = max(240, (contents.map { $0.rect.y + $0.rect.height }.max() ?? header) + padding)
+            // Reserve protruding hidden footprints as well as the area itself.
+            let left = min(0, hiddenRects.map(\.x).min() ?? 0), top = min(0, hiddenRects.map(\.y).min() ?? 0)
+            let envelopeWidth = width - left, envelopeHeight = height - top
             while true {
-                if x + width > bandWidth { x = 0; y = max(y + areaGap, rowBottom + areaGap) }
-                let rect = Rect(x, y, width, height)
-                guard finite(rect) else { throw CanvasError.message("No finite space is available for rearranging.") }
-                let collisions = obstacles.filter { $0.intersects(rect) }
+                if x + envelopeWidth > bandWidth { x = 0; y = max(y + areaGap, rowBottom + areaGap) }
+                let envelope = Rect(x, y, envelopeWidth, envelopeHeight)
+                guard finite(envelope) else { throw CanvasError.message("No finite space is available for rearranging.") }
+                let collisions = obstacles.filter { $0.intersects(envelope) }
                 if collisions.isEmpty {
-                    next.regions[project.id] = rect
-                    for (id, placement) in local { next.placements[id] = Placement(placement.position + Point(x, y)) }
-                    rowBottom = max(rowBottom, y + height); x += width + areaGap
+                    let origin = Point(x - left, y - top)
+                    next.regions[project.id] = Rect(origin.x, origin.y, width, height)
+                    for (id, placement) in local.merging(hidden, uniquingKeysWith: { first, _ in first }) {
+                        next.placements[id] = Placement(placement.position + origin)
+                    }
+                    obstacles.append(envelope)
+                    rowBottom = max(rowBottom, y + envelopeHeight); x += envelopeWidth + areaGap
                     break
                 }
                 let right = collisions.map { $0.x + $0.width + areaGap }.max()!
-                if right + width <= bandWidth { x = right }
+                if right + envelopeWidth <= bandWidth { x = right }
                 else { x = 0; y = max(y + areaGap, collisions.map { $0.y + $0.height + areaGap }.min()!) }
             }
         }
         let projectBottom = projectIDs.compactMap { next.regions[$0] }.map { $0.y + $0.height }.max()
         let unassigned = ordered(moving.filter { $0.projectID == nil })
         let placements = try grid(unassigned, origin: Point(0, projectBottom.map { $0 + areaGap } ?? 0), columns: 6,
-                                  obstacles: Array(next.regions.values) + fixedRects)
+                                  obstacles: obstacles)
         next.placements.merge(placements) { _, new in new }
 
         guard next.regions.allSatisfy({ next.validateRegion(id: $0.key, rect: $0.value, memberPositions: [:]) }),
-              ids.allSatisfy({ id in
+              changed.allSatisfy({ id in
                   guard let placement = next.placements[id] else { return false }
-                  return next.placements.allSatisfy { $0.key == id || !placement.rect.intersects($0.value.rect) }
+                  return next.placements.allSatisfy {
+                      $0.key == id || (!ids.contains(id) && !ids.contains($0.key) && byID[id]?.projectID == byID[$0.key]?.projectID) || !placement.rect.intersects($0.value.rect)
+                  }
               }) else { throw CanvasError.message("Rearrange could not preserve project boundaries and hidden sessions. Show more sessions or adjust surrounding areas, then retry.") }
         return next
     }

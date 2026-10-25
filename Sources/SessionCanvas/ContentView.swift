@@ -63,7 +63,7 @@ struct ContentView: View {
                     .help("New session (⌘N)")
                 Button("Rearrange", systemImage: "square.grid.3x3") { model.rearrange() }
                     .labelStyle(.titleAndIcon).disabled(!model.canRearrange)
-                    .help("Arrange visible sessions by status and recent activity. Hidden sessions stay in place.")
+                    .help("Arrange visible sessions by status and recent activity. Hidden project members travel with their project.")
                     .accessibilityIdentifier("rearrange")
                 Button { model.fitRequest += 1 } label: { Label("Fit to content", systemImage: "viewfinder") }
                     .help("Fit to content (⌘0)")

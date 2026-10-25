@@ -134,19 +134,20 @@ The system SHALL persist note positions, project-region bounds, and viewport for
 - **AND** it does not report the layout as durably saved
 
 ### Requirement: Explicit visible-session rearrangement
-Rearrange SHALL move only currently visible notes into compact rows, with visible projects first and unassigned notes below them. Inside each project and outside projects, notes SHALL group by Attention order, newest activity first, then stable ID. Hidden notes SHALL stay fixed and block overlap. The command SHALL preserve source facts, acknowledgment, filters, selection, history, and viewport, validate membership/geometry, and save before applying the whole layout.
+Rearrange SHALL reflow visible notes by Attention order, newest activity, then stable ID, with visible projects first and unassigned notes below. Hidden members SHALL retain project-relative offsets while receiving its displacement; other hidden notes SHALL stay fixed. The command SHALL preserve source facts, acknowledgment, filters, selection, history, and viewport, validate membership/collisions, and save before applying the whole layout.
 
 #### Scenario: Compact holes and repair overlaps explicitly
 - **WHEN** status/filter changes left gaps or visible notes overlap hidden notes, and the user invokes Rearrange
 - **THEN** visible notes are ordered Running, Waiting for you, Permission required, Finished, Idle, Archived, Unknown, with newer activity first inside each group
-- **AND** movable visible project areas use source/sidebar order before unassigned notes; the same ordering applies within each project
-- **AND** moved notes do not overlap any other note, including hidden ones, and retain their actual memberships
+- **AND** visible project areas use source/sidebar order before unassigned notes; the same ordering applies within each project
+- **AND** reflowed visible notes do not overlap any other note, including hidden ones, and all notes retain their actual memberships
 
-#### Scenario: Preserve all hidden geometry
+#### Scenario: Carry hidden members without reflowing them
 - **WHEN** notes are excluded by attention, project, search, or age filters
-- **THEN** their placements are unchanged; projects with no visible notes are unchanged and projects with hidden members keep their origins
-- **AND** anchored areas may fit visible/fixed members only when membership and region constraints remain valid
-- **AND** gaps forced by fixed obstacles and preexisting hidden-hidden overlaps may remain without moving hidden notes
+- **THEN** hidden members of a participating visible project move by exactly the project's displacement while preserving their internal offsets
+- **AND** hidden unassigned notes and projects with no visible notes are unchanged
+- **AND** visible notes avoid hidden member footprints, and the project envelope avoids other projects/fixed notes including any protruding hidden footprints
+- **AND** preexisting hidden-hidden overlaps within one project remain unchanged
 
 #### Scenario: Persist or reject a complete rearrangement
 - **WHEN** rearrangement succeeds
@@ -155,7 +156,7 @@ Rearrange SHALL move only currently visible notes into compact rows, with visibl
 
 #### Scenario: A complete plan cannot be saved
 - **WHEN** fixed geometry blocks a valid plan or storage rejects it
-- **THEN** no partial layout is applied, hidden notes remain fixed, and an actionable error is shown
+- **THEN** no partial layout is applied, no member is independently displaced, and an actionable error is shown
 
 #### Scenario: No eligible rearrangement
 - **WHEN** there are no visible notes, no connection/storage, or a refresh/create/membership operation is in progress

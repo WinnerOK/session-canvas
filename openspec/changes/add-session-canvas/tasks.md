@@ -171,9 +171,15 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 ## 15. Explicit visible-session rearrangement
 
 - [x] 15.1 Add a pure compact-layout planner: projects first in source order, unassigned notes below, canonical Attention/activity/identity ordering in each area, idempotent coordinates, and no source facts/viewport changes.
-- [x] 15.2 Preserve all filtered placements as collision obstacles, anchor projects with hidden members, validate membership/region/note constraints, jump past tall blocked ranges, and reject an impossible plan without moving hidden notes.
+- [x] 15.2 Preserve hidden project-relative offsets during project movement (clarified in section 16), retain nonparticipating hidden geometry, validate membership/region/note constraints, jump past tall blocked ranges, and reject invalid plans in full.
 - [x] 15.3 Add labeled Rearrange to the top toolbar, use the current visible projection, save the whole workspace before applying it, preserve viewer/filters/acknowledgment, and guard busy/empty cases.
 - [x] 15.4 Complete offline core/runtime regressions, release/signature, native arranged-layout/toolbar inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
+## 16. Hidden members move with their project
+
+- [x] 16.1 Apply the user's clarification: every visible project may move, carrying hidden members by one shared displacement while independently reflowing only visible members; fully hidden projects and hidden unassigned notes stay fixed.
+- [x] 16.2 Reserve project/hidden-footprint envelopes, preserve hidden-hidden internal geometry, verify membership/collisions and idempotence, and retain save-before-apply/restart behavior.
+- [x] 16.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
 
 ## Workflow follow-up
 
