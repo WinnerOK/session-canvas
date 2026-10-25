@@ -61,7 +61,7 @@ The live-test watchdog samples ChatGPT CPU time and RSS every 0.5 seconds. It re
 
 ## Controls
 
-The canvas starts immediately below the window toolbar. New Session, Fit to Content, Full Screen, and Acknowledge all live in that toolbar. The native sidebar toggle collapses the left panel and gives its space to the canvas; Shift + Command + S performs the same action without changing the viewport, filters, or open session.
+The canvas starts immediately below the window toolbar. New Session, Rearrange, Fit to Content, Full Screen, and Acknowledge all live in that toolbar. The native sidebar toggle collapses the left panel and gives its space to the canvas; Shift + Command + S performs the same action without changing the viewport, filters, or open session.
 
 | Action | Control |
 | --- | --- |
@@ -80,6 +80,7 @@ The canvas starts immediately below the window toolbar. New Session, Fit to Cont
 | Restore a hidden project | Choose it from Hidden projects in the sidebar |
 | Reset visibility and search | All sessions, the empty-view button, or Command + 1 |
 | Create a session | Top toolbar, File menu, right-click canvas background or a project area, or Command + N |
+| Rearrange visible notes | Rearrange in the top toolbar; compact projects and unassigned notes without moving hidden notes or changing pan/zoom |
 | Acknowledge | Acknowledge result in the viewer's fixed top panel; available only for Finished sessions with a loaded, unacknowledged result |
 | Acknowledge all | Top toolbar; review latest results of all current-source Finished sessions, including notes hidden by filters |
 | Reverse acknowledgment | Mark as unread on the same viewer button; available for a known acknowledged result in any session state after loading ends |
@@ -102,6 +103,12 @@ Opening or reloading the latest history can also resolve Unknown: if the newest 
 Unknown notes with cached terminal results and missing local history are rechecked automatically after the initial canvas appears. One background worker checks one session at a time, starting checks at least one second apart. Modern APIs return one latest turn; older APIs may require a full history response, whose transcript is discarded after checking state. Confirmed completion updates the note and counts without opening the viewer, acknowledging the result, or reloading the whole inventory. Active/requesting, archived/internal, no-result, and known later-local-work sessions are excluded. Unchanged source/file/result evidence is checked once per connection, including failures; changed evidence or reconnect permits another attempt, and manual Reload history remains available. Closing/disconnecting stops the queue. Viewer transcripts remain on demand.
 
 Search, attention visibility, and individually hidden projects combine. Only projects containing matching visible sessions appear in the sidebar and canvas; overview counts and Fit to Content use the same visible set. Hidden projects can be restored individually or together from the Hidden projects menu. A fully filtered workspace shows an explicit empty view with Show all sessions. Hiding the currently viewed session closes its viewer. Visibility choices persist per source in the app's own SQLite database without altering project membership, source sessions, acknowledgments, or layout.
+
+**Rearrange** compacts the notes currently visible through all these filters, including age hiding. Movable projects use source/sidebar order in compact rows; unassigned sessions appear below the visible project areas. Each project's notes and unassigned notes use the Attention order (Running, Waiting for you, Permission required, Finished, Idle, Archived, Unknown), newest source activity first, then stable identity for ties. The order is read across rows. Projects use up to three note columns, unassigned notes six; anchored projects may use a wider row if surrounding geometry permits.
+
+Hidden note coordinates never change. Their full note rectangles block visible placement; projects with hidden members keep their top-left position, and hidden projects remain unchanged. Areas can resize only while retaining membership and avoiding other areas; obstacles can therefore leave necessary gaps. If fixed geometry prevents a valid layout, the command reports the blocking project and applies nothing; show more sessions or move surrounding areas before retrying. Existing hidden-hidden overlaps are retained. Normal manual project-area dragging still carries all members, including hidden ones.
+
+Rearrangement is a local, explicit action with no Codex mutation or history request. It preserves pan/zoom, selection/history, source facts, review records, and filters, and persists the complete geometry before updating the canvas. A repeated click with unchanged input keeps the same coordinates. Status/activity/filter updates do not rearrange automatically. The button is disabled without visible notes, a connection/storage, or while refresh/creation/membership work is pending. Use Fit to Content separately if the arranged content is outside the current view.
 
 **Archived** appears under **Attention**, immediately above **Unknown**, and is unchecked by default. Confirmed archived sessions show Archived on their note and in the viewer even when execution is unavailable or local history is missing. The checkbox shows/hides them independently of Unknown and without acknowledging their results. The former Hide archived sessions choice migrates to this checkbox; no separate archive toggle remains under Visibility.
 
