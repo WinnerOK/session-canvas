@@ -51,14 +51,12 @@ jobs:
       - name: Packaging and verification script tests
         run: python3 -B -m unittest discover -s scripts/tests -v
       - name: Application tests
-        run: python3 scripts/ci-test-diagnostic.py
-      - name: Save test startup diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-startup-${{ matrix.arch }}
-          path: .build/ci-diagnostics/
-          if-no-files-found: ignore
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          mkdir -p .build
+          swift test --disable-xctest 2>&1 | tee .build/application-tests.log
+          grep -Eq 'Test run with [0-9]+ tests.*passed' .build/application-tests.log
       - name: Release build and bundle verification
         if: ${{ !inputs.release_tag }}
         run: |

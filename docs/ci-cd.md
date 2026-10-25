@@ -8,6 +8,8 @@ Hosted checks use fixtures and native AppKit rendering/events. They do not requi
 
 The first hosted run exposed a Swift 6.1 overload ambiguity in project-focus geometry that local Swift 6.4 accepted. The canvas now converts AppKit dimensions to the domain's `Double` before that arithmetic, retaining the same positioning formula. Both architectures continue using Xcode 16.4 so CI verifies this compatibility boundary.
 
+The native submit-button test queues its mouse-up before synchronous mouse-down delivery. macOS 15 AppKit may wait for mouse-up inside button tracking; sequential synchronous delivery would hang before release could be sent. Newer SwiftUI controls can consume release after mouse-down returns. The same test verifies exactly one session creation and automatic navigation. The application-test step has a five-minute limit and requires Swift Testing's completed-success summary in addition to a zero exit status, so a stalled or prematurely terminated test cannot silently pass.
+
 After these files reach GitHub, Actions must be enabled for the repository. To require checks before merging, add the two architecture jobs and OpenSpec to the branch protection/ruleset after their first run. Adding workflow files alone does not configure branch protection. Pull requests use `contents: read`, and checkout does not persist credentials.
 
 ## Create a release in GitHub

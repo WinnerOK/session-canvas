@@ -11,6 +11,10 @@ Every pull request and push to `main` SHALL run the normal Swift Testing suites,
 - **WHEN** the normal suite runs on a clean hosted runner
 - **THEN** installed-source opt-in tests remain disabled while fixture-based core, runtime, and native rendering tests run
 
+#### Scenario: The test process exits without finishing its run
+- **WHEN** the test command exits without Swift Testing reporting a completed successful run
+- **THEN** CI fails even if the process exit status is zero
+
 ### Requirement: Release creation uses the verified source revision
 The repository SHALL provide a manually dispatched GitHub Actions release workflow and a `v*` tag-push trigger. Releases SHALL accept only `vMAJOR.MINOR.PATCH` numeric versions. An existing tag SHALL resolve to its commit; a new manually requested tag SHALL target the selected workflow revision. Both architecture checks and strict specification validation MUST pass for that exact revision before creating or updating a draft release.
 

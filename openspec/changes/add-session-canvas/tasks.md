@@ -118,7 +118,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [ ] 9.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
   - [x] 9.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
   - [ ] 9.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head.
-    - [ ] Diagnose and remove hosted Swift test startup hang after successful compilation; retain the full application suite.
+    - [x] Diagnose the hosted UI-test hang with process samples: macOS 15 button tracking waits for a mouse-up that the test sent only after mouse-down returned. Queue release first, retain native-button/one-create assertions, remove temporary diagnostics, and bound the test step.
   - [ ] 9.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
 
 ## Workflow follow-up
