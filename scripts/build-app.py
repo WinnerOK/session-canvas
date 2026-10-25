@@ -48,9 +48,13 @@ def build_app(args, root=ROOT):
     executable_dir = bundle / "Contents/MacOS"
     executable_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(binary, executable_dir / "SessionCanvas")
+    resources_dir = bundle / "Contents/Resources"
+    resources_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(root / "assets/branding/SessionCanvas.icns", resources_dir / "SessionCanvas.icns")
     info = {
         "CFBundleName": "Session Canvas", "CFBundleDisplayName": "Session Canvas",
         "CFBundleIdentifier": "local.sessioncanvas.app", "CFBundleExecutable": "SessionCanvas",
+        "CFBundleIconFile": "SessionCanvas.icns",
         "CFBundlePackageType": "APPL", "CFBundleShortVersionString": args.version, "CFBundleVersion": args.build_number,
         "LSMinimumSystemVersion": "14.0", "LSApplicationCategoryType": "public.app-category.developer-tools",
         "NSHighResolutionCapable": True, "NSPrincipalClass": "NSApplication",

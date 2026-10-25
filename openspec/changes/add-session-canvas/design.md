@@ -176,6 +176,12 @@ Release dispatch accepts `vMAJOR.MINOR.PATCH` and resolves an existing tag to it
 
 Extend the existing app builder with validated version/build metadata while preserving local defaults. Package separate native ZIPs with `ditto`, preserving the app structure and executable permissions; verify architecture with `lipo`, verify the ad-hoc signature, and provide SHA-256 files checked again before upload. Use the tag version in Info.plist and filenames and the workflow run number as the build number. Separate archives provide native test coverage without adding universal-binary assembly. Developer ID signing and notarization remain outside this change; document Gatekeeper limitations. See the [CI/CD guide](../../../docs/ci-cd.md).
 
+Routine Git/GitHub delivery follows the user's standing authorization: working branch, verified task-only commit, ordinary branch push, and PR creation/update without another conversation-level confirmation. Global command/instruction installation remains pending because its system request was declined. The enabled GitHub plugin inherits Allow low-risk actions. [The delivery workflow](../../../docs/git-workflow.md) records setup status, protected operations, authentication prerequisites, and rule-loading limits. This agent configuration changes no application behavior or product requirements.
+
+### 12. Package the selected application icon
+
+Use the selected blue session-cards PNG as the application identity. Export its unchanged artwork at the standard 16, 32, 128, 256, and 512-point iconset sizes with 1×/2× representations using `sips`, then assemble the checked-in `assets/branding/SessionCanvas.icns` with `iconutil`. The shared app builder copies that resource into `Contents/Resources` and sets `CFBundleIconFile` before codesigning. A missing source resource fails before signing. Local verification and architecture-specific releases share this packaging path. Retain original and light alternatives as review assets without choosing them implicitly. Canvas, source, and acknowledgment behavior are unaffected.
+
 ### Explicit visible layout
 
 CanvasRearranger is a pure CanvasCore planner over a workspace, current visible session IDs, and acknowledgments. Derive each note's canonical Attention state; order by that state, descending updatedAt, then stable ID across rows. Do not sort by formatted age or alter source facts. Build adaptive note grids, a compact project block, and a separate unassigned grid below the maximum visible-project bottom. Keep pan/zoom and viewer state; fitting is a separate action.

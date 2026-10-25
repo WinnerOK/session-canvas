@@ -16,6 +16,8 @@ python3 scripts/build-app.py
 
 The bundle is written to `dist/Session Canvas.app`. The default signature is ad hoc; Gatekeeper-trusted distribution requires a Developer ID identity and notarization. `--sign IDENTITY` selects a signing identity. `--debug` builds a debug bundle. `--version MAJOR.MINOR.PATCH` and `--build-number INTEGER` set bundle metadata; local defaults remain `0.1.0` and `1`.
 
+The selected application icon is the [blue session-cards image](../assets/branding/README.md). The builder includes its multi-resolution `SessionCanvas.icns` in `Contents/Resources` and sets `CFBundleIconFile` before signing. This applies to local and release bundles; running the bare SwiftPM executable does not package app resources. A missing icon resource fails the build before signing.
+
 The bundle built on this machine targets Apple Silicon. [GitHub Actions](ci-cd.md) checks Apple Silicon and Intel separately and prepares architecture-specific ZIPs and checksums as draft GitHub Releases. The workflow can be run entirely in GitHub with a version tag, creating a new tag at the verified commit if needed. Hosted PR tests and release bundle builds passed on both architectures; actual draft upload remains a separate acceptance check. These ad-hoc releases are not notarized or universal binaries.
 
 The development machine has mismatched public/private `PackageDescription` interfaces. The opt-in workaround compiles its installed public interface into a local module and uses it only for the manifest compiler:

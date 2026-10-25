@@ -109,6 +109,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 8.3 Run the launcher against actual tests, a signed app build, and native captures; inspect a new PNG and record evidence in verification.md.
 - [x] 8.4 Document the stable direct command for future Codex chats and synchronize the local-verification contract, guide, and strict validation.
 - [x] 8.5 Add the general launcher prefix to the main default.rules allow list after the repeated-prompt report; verify the exact reported command and changed preview parameters against that file, run the targeted regression, and document that existing chats need startup reload. File matching alone does not prove prompt-free execution.
+- [ ] 8.6 Save the user's global standing authorization and command rules for routine Git/GitHub branch/commit/push/PR work, verify policy matching and existing repository access without publishing test changes, and document the workflow. Application requirements are unaffected.
 
 ## 9. Session lifecycle visibility
 
@@ -207,6 +208,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
     - [x] Diagnose the hosted UI-test hang with process samples and early exit with LLDB. Use the real hosted form's native Return/default-button route, retain one-create/navigation assertions and canvas mouse regressions, remove temporary diagnostics, and bound/verify test completion.
     - [x] Normalize OCR snapshots to 2× density with English, best-candidate exact text checks, and language correction disabled; seven semantic-zoom tests pass locally. Retain failed hosted test logs/fixture PNGs for diagnosis. Verify the revised native submit test completes locally and on both hosted architectures.
   - [ ] 21.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
+
+## 22. Selected application icon
+
+- [x] 22.1 Preserve four generated light alternatives and their original prompts; record the user's selection of the original blue session-cards image.
+- [x] 22.2 Export standard 1×/2× native icon sizes and package the selected ICNS resource and metadata before signing in the shared local/release builder.
+- [x] 22.3 Verify bundle resource lookup, icon representations and appearance, the signed local build, packaging checks, strict OpenSpec/whitespace checks, and affected documentation links; record actual evidence.
 
 ## Workflow follow-up
 
