@@ -93,9 +93,10 @@ final class CanvasNSView: NSView {
         }
         if focusVersion != model.focusRequest, let id = model.focusedProjectID, let rect = model.visibleRegions[id], bounds.width > 0 {
             focusVersion = model.focusRequest
-            let scale = max(0.75, min(1, min((bounds.width - 80) / rect.width, (bounds.height - 80) / rect.height)))
-            let top = rect.height * scale > bounds.height - 80 ? 40 : (bounds.height - rect.height * scale) / 2
-            model.setViewport(Viewport(origin: Point((bounds.width - rect.width * scale) / 2 - rect.x * scale, top - rect.y * scale), zoom: scale))
+            let width = Double(bounds.width), height = Double(bounds.height)
+            let scale = max(0.75, min(1, min((width - 80) / rect.width, (height - 80) / rect.height)))
+            let top = rect.height * scale > height - 80 ? 40 : (height - rect.height * scale) / 2
+            model.setViewport(Viewport(origin: Point((width - rect.width * scale) / 2 - rect.x * scale, top - rect.y * scale), zoom: scale))
         } else if focusVersion != model.focusRequest, let id = model.focusedSessionID,
                   let placement = model.workspace.placements[id], bounds.width > 0 {
             focusVersion = model.focusRequest

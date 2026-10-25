@@ -109,6 +109,19 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 8.4 Document the stable direct command for future Codex chats and synchronize the local-verification contract, guide, and strict validation.
 - [x] 8.5 Add the general launcher prefix to the main default.rules allow list after the repeated-prompt report; verify the exact reported command and changed preview parameters against that file, run the targeted regression, and document that existing chats need startup reload. File matching alone does not prove prompt-free execution.
 
+## 9. GitHub checks and app releases
+
+- [x] 9.1 Add reusable pull-request/main CI with Apple Silicon and Intel macOS tests, Python tooling checks, release builds/signature checks, and strict OpenSpec validation; keep installed-source tests opt-in and repository permissions read-only.
+- [x] 9.2 Resolve release versions to exact commits, reuse all required checks, and create/update only draft GitHub Releases from Actions dispatch or version-tag pushes. Create new tags only after checks pass; refuse moved tags and published asset replacement.
+- [x] 9.3 Add validated bundle versions/build numbers and architecture-specific ZIP/checksum packaging; verify metadata, executable permissions, failure propagation, and a local Apple Silicon archive.
+- [x] 9.4 Document GitHub setup, manual/tag release flows, draft review, checksum verification, and ad-hoc signing limitations; synchronize SDD and verify local structure/links.
+- [ ] 9.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
+  - [x] 9.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
+  - [x] 9.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head: hosted run 40198030452, commit 1a52884, Xcode 16.4 / Swift 6.1.2; 12 Python checks, the normal 71-test Swift run, release builds, and bundle signatures passed on both architectures.
+    - [x] Diagnose the hosted UI-test hang with process samples and early exit with LLDB. Use the real hosted form's native Return/default-button route, retain one-create/navigation assertions and canvas mouse regressions, remove temporary diagnostics, and bound/verify test completion.
+    - [x] Normalize OCR snapshots to 2× density with English, best-candidate exact text checks, and language correction disabled; seven semantic-zoom tests pass locally. Retain failed hosted test logs/fixture PNGs for diagnosis. Verify the revised native submit test completes locally and on both hosted architectures.
+  - [ ] 9.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.
