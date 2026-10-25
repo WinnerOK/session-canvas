@@ -10,13 +10,10 @@ public struct DesktopProjectCatalog: Sendable {
     private var roots: [String: [String]]
     private var membershipRevisions: [String: String] = [:]
 
-    public func projectID(for sessionID: String, serverProjectID: String? = nil, confirmation: ProjectMembershipConfirmation? = nil) -> String? {
+    public func projectID(for sessionID: String, serverProjectID: String? = nil) -> String? {
         guard !nonlocalSessions.contains(sessionID) else { return nil }
-        // API null alone does not erase an existing desktop assignment. A verified
-        // move can supersede only the same desktop membership snapshot it observed.
-        if let confirmation, confirmation.desktopRevision == membershipRevision(for: sessionID) {
-            return serverIDs.first { $0.value == serverProjectID }?.key
-        }
+        // SQLite projectId and desktop membership can disagree. A backend-only
+        // readback or cached Canvas confirmation cannot override the desktop.
         guard !excludedSessions.contains(sessionID) else { return nil }
         return assignments[sessionID] ?? serverIDs.first { $0.value == serverProjectID }?.key
     }

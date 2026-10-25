@@ -403,7 +403,7 @@ final class ApplicationModel: ObservableObject {
         }
         if session.projectID == target { workspace.placements[id] = proposed; persist(); return }
         guard canAssignProject else {
-            errorMessage = "Moving existing sessions requires a newer desktop Codex connection. Select the desktop-bundled executable in Connection settings and reconnect. The session stayed in its original project."
+            errorMessage = "Project moves are unavailable through this Codex connection. Move the chat in Codex; its project will sync here. The session stayed in its original project."
             objectWillChange.send(); return
         }
         guard let source else {

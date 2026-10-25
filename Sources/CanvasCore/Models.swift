@@ -158,6 +158,7 @@ public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
     public init(id: String, outcome: Outcome, text: String) { self.id = id; self.outcome = outcome; self.text = text }
 }
 
+// Decode legacy Canvas snapshots; backend-only confirmations have no authority.
 public struct ProjectMembershipConfirmation: Codable, Equatable, Sendable {
     public var desktopRevision: String
     public var serverProjectID: String?
