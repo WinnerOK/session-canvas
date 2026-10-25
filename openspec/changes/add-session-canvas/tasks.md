@@ -158,7 +158,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 
 ## 15. Explicit visible-session rearrangement
 
-- [x] 15.1 Add a pure compact-layout planner: projects first in source order, unassigned notes below, canonical Attention/activity/identity ordering in each area, idempotent coordinates, and no source facts/viewport changes.
+- [x] 15.1 Add a pure compact-layout planner: projects first, unassigned notes below, canonical Attention/activity/identity ordering in each area, idempotent coordinates, and no source facts/viewport changes. Adaptive square-oriented packing in section 18 supersedes the original geometric source order.
 - [x] 15.2 Preserve hidden project-relative offsets during project movement (clarified in section 16), retain nonparticipating hidden geometry, validate membership/region/note constraints, jump past tall blocked ranges, and reject invalid plans in full.
 - [x] 15.3 Add labeled Rearrange to the top toolbar, use the current visible projection, save the whole workspace before applying it, preserve viewer/filters/acknowledgment, and guard busy/empty cases.
 - [x] 15.4 Complete offline core/runtime regressions, release/signature, native arranged-layout/toolbar inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
@@ -175,6 +175,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, retain remote exclusions, and prefer current explicit server membership over stale local caches.
 - [x] 17.3 Keep confirmed coordinates pending, prevent duplicate session moves, commit only confirmed identities/membership, reconcile failed/ambiguous outcomes without mutation replay, and retain state/requests/review/viewport.
 - [x] 17.4 Complete full offline regressions, isolated adapter verification, release/signature and SDD/link/whitespace checks, then update delivery evidence. Atomic preflight/write races, durable pending recovery, and live-host move presentation remain explicitly unverified.
+
+## 18. Compact square-oriented Rearrange
+
+- [x] 18.1 Replace fixed three/six-column note grids with adaptive physical-size grids; prefer the smallest longer side, then bounding area and wider orientation, retaining Attention/activity/identity row order.
+- [x] 18.2 Pack differently sized project envelopes with deterministic non-rotating free-space reuse and eight width candidates; preserve hidden offsets, fixed nonparticipants, viewport, and atomic persistence.
+- [x] 18.3 Complete shape/density/order/collision/idempotence and model/storage regressions, full offline tests, release/signature, native demo inspection, and strict OpenSpec/whitespace/local-link checks. Keep exact optimum and live-desktop acceptance outside this evidence.
 
 ## Workflow follow-up
 

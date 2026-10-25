@@ -139,7 +139,7 @@ Rearrange SHALL reflow visible notes by Attention order, newest activity, then s
 #### Scenario: Compact holes and repair overlaps explicitly
 - **WHEN** status/filter changes left gaps or visible notes overlap hidden notes, and the user invokes Rearrange
 - **THEN** visible notes are ordered Running, Waiting for you, Permission required, Finished, Idle, Archived, Unknown, with newer activity first inside each group
-- **AND** visible project areas use source/sidebar order before unassigned notes; the same ordering applies within each project
+- **AND** visible project areas form a compact block before unassigned notes; the same Attention/activity/identity ordering applies within each project
 - **AND** reflowed visible notes do not overlap any other note, including hidden ones, and all notes retain their actual memberships
 
 #### Scenario: Carry hidden members without reflowing them
@@ -161,6 +161,22 @@ Rearrange SHALL reflow visible notes by Attention order, newest activity, then s
 #### Scenario: No eligible rearrangement
 - **WHEN** there are no visible notes, no connection/storage, or a refresh/create/membership operation is in progress
 - **THEN** Rearrange is disabled and invoking its command leaves the workspace unchanged
+
+### Requirement: Compact square-oriented layout
+Rearrange SHALL form separate compact project and unassigned-session blocks using adaptive physical-card grids and non-rotating project packing. Candidates SHALL prefer the smallest longer side, then bounding area, then wider orientation. Hidden geometry MAY constrain shape or displace whole blocks. Exact squares and globally minimum area are not required.
+
+#### Scenario: Equal cards form a compact block
+- **WHEN** Rearrange arranges six visible unassigned cards without obstacles
+- **THEN** it uses two columns and three rows for the current physical card proportions instead of a six-card ribbon
+- **AND** larger note sets adapt their columns instead of retaining a fixed six-column limit
+- **AND** the same physical-size rule applies inside each project, including its header and padding
+
+#### Scenario: Differently sized projects form one compact block
+- **WHEN** visible projects have different envelope dimensions
+- **THEN** a bounded set of deterministic packing candidates reuses free spaces and selects by longer side, area, then orientation
+- **AND** placement uses descending height, then width, with source/sidebar order breaking equal-size ties
+- **AND** projects retain their orientation, membership, and hidden-member offsets while geometric order may differ from sidebar order
+- **AND** repeating Rearrange with unchanged input yields the same coordinates
 
 ### Requirement: New sessions receive predictable placement
 The system SHALL place newly discovered notes without covering existing notes, within their project's region or in unassigned space. It SHALL create a region for a newly discovered project, expanding that region when space is needed without overlapping another region.
