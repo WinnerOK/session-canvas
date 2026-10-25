@@ -394,42 +394,54 @@ final class ApplicationModel: ObservableObject {
             closeHiddenSelection()
         } catch { errorMessage = "Result was not marked unread. Please retry. \(error.localizedDescription)" }
     }
-    func moveNote(id: String, position: Point, expectedRevision: String) {
-        guard let session = workspace.sessions.first(where: { $0.id == id }), let previous = workspace.placements[id], !pendingSessions.contains(id) else { return }
+    func moveNote(id: String, position: Point, expectedRevision: String, explicitProjectAction: Bool = false) {
+        guard let session = workspace.sessions.first(where: { $0.id == id }), workspace.placements[id] != nil, !pendingSessions.contains(id), !isRefreshing else { return }
         guard session.revision == expectedRevision else { errorMessage = "The session changed during the drag. Its current placement was retained."; return }
         let proposed = Placement(position), target = workspace.project(at: proposed.center)
-        if let target, visibleRegions[target] == nil {
+        if let target, visibleRegions[target] == nil, !explicitProjectAction {
             errorMessage = "That project is hidden. Show it before moving a session there."; return
         }
         if session.projectID == target { workspace.placements[id] = proposed; persist(); return }
         guard canAssignProject else {
-            errorMessage = "Codex desktop project membership is not exposed by this connection. The note stayed in its original area. You can try project regions in Demo workspace."
+            errorMessage = "Moving existing sessions requires a newer desktop Codex connection. Select the desktop-bundled executable in Connection settings and reconnect. The session stayed in its original project."
             objectWillChange.send(); return
         }
         guard let source else {
             errorMessage = "The session changed during the drag. Its current placement was retained."; return
         }
         pendingSessions.insert(id)
-        workspace.placements[id] = proposed
         let token = generation
         Task {
             defer { if generation == token { pendingSessions.remove(id) } }
             do {
-                try await source.assign(sessionID: id, projectID: target, revision: expectedRevision)
+                let confirmed = try await source.assign(sessionID: id, projectID: target, revision: expectedRevision)
+                guard generation == token else { return }
+                guard confirmed.id == id, confirmed.projectID == target,
+                      let index = workspace.sessions.firstIndex(where: { $0.id == id }) else {
+                    throw CanvasError.message("Codex did not confirm the requested project. Refresh before retrying.")
+                }
+                guard workspace.sessions[index].projectID == session.projectID || workspace.sessions[index].projectID == target else {
+                    throw CanvasError.message("The session moved to another project while this request was pending. Its current membership will be refreshed.")
+                }
+                workspace.sessions[index].projectID = confirmed.projectID
+                workspace.sessions[index].revision = confirmed.revision
+                workspace.sessions[index].updatedAt = confirmed.updatedAt
+                workspace.placements[id] = proposed
+                persist()
+            } catch {
                 guard generation == token else { return }
                 await refresh()
                 guard generation == token else { return }
-                workspace.placements[id] = proposed
-                persist()
-            } catch { if generation == token { workspace.placements[id] = previous; errorMessage = error.localizedDescription } }
+                errorMessage = error.localizedDescription
+            }
         }
     }
     func moveToProject(id: String, projectID: String?) {
-        guard let session = workspace.sessions.first(where: { $0.id == id }) else { return }
+        guard let session = workspace.sessions.first(where: { $0.id == id }), !pendingSessions.contains(id), !isRefreshing else { return }
         var copy = workspace
         let placement = copy.vacantPlacement(projectID: projectID, excluding: id)
         workspace.regions = copy.regions
-        moveNote(id: id, position: placement.position, expectedRevision: session.revision)
+        moveNote(id: id, position: placement.position, expectedRevision: session.revision, explicitProjectAction: true)
     }
     func editRegion(id: String, rect: Rect) {
         guard let original = workspace.regions[id] else { return }

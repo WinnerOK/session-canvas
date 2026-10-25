@@ -65,7 +65,8 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 
 - [x] 5.1 Implement non-overlapping regions and world-coordinate center/boundary rules; verify borders, partial overlaps, zoom invariance, and invisible-region exclusion in core/runtime tests.
 - [ ] 5.2 Implement confirmed assignment/reassignment/removal plus keyboard alternatives; verify source rejection restores confirmed placement and running-session restrictions are reported.
-  - [x] 5.2.1 Exercise confirmed moves and preserved execution with the isolated demo; keep real-source move controls disabled and reject unsupported cross-boundary drops.
+  - [x] 5.2.1 Exercise confirmed moves and preserved execution with the isolated demo; reject unsupported cross-boundary drops. Supported desktop updates were subsequently enabled in section 17.
+  - [x] 5.2.2 Verify actual installed-server assignment/reassignment/removal through the source adapter in isolated homes, plus fixture/model confirmation, rejection, persistence, and stale-cache precedence.
 - [ ] 5.3 Implement conditional membership changes, pending-operation recovery, and external-change reconciliation; verify a racing external move wins over a stale drop and an uncertain mutation is not blindly retried.
 - [ ] 5.4 Implement region movement/resizing and source project removal; verify members move together, invalid geometry edits are rejected, and no geometry edit mutates membership.
   - [x] 5.4.1 Verify local region movement/resizing, member retention, hidden-member movement, collision rejection, and no geometry-driven reassignment.
@@ -167,6 +168,13 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 16.1 Apply the user's clarification: every visible project may move, carrying hidden members by one shared displacement while independently reflowing only visible members; fully hidden projects and hidden unassigned notes stay fixed.
 - [x] 16.2 Reserve project/hidden-footprint envelopes, preserve hidden-hidden internal geometry, verify membership/collisions and idempotence, and retain save-before-apply/restart behavior.
 - [x] 16.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
+## 17. Existing-session project membership API
+
+- [x] 17.1 Verify the installed 0.164.0-alpha.11.1 schema and isolated actual server for metadata/update projectId assignment, reassignment, and empty-string removal; preserve exact session/cwd and start no turn.
+- [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, retain remote exclusions, and prefer current explicit server membership over stale local caches.
+- [x] 17.3 Keep confirmed coordinates pending, prevent duplicate session moves, commit only confirmed identities/membership, reconcile failed/ambiguous outcomes without mutation replay, and retain state/requests/review/viewport.
+- [x] 17.4 Complete full offline regressions, isolated adapter verification, release/signature and SDD/link/whitespace checks, then update delivery evidence. Atomic preflight/write races, durable pending recovery, and live-host move presentation remain explicitly unverified.
 
 ## Workflow follow-up
 

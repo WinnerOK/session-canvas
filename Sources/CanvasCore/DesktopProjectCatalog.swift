@@ -5,14 +5,22 @@ public struct DesktopProjectCatalog: Sendable {
     public var projects: [Project]
     private var assignments: [String: String]
     private var excludedSessions: Set<String>
+    private var nonlocalSessions: Set<String>
     private var serverIDs: [String: String]
     private var roots: [String: [String]]
 
-    public func projectID(for sessionID: String, serverProjectID: String? = nil) -> String? {
+    public func projectID(for sessionID: String, serverProjectID: String? = nil, authoritativeServer: Bool = false) -> String? {
+        // New metadata APIs own membership, including explicit null. Legacy projectless
+        // entries can lag behind a confirmed API move; remote identities stay excluded.
+        if authoritativeServer {
+            guard !nonlocalSessions.contains(sessionID) else { return nil }
+            return serverIDs.first { $0.value == serverProjectID }?.key
+        }
         guard !excludedSessions.contains(sessionID) else { return nil }
         return assignments[sessionID] ?? serverIDs.first { $0.value == serverProjectID }?.key
     }
     public func serverProjectID(for projectID: String) -> String? { serverIDs[projectID] }
+    public func allowsLocalMembership(for sessionID: String) -> Bool { !nonlocalSessions.contains(sessionID) }
     public func rootPaths(for projectID: String) -> [String] { roots[projectID] ?? [] }
 
     public init(data: Data, codexHome: String? = nil) throws {
@@ -39,14 +47,15 @@ public struct DesktopProjectCatalog: Sendable {
         let known = Set(projects.map(\.id))
         let projectless = Set(state["projectless-thread-ids"].array.compactMap(\.string))
         let hosts = state["thread-project-membership-host-ids"]
-        excludedSessions = projectless.union(hosts.object.compactMap { id, value in
+        nonlocalSessions = Set(hosts.object.compactMap { id, value in
             value.string != nil && value.string != "local" ? id : nil
         })
         for (id, value) in state["thread-project-assignments"].object {
             if value["projectKind"].string != "local" || !known.contains(value["projectId"].string ?? "") {
-                excludedSessions.insert(id)
+                nonlocalSessions.insert(id)
             }
         }
+        excludedSessions = projectless.union(nonlocalSessions)
         serverIDs = [:]
         if let codexHome {
             for (id, value) in state["app-server-project-id-by-legacy-project-id-by-host"]["local:" + codexHome].object {
