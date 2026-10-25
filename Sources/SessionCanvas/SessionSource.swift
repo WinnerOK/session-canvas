@@ -364,7 +364,9 @@ final class CodexSource: SessionSource {
     static func supportsProjectMoves(userAgent: String) -> Bool {
         // The generated 0.164.0-alpha.11.1 schema and isolated server verify projectId
         // on metadata/update. Older servers can silently ignore unknown fields.
-        let pattern = #"^(?:Codex Desktop|codex_cli_rs)/(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+)\.(\d+))?(?: |$)"#
+        // Without a parent Codex originator override, initialization uses our client
+        // name as the prefix; the version after it is still the server's version.
+        let pattern = #"^(?:Codex Desktop|codex_cli_rs|session_canvas)/(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+)\.(\d+))?(?: |$)"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: userAgent, range: NSRange(userAgent.startIndex..., in: userAgent)) else { return false }
         func number(_ index: Int) -> Int? { Range(match.range(at: index), in: userAgent).flatMap { Int(userAgent[$0]) } }

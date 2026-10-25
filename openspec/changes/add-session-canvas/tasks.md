@@ -182,6 +182,12 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 18.2 Pack differently sized project envelopes with deterministic non-rotating free-space reuse and eight width candidates; preserve hidden offsets, fixed nonparticipants, viewport, and atomic persistence.
 - [x] 18.3 Complete shape/density/order/collision/idempotence and model/storage regressions, full offline tests, release/signature, native demo inspection, and strict OpenSpec/whitespace/local-link checks. Keep exact optimum and live-desktop acceptance outside this evidence.
 
+## 19. Native-launch membership detection
+
+- [x] 19.1 Inspect the 16:14 recording and reproduce the unsupported-move guard with an isolated installed server after removing the inherited originator override; distinguish successful raw API moves from disabled adapter support.
+- [x] 19.2 Accept the exact native Canvas user-agent prefix while retaining server-version thresholds and unknown/older/shared guards; use the native form in source/model fixtures and the clean environment in installed verification.
+- [x] 19.3 Complete affected and full offline checks, clean-launch installed-server regression, release/signature and strict SDD/whitespace/link checks; record the missed environment assumption and deliver the fix without live-desktop observation.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

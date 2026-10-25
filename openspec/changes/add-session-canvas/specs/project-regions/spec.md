@@ -66,6 +66,11 @@ On a source supporting confirmed membership changes, a completed drop into a dif
 - **AND** an empty project string removes membership, without resuming the thread or changing execution settings
 - **AND** stale preflight or mismatched readback reconciles current source facts without applying the proposed coordinates or automatically repeating the mutation
 
+#### Scenario: Detect support during a normal native launch
+- **WHEN** a supported desktop server initializes the native Canvas client without a parent Codex originator override
+- **THEN** its session_canvas/server-version user agent enables the same project-move support as the corresponding desktop-origin reply
+- **AND** older server versions and the Canvas client version alone do not enable unsupported mutations
+
 #### Scenario: Remove a session's project
 - **WHEN** the user drops an assigned note into unassigned space and the source confirms removal
 - **THEN** the session has no project in Codex and its note remains outside every region
