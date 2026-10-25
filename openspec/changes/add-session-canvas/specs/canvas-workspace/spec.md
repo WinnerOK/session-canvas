@@ -14,7 +14,7 @@ The application SHALL use native SwiftUI/AppKit interfaces on macOS 14 or later,
 - **THEN** a native window presents the canvas, sidebar, and session viewer without a web renderer
 
 ### Requirement: Canvas-first window controls
-The application SHALL place New Session, Fit to Content, Full Screen, and a labeled Acknowledge all control in the top window toolbar. The canvas SHALL begin directly below that toolbar without a workspace heading, tagline, or header panel. The left sidebar SHALL be collapsible through the native toolbar toggle and Shift + Command + S.
+The application SHALL place New Session, Fit to Content, Full Screen, labeled Rearrange, and Acknowledge all controls in the top window toolbar. The canvas SHALL begin directly below that toolbar without a workspace heading, tagline, or header panel. The left sidebar SHALL be collapsible through the native toolbar toggle and Shift + Command + S.
 
 #### Scenario: Acknowledge from the top bar
 - **WHEN** Finished sessions have unacknowledged latest results
@@ -132,6 +132,34 @@ The system SHALL persist note positions, project-region bounds, and viewport for
 - **WHEN** durable layout storage rejects a note movement
 - **THEN** the app indicates that the position is unsaved and offers retry
 - **AND** it does not report the layout as durably saved
+
+### Requirement: Explicit visible-session rearrangement
+Rearrange SHALL move only currently visible notes into compact rows, with visible projects first and unassigned notes below them. Inside each project and outside projects, notes SHALL group by Attention order, newest activity first, then stable ID. Hidden notes SHALL stay fixed and block overlap. The command SHALL preserve source facts, acknowledgment, filters, selection, history, and viewport, validate membership/geometry, and save before applying the whole layout.
+
+#### Scenario: Compact holes and repair overlaps explicitly
+- **WHEN** status/filter changes left gaps or visible notes overlap hidden notes, and the user invokes Rearrange
+- **THEN** visible notes are ordered Running, Waiting for you, Permission required, Finished, Idle, Archived, Unknown, with newer activity first inside each group
+- **AND** movable visible project areas use source/sidebar order before unassigned notes; the same ordering applies within each project
+- **AND** moved notes do not overlap any other note, including hidden ones, and retain their actual memberships
+
+#### Scenario: Preserve all hidden geometry
+- **WHEN** notes are excluded by attention, project, search, or age filters
+- **THEN** their placements are unchanged; projects with no visible notes are unchanged and projects with hidden members keep their origins
+- **AND** anchored areas may fit visible/fixed members only when membership and region constraints remain valid
+- **AND** gaps forced by fixed obstacles and preexisting hidden-hidden overlaps may remain without moving hidden notes
+
+#### Scenario: Persist or reject a complete rearrangement
+- **WHEN** rearrangement succeeds
+- **THEN** placements and project bounds survive restart, pan/zoom and the viewer stay unchanged, and another invocation with unchanged input produces the same geometry
+- **AND** status/activity/filter updates alone do not invoke rearrangement
+
+#### Scenario: A complete plan cannot be saved
+- **WHEN** fixed geometry blocks a valid plan or storage rejects it
+- **THEN** no partial layout is applied, hidden notes remain fixed, and an actionable error is shown
+
+#### Scenario: No eligible rearrangement
+- **WHEN** there are no visible notes, no connection/storage, or a refresh/create/membership operation is in progress
+- **THEN** Rearrange is disabled and invoking its command leaves the workspace unchanged
 
 ### Requirement: New sessions receive predictable placement
 The system SHALL place newly discovered notes without covering existing notes, within their project's region or in unassigned space. It SHALL create a region for a newly discovered project, expanding that region when space is needed without overlapping another region.

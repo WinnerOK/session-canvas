@@ -155,6 +155,13 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 14.2 Add Mark as unread to the same viewer control for a known acknowledged result in any state, including unavailable history; persist exact-identity deletion and preserve work/requests, source facts, other records, and geometry on success or failure.
 - [x] 14.3 Complete offline regressions, release/signature, native toolbar/unread-control inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
 
+## 15. Explicit visible-session rearrangement
+
+- [x] 15.1 Add a pure compact-layout planner: projects first in source order, unassigned notes below, canonical Attention/activity/identity ordering in each area, idempotent coordinates, and no source facts/viewport changes.
+- [x] 15.2 Preserve all filtered placements as collision obstacles, anchor projects with hidden members, validate membership/region/note constraints, jump past tall blocked ranges, and reject an impossible plan without moving hidden notes.
+- [x] 15.3 Add labeled Rearrange to the top toolbar, use the current visible projection, save the whole workspace before applying it, preserve viewer/filters/acknowledgment, and guard busy/empty cases.
+- [x] 15.4 Complete offline core/runtime regressions, release/signature, native arranged-layout/toolbar inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

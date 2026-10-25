@@ -138,7 +138,7 @@ Keep durable state in the local service/application rather than in a mounted plu
 
 ### 8. Render a stable, filterable canvas at every zoom
 
-Clip notes, project areas, labels, dots, and shadows to the AppKit canvas bounds. The native top toolbar owns New Session, Fit to Content, Full Screen, and labeled Acknowledge all; no workspace heading, tagline, or gray header panel sits above the canvas. A native `NavigationSplitView` sidebar toggles through its toolbar control or Shift + Command + S without resetting canvas state.
+Clip notes, project areas, labels, dots, and shadows to the AppKit canvas bounds. The native top toolbar owns New Session, Rearrange, Fit to Content, Full Screen, and labeled Acknowledge all; no workspace heading, tagline, or gray header panel sits above the canvas. A native `NavigationSplitView` sidebar toggles through its toolbar control or Shift + Command + S without resetting canvas state.
 
 Use one derived visible set: search, independently enabled attention states, and hidden project IDs all apply. Omit projects with no visible sessions from the sidebar, canvas, overview, accessibility targets, and fit bounds. Hidden projects have individual/all restore controls. Changes of session state or acknowledgment reevaluate filters; close the viewer if its session becomes hidden. Persist attention/project visibility per source while retaining all underlying layout and membership, including hidden members.
 
@@ -158,6 +158,14 @@ Use `scripts/verify-local.py` as the single build/test/native-preview entry poin
 
 The launcher executes fixed subprocess argument lists, directs SwiftPM/module caches under `.build`, and exposes explicit installed-source opt-in. Preview rebuilds/signs the bundle and defaults to a fresh demo database and PNG under `.build/verification`. Resolve explicit SQLite/PNG outputs against verification, temporary, and Codex visualization roots before starting any subprocess. Preserve the real application database. A bounded capture must produce a fresh PNG and a successful process exit; stale files are not verification evidence. This development permission is independent of permission requests displayed by the product's session viewer.
 
+
+### Explicit visible layout
+
+CanvasRearranger is a pure CanvasCore planner over a workspace, current visible session IDs, and acknowledgments. Derive each note's canonical Attention state; order by that state, descending updatedAt, then stable ID. Do not sort by formatted age or alter source facts. Free projects use source/sidebar order in compact shelves up to three ordinary project widths across, with up to three note columns inside. Unassigned notes use six columns below the maximum visible-project bottom. Keep pan/zoom and viewer state; fitting is a separate action.
+
+Remove only visible notes from the obstacle set. Hidden placements, including notes excluded by search/project/age, remain fixed full-rectangle obstacles. Projects with hidden members are anchored at their existing origins; try a bounded set of row widths and fit bounds around visible and fixed members. Projects with no visible members stay unchanged. This is the strict interpretation of the user's hidden-position constraint: fixed geometry can force holes or prevent a plan. Manual area movement remains a separate all-member translation. Never silently move hidden members or change membership to make a layout fit.
+
+Grid cursors advance monotonically and jump past completely blocked row ranges instead of scanning arbitrary world distances. Plan all moved regions/notes on a copy, validate region membership and note collisions against all retained geometry, and reject a blocked/nonfinite plan in full. Existing hidden-hidden overlaps are outside the movement scope. The application captures its visible projection once, saves the planned workspace before assignment, and leaves the old model/storage intact on failure. Disable while refreshing, creating, moving membership, or without visible content/connection/storage. Source refresh and filter changes preserve coordinates until another explicit invocation.
 
 ## Risks / Trade-offs
 

@@ -135,6 +135,15 @@ final class ApplicationModel: ObservableObject {
     func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
     func setHideUnknown(_ hidden: Bool) { var next = visibility; next.hideUnknown = hidden; setVisibility(next) }
     func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hiddenStates = []; setVisibility(next) }
+    var canRearrange: Bool { connected && !isRefreshing && !isCreating && pendingSessions.isEmpty && database != nil && !visibleSessions.isEmpty }
+    func rearrange() {
+        guard canRearrange, let database else { return }
+        do {
+            let next = try CanvasRearranger.arrange(workspace, visibleSessionIDs: Set(visibleSessions.map(\.id)), acknowledgments: acknowledgments)
+            try database.save(next, source: sourceID)
+            workspace = next
+        } catch { errorMessage = "Couldn’t rearrange sessions. \(error.localizedDescription)" }
+    }
     func canArchive(_ session: Session) -> Bool {
         archiveEligible(session) && !pendingSessions.contains(session.id) && !isRefreshing
     }
