@@ -8,16 +8,20 @@ Canonical vocabulary lives in [GLOSSARY.md](../GLOSSARY.md). The behavioral cont
 
 ## Confirmed requirements
 
+The canvas displays exactly one lifecycle layer. Archived and Unknown belong to **Inactive sessions** first, regardless of age or cached unread results. Otherwise eligible Idle sessions at or beyond **Hide Idle after** belong to **Stale sessions**; all remaining sessions belong to **Active sessions**. Never, missing/future activity, execution, requests, and unread results prevent age classification as Stale. Classification ignores search and visibility choices; the clock reevaluates it within 30 seconds. Actual project membership and source facts remain shared across layers.
+
+Each actual project has independently saved region bounds on each populated layer. Region interiors cannot overlap or nest within a layer, including filtered occupied regions; cross-layer coordinates may overlap freely. Moving a region carries only current members of that layer, including filtered members. Departed note positions and empty regions remain remembered without reserving space. Returning sessions restore valid project-relative offsets or receive a free placement inside the same destination project, growing or translating that project as a group when needed. An external membership change invalidates remembered positions under the former project. Unassigned sessions remain outside project interiors.
+
 - A free-roam canvas displays existing user sessions as movable notes showing their name and state. Drawing stays inside the canvas, and Guardian/internal agent sessions are excluded without source deletion.
 - Color distinguishes Running, Waiting for you, Permission required, and Finished.
 - Current state follows the actual desktop runtime automatically; another reader's unloaded state does not erase live activity.
 - Finished remains until explicit acknowledgment. The viewer acknowledges its loaded unread result only in Finished; Acknowledge all in the top toolbar records the latest known results of all current-source Finished sessions, including filtered notes. Mark as unread removes one known acknowledgment in any state. Opening alone never acknowledges a result.
 - Project regions represent actual desktop project identity and explicit membership, independently of working folders. Backend metadata updates do not prove a desktop project change. The current real-source connection disables membership mutations and follows changes made in Codex. Explicit desktop membership precedes backend fallback; API null and old Canvas confirmations cannot erase or override it. Remote exclusions remain enforced.
-- Search, independently hidden attention states including Archived, and individually hidden projects combine with an Idle-age timeout. Archive status takes display priority even without local history; its checkbox sits above Unknown and starts unchecked. Hide unknown starts checked and applies the same timeout to Unknown. The age filter protects active work, pending requests, and unreviewed results; Never disables it for both Idle and Unknown. Projects without visible sessions are omitted; restoring visibility preserves layout and membership.
+- Search and attention/project filters compose within the selected layer and persist independently per source and layer. They never change classification. Fresh layers enable their applicable states; migrated choices retain exclusions. Projects without visible members are omitted. Layer counts ignore filters; resets clear only selected-layer exclusions and transient search.
 - Unloaded sessions with identity-verified latest terminal evidence recover Finished/Idle during discovery or when reading the latest history. Missing local history remains Unknown until another verified source establishes the latest state. A terminal latest API turn recovers Finished even without a local rollout; newer work and requests keep priority. Older results/pages alone never prove inactivity. Notes show one-unit last source activity, with relative and exact time in the viewer.
 - Unknown sessions with a same-source cached result and missing local evidence are also rechecked automatically after discovery, one at a time and at most once per second. Verified latest completion updates the note and counts without opening a viewer or acknowledging a result. Failures remain Unknown and do not loop on unchanged evidence.
-- At distant zooms, project areas replace member notes. Names are readable/truncated only when meaningful text fits; smaller areas show no text. Regions do not jump or reflow. Their areas remain draggable with all member notes, including hidden notes.
-- Rearrange explicitly reflows the current visible projection into separate compact, roughly square project and unassigned-session blocks. Note grids use physical card proportions and retain Attention status, newest activity, then stable identity order across rows. Projects are packed by size without rotation; source/sidebar order breaks equal-size ties. Unassigned notes appear below the project block. Hidden members keep their project-relative offsets and move by the project's displacement; hidden unassigned notes and fully hidden projects stay fixed. Fixed geometry can displace a whole block and hidden offsets can limit its compactness. Membership, state, acknowledgment, selection, and viewport remain unchanged; ordinary source/filter updates never invoke this command.
+- At distant zooms, project areas replace member notes. Names are readable/truncated only when meaningful text fits; smaller areas show no text. Regions do not jump or reflow. Their areas remain draggable with all current member notes on that layer, including filtered notes.
+- Rearrange explicitly reflows the selected layer's visible projection into compact project and unassigned blocks using physical-card grids and Attention/activity/identity ordering. Filtered current members retain relative offsets while moving with their project; other filtered current geometry stays fixed. Dormant positions and other layers are excluded. Geometry changes never modify source membership, work, requests, or acknowledgment.
 - The top toolbar contains New Session, Fit to Content, and Full Screen. The workspace heading/tagline/header panel is removed, and the native sidebar is toggleable.
 - Clicking a note opens that same session's read-only history, newest first. Acknowledge result, Open in Codex, Reload history, and pagination remain above the scrolling transcript.
 - Right-clicking background or a project area starts creation at that world-coordinate location, with the project preselected even in the overview. The desktop creates an empty durable session with confirmed project identity and working roots, verifies independent resume and releases ownership, then opens it automatically in Codex. Its note/viewer are temporarily revealed despite filters, without changing saved choices. No model turn starts in the canvas. Blank names and projectless folders receive explained defaults.
@@ -32,11 +36,11 @@ These resolve unspecified behavior for the first version; they are design choice
 | Delivery | Native Mac-only SwiftUI/AppKit companion app, selected by the user | Native platform experience with an independent session-source boundary |
 | Scope | One user, one local Codex source, one persistent canvas; user sessions including optionally visible archives, excluding Guardian and other internal agent sessions | Existing user sessions must appear without internal automation clutter |
 | Membership | Zero or one actual Codex project per session | A note has one spatial home |
-| Regions | One rectangular region per project; interiors cannot overlap or nest | Every drop has at most one target |
+| Regions | One region per actual project per populated layer; interiors cannot overlap or nest within that layer | Independent layouts preserve one drop target per layer |
 | Drop target | The note's center at pointer release, in canvas coordinates; edges count as outside | Small partial overlaps do not create ambiguous membership |
 | Region editing | Move/resize regions; carry member notes on move; resize must retain member centers | Organizing a region must not become accidental mass reassignment |
 | Overview | Original project bounds, readable truncated name when it fits, otherwise area only; click to zoom, drag to move | Zoom must not reflow geometry or make small project areas immovable |
-| Visibility | Per-source attention states/projects, Archived unchecked, Idle timeout Never, Hide unknown checked by default; transient search | Reduce clutter without altering membership, acknowledgment, or layout; the shared age limit protects active work, requests, and unread results |
+| Visibility | Per-source/per-layer attention and project filters; Active first, Never cutoff; transient search | Layer classification stays separate from optional rendering filters |
 | Historical results | Latest known terminal result starts unacknowledged unless this app has an acknowledgment for it | Do not silently declare old work reviewed |
 | After acknowledgment | Neutral Idle when no work or request is pending | The note remains available for future turns |
 | Failures and stops | Finished plus an outcome label: Completed, Failed, or Stopped | A stopped turn still has an outcome to inspect |
@@ -59,7 +63,7 @@ erDiagram
     SESSION_VIEWER }o--|| SESSION : displays
 ```
 
-A session's identity survives title changes, project moves, repeated turns, and navigation. A note's position belongs to the canvas. Project membership belongs to Codex. A result belongs to a turn. Acknowledgment belongs to the user and the particular result being viewed.
+A session's identity survives title changes, project moves, repeated turns, and navigation. A note's positions belong to its layer layouts. Project membership belongs to Codex. A result belongs to a turn. Acknowledgment belongs to the user and the particular result being viewed.
 
 ## Facts behind note state
 
@@ -113,7 +117,7 @@ The diagram shows the ordinary non-archived path. Confirmed Archived takes prior
 10. Region geometry is a representation of membership. Region edits do not assign sessions swept by their new bounds.
 11. External project moves are reflected by relocating the note to its new region or unassigned space. Unrelated notes retain their positions.
 12. A missing page of sessions or a disconnected source is not deletion. Archive/removal requires authoritative evidence.
-13. Visibility is a projection of sessions, search, current note state, and hidden project IDs. Hiding never changes source membership, acknowledgment, or saved geometry.
+13. Visibility is a projection of the selected layer, search, current note state, and that layer's hidden project IDs. Hiding never changes source membership, acknowledgment, or saved geometry.
 14. Overview labels and hit areas project the saved world bounds exactly. Text that cannot fit is omitted; geometry is never shifted to preserve a label.
 15. Desktop creation confirms real server membership, retains the returned session identity even before inventory lists it, and starts no turn. Naming or navigation failure never creates a replacement session.
 16. Internal-agent exclusion uses structured source/parent evidence. A Guardian title alone does not make an ordinary user session internal.
@@ -129,7 +133,7 @@ The diagram shows the ordinary non-archived path. Confirmed Archived takes prior
 | Review all known Finished outcomes | Acknowledge all in the top toolbar | Latest result identities from all current-source Finished sessions, including filtered notes, are captured at invocation and recorded atomically; later results stay unread |
 | Reverse review | Mark as unread in the viewer | Only the displayed or known latest acknowledged result's record is removed, in any state; work, requests, other results, membership, and geometry are retained |
 | Right-click background/project and confirm creation | Create empty session | One durable source identity with confirmed context/history and released ownership; clicked position or nearest collision-free position retained across refresh/restart, unchanged viewport for the context's project, temporary reveal, automatic native opening; no turn |
-| Hide attention states or a project | Change canvas visibility | Saved per-source visibility; geometry, source membership, and acknowledgment preserved |
+| Hide attention states or a project | Change canvas visibility | Saved per-source/per-layer visibility; geometry, source membership, and acknowledgment preserved |
 | Continue work or answer a request | Open in Codex | Native application is asked to navigate to that exact session |
 
 Source observations include a renamed session, new session, changed execution state, pending/resolved request, terminal result, project move, archive, and deletion. Repeated observations must not create repeated notes or results.

@@ -1,5 +1,7 @@
 # Tasks
 
+Current layer behavior is tracked in [add-session-layers](../add-session-layers/proposal.md), with [implementation tasks](../add-session-layers/tasks.md) and [execution evidence](../add-session-layers/verification.md). That change supersedes single-layout geometry, Unknown age hiding, and source-wide visibility reset. Historical evidence below retains its original scope; unrelated desktop integration gates remain open.
+
 Updated against the implemented corrections through 2026-10-25. [verification.md](verification.md) maps each correction to its requirement and evidence. Checked tasks describe completed, bounded work; an unchecked parent can have verified subtasks without passing its full acceptance gate. The real desktop, isolated server, fixture, and demo evidence are distinguished explicitly. This change is not ready to archive while the remaining gates are open.
 
 ## 0. Native Mac foundation

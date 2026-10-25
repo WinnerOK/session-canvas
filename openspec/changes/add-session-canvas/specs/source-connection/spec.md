@@ -4,6 +4,8 @@
 
 Connect the native workspace to saved Codex sessions, an existing shared server, or an isolated demo, with explicit connection status and source-owned persistence boundaries.
 
+Canvas geometry, visible populations, filters, overview, and gestures below refer to the selected layer defined by [session-layers](../../../add-session-layers/specs/session-layers/spec.md). Source identities, actual memberships, results, and acknowledgments remain shared; explicitly source-wide actions keep that scope.
+
 ## ADDED Requirements
 
 ### Requirement: Explicit source selection and startup defaults

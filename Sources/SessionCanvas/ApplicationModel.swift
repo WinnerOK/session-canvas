@@ -13,7 +13,10 @@ final class ApplicationModel: ObservableObject {
     @Published var isRefreshing = false
     @Published var selectedSessionID: String?
     @Published var search = "" { didSet { revealedCreationID = nil; closeHiddenSelection() } }
-    @Published private(set) var visibility = CanvasVisibility()
+    @Published private(set) var visibility: CanvasVisibility = { var value = CanvasVisibility(); value.hiddenStates = []; return value }()
+    @Published private(set) var geometryGeneration = 0
+    @Published private(set) var hasUnsavedLayout = false
+    private var storageReady = true
     @Published private(set) var activityNow = Date()
     @Published var history: [HistoryEntry] = []
     @Published var nextHistoryCursor: String?
@@ -47,6 +50,7 @@ final class ApplicationModel: ObservableObject {
         let id = UUID()
         var location: Point
         var projectID: String?
+        var layer: CanvasLayer = .active
     }
 
     init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil, observedSessionIDs: Set<String>? = nil) {
@@ -81,19 +85,41 @@ final class ApplicationModel: ObservableObject {
     var canAssignProject: Bool { source?.canAssignProject == true && connected }
     var selectedSession: Session? { workspace.sessions.first { $0.id == selectedSessionID } }
     func state(_ session: Session) -> NoteState { session.state(acknowledged: acknowledgments[session.id] ?? []) }
+    var selectedLayer: CanvasLayer { workspace.selectedLayer }
+    func layer(_ session: Session) -> CanvasLayer {
+        CanvasLayer.classify(session, acknowledged: acknowledgments[session.id] ?? [], timeout: visibility.idleTimeout, now: activityNow)
+    }
+    var layerCounts: [CanvasLayer: Int] { Dictionary(grouping: workspace.sessions, by: layer).mapValues(\.count) }
+    func selectLayer(_ layer: CanvasLayer, revealingCreation: Bool = false) {
+        guard layer != selectedLayer else { return }
+        var next = workspace
+        next.reconcileLayers(acknowledgments: acknowledgments, now: activityNow, legacyVisibility: visibility, selecting: layer)
+        if !saveUserLayout(next) {
+            guard revealingCreation else { return }
+            workspace = next; visibility = next.selectedVisibility; geometryGeneration += 1; hasUnsavedLayout = true
+        }
+        revealedCreationID = nil; focusedProjectID = nil; focusedSessionID = nil
+        closeHiddenSelection()
+    }
+    func synchronizeLayers() {
+        let before = workspace
+        workspace.reconcileLayers(acknowledgments: acknowledgments, now: activityNow, legacyVisibility: visibility)
+        visibility = workspace.selectedVisibility
+        if before.placements != workspace.placements || before.regions != workspace.regions ||
+            before.layerState?.assignments != workspace.layerState?.assignments || before.layerState?.homes != workspace.layerState?.homes {
+            geometryGeneration += 1
+        }
+    }
     var visibleSessions: [Session] {
         workspace.sessions.filter { session in
-            session.id == revealedCreationID || matchesVisibility(session)
+            layer(session) == selectedLayer && (session.id == revealedCreationID || matchesVisibility(session))
         }
     }
     private func matchesVisibility(_ session: Session) -> Bool {
         matchesSearch(session) && !visibility.hiddenStates.contains(state(session)) &&
-            !visibility.hiddenProjectIDs.contains(session.projectID ?? "") && matchesLifecycle(session)
+            !visibility.hiddenProjectIDs.contains(session.projectID ?? "") && layer(session) == selectedLayer
     }
-    private func matchesLifecycle(_ session: Session) -> Bool {
-        visibility.includesLifecycle(session, acknowledged: acknowledgments[session.id] ?? [], now: activityNow)
-    }
-    func updateActivityTime(now: Date = Date()) { activityNow = now; closeHiddenSelection() }
+    func updateActivityTime(now: Date = Date()) { activityNow = now; persist(); closeHiddenSelection() }
     func activityLabel(_ session: Session) -> String { ActivityTime.label(session.updatedAt, now: activityNow) }
     var creationIsOutsideFilters: Bool {
         guard let session = workspace.sessions.first(where: { $0.id == revealedCreationID }) else { return false }
@@ -110,7 +136,7 @@ final class ApplicationModel: ObservableObject {
     }
     var hiddenProjects: [Project] { workspace.projects.filter { visibility.hiddenProjectIDs.contains($0.id) } }
     var stateCounts: [NoteState: Int] {
-        Dictionary(grouping: workspace.sessions.filter { $0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "") && matchesLifecycle($0) }, by: state).mapValues(\.count)
+        Dictionary(grouping: workspace.sessions.filter { layer($0) == selectedLayer && ($0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "")) }, by: state).mapValues(\.count)
     }
     func visibleProject(at point: Point) -> String? {
         visibleProjects.first { workspace.regions[$0.id]?.contains(point) == true }?.id
@@ -133,15 +159,16 @@ final class ApplicationModel: ObservableObject {
         var next = visibility; next.hiddenProjectIDs = []; setVisibility(next)
     }
     func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
-    func setHideUnknown(_ hidden: Bool) { var next = visibility; next.hideUnknown = hidden; setVisibility(next) }
-    func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hiddenStates = []; setVisibility(next) }
+    func showAllSessions() { search = ""; var next = visibility; next.hiddenStates = []; next.hiddenProjectIDs = []; setVisibility(next) }
     var canRearrange: Bool { connected && !isRefreshing && !isCreating && pendingSessions.isEmpty && database != nil && !visibleSessions.isEmpty }
     func rearrange() {
         guard canRearrange, let database else { return }
         do {
-            let next = try CanvasRearranger.arrange(workspace, visibleSessionIDs: Set(visibleSessions.map(\.id)), acknowledgments: acknowledgments)
+            synchronizeLayers()
+            let geometry = try CanvasRearranger.arrange(workspace.geometryProjection, visibleSessionIDs: Set(visibleSessions.map(\.id)), acknowledgments: acknowledgments)
+            var next = workspace; next.installGeometry(geometry)
             try database.save(next, source: sourceID)
-            workspace = next
+            workspace = next; geometryGeneration += 1; hasUnsavedLayout = false
         } catch { errorMessage = "Couldn’t rearrange sessions. \(error.localizedDescription)" }
     }
     func canArchive(_ session: Session) -> Bool {
@@ -166,11 +193,15 @@ final class ApplicationModel: ObservableObject {
     }
     private func setVisibility(_ next: CanvasVisibility) {
         do {
+            var value = workspace
+            value.reconcileLayers(acknowledgments: acknowledgments, now: activityNow, legacyVisibility: visibility)
+            value.setLayerVisibility(next)
+            value.reconcileLayers(acknowledgments: acknowledgments, now: activityNow)
             if let source {
-                guard let database else { throw CanvasError.message("Canvas storage is unavailable.") }
-                try database.saveVisibility(next, source: source.sourceID)
+                guard let database, storageReady else { throw CanvasError.message("Canvas storage is unavailable. Reconnect to retry.") }
+                try database.save(value, source: source.sourceID)
             }
-            visibility = next
+            workspace = value; visibility = value.selectedVisibility; geometryGeneration += 1; hasUnsavedLayout = false
             revealedCreationID = nil
             closeHiddenSelection()
         } catch { errorMessage = "Visibility changes could not be saved. \(error.localizedDescription)" }
@@ -210,9 +241,10 @@ final class ApplicationModel: ObservableObject {
         source = next
         let cachedSourceID = next.sourceID
         do {
-            workspace = try database?.load(source: next.sourceID) ?? Workspace()
+            storageReady = false
+            workspace = try database?.loadLayered(source: next.sourceID, now: activityNow) ?? Workspace()
             acknowledgments = try database?.acknowledgments(source: next.sourceID) ?? [:]
-            visibility = try database?.visibility(source: next.sourceID) ?? CanvasVisibility()
+            visibility = workspace.selectedVisibility; storageReady = database != nil
             if mode != .demo {
                 for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
             }
@@ -230,6 +262,7 @@ final class ApplicationModel: ObservableObject {
                 guard let self, self.generation == token else { return }
                 self.connected = false; self.hasLiveState = false; self.connectionStatus = "Disconnected"
                 for i in self.workspace.sessions.indices { self.workspace.sessions[i].execution = .unknown }
+                self.persist()
                 self.closeHiddenSelection()
             }
             next.onSessionObservation = { [weak self] observation, baseline in
@@ -245,9 +278,10 @@ final class ApplicationModel: ObservableObject {
             try await next.connect()
             guard generation == token else { return }
             if next.sourceID != cachedSourceID {
-                workspace = try database?.load(source: next.sourceID) ?? Workspace()
+                storageReady = false
+                workspace = try database?.loadLayered(source: next.sourceID, now: activityNow) ?? Workspace()
                 acknowledgments = try database?.acknowledgments(source: next.sourceID) ?? [:]
-                visibility = try database?.visibility(source: next.sourceID) ?? CanvasVisibility()
+                visibility = workspace.selectedVisibility; storageReady = database != nil
                 for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
             }
             next.restoreCachedResults(workspace.sessions)
@@ -264,6 +298,7 @@ final class ApplicationModel: ObservableObject {
         } catch {
             guard generation == token else { return }
             connected = false; connectionStatus = "Connection unavailable"
+            if !storageReady { hasUnsavedLayout = true }
             errorMessage = mode == .shared ? "No reachable shared Codex server. Select Codex desktop for local sessions, or configure the shared server's control socket. \(error.localizedDescription)" : error.localizedDescription
         }
     }
@@ -277,7 +312,7 @@ final class ApplicationModel: ObservableObject {
             guard generation == token else { return }
             connectionStatus = source.connectionStatus; hasLiveState = source.hasLiveState
             let hadContent = !workspace.sessions.isEmpty
-            let hadPlacements = !workspace.placements.isEmpty
+            let hadPlacements = !workspace.placements.isEmpty || workspace.layerState?.layouts.values.contains { !$0.placements.isEmpty } == true
             // Preserve cached notes when an inventory is incomplete or metadata-only discovery omits them.
             var merged = Dictionary(uniqueKeysWithValues: workspace.sessions.map { ($0.id, $0) })
             for session in snapshot.sessions {
@@ -304,6 +339,7 @@ final class ApplicationModel: ObservableObject {
         } catch {
             guard generation == token else { return }
             for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
+            persist()
             closeHiddenSelection()
             errorMessage = "Refresh failed; existing notes have been retained. \(error.localizedDescription)"
         }
@@ -359,6 +395,7 @@ final class ApplicationModel: ObservableObject {
         do {
             try database.acknowledge(source: sourceID, session: sessionID, result: result.id)
             acknowledgments[sessionID, default: []].insert(result.id)
+            persist()
             closeHiddenSelection()
         } catch { errorMessage = "Acknowledgment was not saved. Please retry. \(error.localizedDescription)" }
     }
@@ -378,6 +415,7 @@ final class ApplicationModel: ObservableObject {
             var next = acknowledgments
             for target in targets { next[target.session, default: []].insert(target.result) }
             acknowledgments = next
+            persist()
             closeHiddenSelection()
         } catch { errorMessage = "Acknowledgments were not saved. Please retry. \(error.localizedDescription)" }
     }
@@ -391,17 +429,18 @@ final class ApplicationModel: ObservableObject {
         do {
             try database.removeAcknowledgment(source: sourceID, session: sessionID, result: result.id)
             acknowledgments[sessionID]?.remove(result.id)
+            persist()
             closeHiddenSelection()
         } catch { errorMessage = "Result was not marked unread. Please retry. \(error.localizedDescription)" }
     }
-    func moveNote(id: String, position: Point, expectedRevision: String, explicitProjectAction: Bool = false) {
+    func moveNote(id: String, position: Point, expectedRevision: String, explicitProjectAction: Bool = false, explicitProjectID: String? = nil) {
         guard let session = workspace.sessions.first(where: { $0.id == id }), workspace.placements[id] != nil, !pendingSessions.contains(id), !isRefreshing else { return }
         guard session.revision == expectedRevision else { errorMessage = "The session changed during the drag. Its current placement was retained."; return }
-        let proposed = Placement(position), target = workspace.project(at: proposed.center)
+        let proposed = Placement(position), target = explicitProjectAction ? explicitProjectID : workspace.project(at: proposed.center)
         if let target, visibleRegions[target] == nil, !explicitProjectAction {
             errorMessage = "That project is hidden. Show it before moving a session there."; return
         }
-        if session.projectID == target { workspace.placements[id] = proposed; persist(); return }
+        if session.projectID == target { var next = workspace; next.placements[id] = proposed; _ = saveUserLayout(next); return }
         guard canAssignProject else {
             errorMessage = "Project moves are unavailable through this Codex connection. Move the chat in Codex; its project will sync here. The session stayed in its original project."
             objectWillChange.send(); return
@@ -410,7 +449,7 @@ final class ApplicationModel: ObservableObject {
             errorMessage = "The session changed during the drag. Its current placement was retained."; return
         }
         pendingSessions.insert(id)
-        let token = generation
+        let token = generation, moveLayer = selectedLayer, moveGeometry = geometryGeneration
         Task {
             defer { if generation == token { pendingSessions.remove(id) } }
             do {
@@ -423,11 +462,15 @@ final class ApplicationModel: ObservableObject {
                 guard workspace.sessions[index].projectID == session.projectID || workspace.sessions[index].projectID == target else {
                     throw CanvasError.message("The session moved to another project while this request was pending. Its current membership will be refreshed.")
                 }
+                let keepPosition = selectedLayer == moveLayer && geometryGeneration == moveGeometry
                 workspace.sessions[index].projectID = confirmed.projectID
                 workspace.sessions[index].projectMembershipConfirmation = confirmed.projectMembershipConfirmation
                 workspace.sessions[index].revision = confirmed.revision
                 workspace.sessions[index].updatedAt = confirmed.updatedAt
-                workspace.placements[id] = proposed
+                synchronizeLayers()
+                if keepPosition, layer(workspace.sessions[index]) == moveLayer, workspace.project(at: proposed.center) == target {
+                    workspace.placements[id] = proposed
+                }
                 persist()
             } catch {
                 guard generation == token else { return }
@@ -439,28 +482,29 @@ final class ApplicationModel: ObservableObject {
     }
     func moveToProject(id: String, projectID: String?) {
         guard let session = workspace.sessions.first(where: { $0.id == id }), !pendingSessions.contains(id), !isRefreshing else { return }
-        var copy = workspace
+        var copy = workspace.geometryProjection
         let placement = copy.vacantPlacement(projectID: projectID, excluding: id)
-        workspace.regions = copy.regions
-        moveNote(id: id, position: placement.position, expectedRevision: session.revision, explicitProjectAction: true)
+        // Source confirmation owns the membership change; speculative growth cannot alter saved geometry.
+        if !canAssignProject { errorMessage = "Project moves are unavailable through this Codex connection. Move the chat in Codex; its project will sync here. The session stayed in its original project."; return }
+        moveNote(id: id, position: placement.position, expectedRevision: session.revision, explicitProjectAction: true, explicitProjectID: projectID)
     }
     func editRegion(id: String, rect: Rect) {
         guard let original = workspace.regions[id] else { return }
         let delta = Point(rect.x - original.x, rect.y - original.y)
         var changes: [String: Placement] = [:]
-        for session in workspace.sessions where session.projectID == id {
+        for session in workspace.geometrySessions where session.projectID == id {
             if let placement = workspace.placements[session.id] { changes[session.id] = Placement(placement.position + delta) }
         }
         guard workspace.validateRegion(id: id, rect: rect, memberPositions: changes) else {
             errorMessage = "Regions cannot overlap, enclose unrelated notes, or exclude their member notes."; return
         }
-        workspace.regions[id] = rect
-        for (id, placement) in changes { workspace.placements[id] = placement }
-        persist()
+        var next = workspace; next.regions[id] = rect
+        for (id, placement) in changes { next.placements[id] = placement }
+        _ = saveUserLayout(next)
     }
     func beginCreation(at point: Point) {
         creationError = nil
-        creation = CreationContext(location: point, projectID: visibleProject(at: point))
+        creation = CreationContext(location: point, projectID: visibleProject(at: point), layer: selectedLayer)
     }
     func create(title: String, prompt: String, projectID: String?, cwd: String) async {
         guard let source, canCreate, let context = creation, !isCreating else { return }
@@ -477,15 +521,20 @@ final class ApplicationModel: ObservableObject {
             await refresh()
             guard generation == token else { return }
             let confirmed = workspace.sessions.first(where: { $0.id == session.id }) ?? session
-            workspace.placements[session.id] = workspace.vacantPlacement(projectID: confirmed.projectID, excluding: session.id, near: context.location)
+            synchronizeLayers()
+            let destination = layer(confirmed), crossedLayer = context.layer != destination
+            if selectedLayer != destination { selectLayer(destination, revealingCreation: true) }
+            workspace.placements[session.id] = workspace.vacantPlacement(projectID: confirmed.projectID, excluding: session.id, near: crossedLayer ? nil : context.location)
             creation = nil; persist()
-            revealCreatedSession(session.id, focus: confirmed.projectID != context.projectID)
+            revealCreatedSession(session.id, focus: crossedLayer || confirmed.projectID != context.projectID)
             if mode != .demo && result.warning == nil { openInCodex(session) }
             if let warning = result.warning { errorMessage = warning }
         } catch { if generation == token { creationError = error.localizedDescription } }
     }
     func revealCreatedSession(_ id: String, focus: Bool = true) {
-        guard workspace.sessions.contains(where: { $0.id == id }) else { return }
+        guard let session = workspace.sessions.first(where: { $0.id == id }) else { return }
+        let destination = layer(session)
+        if selectedLayer != destination { selectLayer(destination, revealingCreation: true) }
         revealedCreationID = id
         focusedProjectID = nil; focusedSessionID = focus ? id : nil
         if focus { focusRequest += 1 }
@@ -514,11 +563,29 @@ final class ApplicationModel: ObservableObject {
         }
     }
     func persist() {
+        synchronizeLayers()
         guard let source else { return }
         do {
-            guard let database else { throw CanvasError.message("Canvas storage is unavailable.") }
+            guard let database, storageReady else { throw CanvasError.message("Canvas storage is unavailable. Reconnect to retry.") }
             try database.save(workspace, source: source.sourceID)
-        } catch { errorMessage = "Changes are not saved. \(error.localizedDescription)" }
+            hasUnsavedLayout = false
+        } catch { hasUnsavedLayout = true; errorMessage = "Changes are not saved. \(error.localizedDescription)" }
+    }
+    @discardableResult private func saveUserLayout(_ next: Workspace) -> Bool {
+        do {
+            var saved = next; saved.rememberLayerLayout()
+            if let source {
+                guard let database, storageReady else { throw CanvasError.message("Canvas storage is unavailable. Reconnect to retry.") }
+                try database.save(saved, source: source.sourceID)
+            }
+            workspace = saved; visibility = saved.selectedVisibility; geometryGeneration += 1
+            hasUnsavedLayout = false
+            return true
+        } catch { errorMessage = "Layout was not changed. \(error.localizedDescription)"; return false }
+    }
+    func retryLayoutSave() {
+        if storageReady { persist() }
+        else { Task { await connect() } }
     }
     func saveSettings() {
         if let data = try? JSONEncoder().encode(settings) { UserDefaults.standard.set(data, forKey: "connectionSettings") }

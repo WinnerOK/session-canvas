@@ -20,6 +20,10 @@ _Avoid_: Session, card, task
 The spatial workspace containing session notes and project regions.
 _Avoid_: Board, project
 
+**Canvas layer**:
+One exclusive spatial population of sessions. Active sessions contain current work and recent Idle sessions; Stale sessions contain Idle sessions past Hide Idle after; Inactive sessions contain Archived and Unknown sessions. Project bounds, note positions, viewports, and visibility choices are independent per layer; source identities and actual project membership are shared.
+_Avoid_: Execution state, project, board
+
 **Project**:
 A named grouping to which a session may belong.
 _Avoid_: Region, working directory, repository

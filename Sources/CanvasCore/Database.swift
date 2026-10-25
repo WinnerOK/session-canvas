@@ -10,6 +10,7 @@ public final class CanvasDatabase {
         try execute("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;")
         try execute("CREATE TABLE IF NOT EXISTS workspace (source TEXT PRIMARY KEY, payload BLOB NOT NULL); CREATE TABLE IF NOT EXISTS acknowledgments (source TEXT NOT NULL, session TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(source,session,result)); PRAGMA user_version=1;")
         try execute("CREATE TABLE IF NOT EXISTS canvas_visibility (source TEXT PRIMARY KEY, payload BLOB NOT NULL); PRAGMA user_version=2;")
+        try execute("CREATE TABLE IF NOT EXISTS layer_migration_backup (source TEXT PRIMARY KEY, workspace BLOB NOT NULL, visibility BLOB); PRAGMA user_version=3;")
     }
     deinit { sqlite3_close(db) }
     private func execute(_ sql: String) throws {
@@ -22,7 +23,9 @@ public final class CanvasDatabase {
         return value
     }
     public func save(_ workspace: Workspace, source: String) throws {
-        let data = try JSONEncoder().encode(workspace)
+        var snapshot = workspace
+        snapshot.rememberLayerLayout()
+        let data = try JSONEncoder().encode(snapshot)
         let stmt = try statement("INSERT INTO workspace(source,payload) VALUES(?,?) ON CONFLICT(source) DO UPDATE SET payload=excluded.payload")
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, source, -1, transient)
@@ -37,6 +40,30 @@ public final class CanvasDatabase {
         if status == SQLITE_DONE { return Workspace() }
         guard status == SQLITE_ROW, let bytes = sqlite3_column_blob(stmt, 0) else { throw failure() }
         return try JSONDecoder().decode(Workspace.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0))))
+    }
+    /// Convert only Canvas-owned records; the original payloads survive for explicit recovery.
+    public func loadLayered(source: String, now: Date = Date()) throws -> Workspace {
+        var workspace = try load(source: source)
+        guard workspace.layerState == nil else { return workspace }
+        let legacy = try visibility(source: source)
+        let hasLegacy = try hasWorkspace(source: source)
+        workspace.reconcileLayers(acknowledgments: try acknowledgments(source: source), now: now, legacyVisibility: hasLegacy ? legacy : nil)
+        try execute("BEGIN IMMEDIATE")
+        do {
+            let stmt = try statement("INSERT OR IGNORE INTO layer_migration_backup(source,workspace,visibility) SELECT w.source,w.payload,v.payload FROM workspace w LEFT JOIN canvas_visibility v ON w.source=v.source WHERE w.source=?")
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_text(stmt, 1, source, -1, transient)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw failure() }
+            try save(workspace, source: source)
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+        return workspace
+    }
+    private func hasWorkspace(source: String) throws -> Bool {
+        let stmt = try statement("SELECT 1 FROM workspace WHERE source=?")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, source, -1, transient)
+        return sqlite3_step(stmt) == SQLITE_ROW
     }
     public func acknowledge(source: String, session: String, result: String) throws {
         try acknowledge(source: source, results: [(session, result)])

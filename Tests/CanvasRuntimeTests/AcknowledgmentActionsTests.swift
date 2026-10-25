@@ -21,6 +21,7 @@ struct AcknowledgmentActionsTests {
         for index in model.workspace.sessions.indices where model.workspace.sessions[index].execution == .running {
             model.workspace.sessions[index].latestResult = SessionResult(id: "active-old/" + model.workspace.sessions[index].id, outcome: .completed, text: "Earlier result")
         }
+        model.synchronizeLayers()
         let original = model.workspace
         let finished = original.sessions.filter { model.state($0) == .finished }
         #expect(finished.count == 3)
@@ -40,7 +41,8 @@ struct AcknowledgmentActionsTests {
                 #expect((model.acknowledgments[session.id] ?? []).contains(result.id) == finished.contains(where: { $0.id == session.id }))
             }
         }
-        #expect(model.workspace == original)
+        #expect(model.workspace.sessions == original.sessions)
+        #expect(model.workspace.placements == original.placements && model.workspace.regions == original.regions)
         #expect(model.acknowledgeAllCount == 0)
         #expect(!model.canAcknowledgeAll)
         let stored = model.acknowledgments
@@ -79,6 +81,11 @@ struct AcknowledgmentActionsTests {
         case .finished: model.workspace.sessions[index].latestResult = SessionResult(id: "new", outcome: .completed, text: "Newer result")
         case .idle: break
         }
+        model.synchronizeLayers()
+        let destination = model.layer(model.workspace.sessions[index])
+        model.selectLayer(destination)
+        model.selectedSessionID = "demo-state"
+        model.history = [HistoryEntry(id: result.id, role: "Codex", text: result.text, result: result)]
         let original = model.workspace
         #expect(model.state(model.workspace.sessions[index]) == state)
         model.isLoadingHistory = true
@@ -89,7 +96,8 @@ struct AcknowledgmentActionsTests {
         #expect(model.canMarkUnread(result, sessionID: "demo-state"))
         model.markUnread(result, sessionID: "demo-state")
         #expect(model.acknowledgments["demo-state"]?.contains(result.id) == false)
-        #expect(model.workspace == original)
+        #expect(model.workspace.sessions == original.sessions)
+        #expect(model.workspace.placements == original.placements && model.workspace.regions == original.regions)
         #expect(model.state(model.workspace.sessions[index]) == (state == .idle ? .finished : state))
         #expect(!model.canMarkUnread(result, sessionID: "demo-state"))
         model.markUnread(result, sessionID: "demo-state")

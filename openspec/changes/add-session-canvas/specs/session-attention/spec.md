@@ -4,6 +4,8 @@
 
 Show which sessions are working or need attention, and preserve notice of a terminal result until the user explicitly acknowledges that result.
 
+Canvas geometry, visible populations, filters, overview, and gestures below refer to the selected layer defined by [session-layers](../../../add-session-layers/specs/session-layers/spec.md). Source identities, actual memberships, results, and acknowledgments remain shared; explicitly source-wide actions keep that scope.
+
 ## ADDED Requirements
 
 ### Requirement: Deterministic note state

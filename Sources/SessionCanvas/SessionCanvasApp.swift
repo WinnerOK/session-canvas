@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CanvasCore
 
 @main
 struct SessionCanvasApp: App {
@@ -29,7 +30,7 @@ struct SessionCanvasApp: App {
                 Button("Toggle Sidebar") { model.toggleSidebar() }.keyboardShortcut("s", modifiers: [.command, .shift])
                 Divider()
                 Button("Fit to Content") { model.fitRequest += 1 }.keyboardShortcut("0")
-                Button("Show All Sessions") { model.showAllSessions() }.keyboardShortcut("1")
+                Button("Show All in This Layer") { model.showAllSessions() }.keyboardShortcut("1")
             }
         }
     }
@@ -38,6 +39,8 @@ struct SessionCanvasApp: App {
         guard let index = args.firstIndex(of: "--capture"), index + 1 < args.count else { return }
         let path = args[index + 1]
         Task { @MainActor in
+            if let layerIndex = args.firstIndex(of: "--layer"), layerIndex + 1 < args.count,
+               let layer = CanvasLayer(rawValue: args[layerIndex + 1]) { model.selectLayer(layer) }
             if args.contains("--show-result"), model.mode == .demo {
                 model.openSession("demo-state")
                 await model.loadHistory(older: false)

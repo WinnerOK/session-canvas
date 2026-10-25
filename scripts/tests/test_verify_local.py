@@ -15,6 +15,11 @@ spec.loader.exec_module(verify)
 
 
 class VerificationTests(unittest.TestCase):
+    def test_layer_preview_accepts_one_layer_and_rejects_combined_mode(self):
+        for layer in ("active", "stale", "inactive"):
+            self.assertEqual(verify.parser().parse_args(["preview", "--layer", layer]).layer, layer)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            verify.parser().parse_args(["preview", "--layer", "all"])
     def test_swift_build_concurrency_is_bounded(self):
         args = verify.parser().parse_args(["test"])
         command = verify.swift_command(args, "test")

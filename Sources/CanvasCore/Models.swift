@@ -223,11 +223,17 @@ public struct Workspace: Codable, Equatable, Sendable {
     public var viewport = Viewport()
     public var sessions: [Session] = []
     public var projects: [Project] = []
+    public var layerState: LayerState?
     public init() {}
     public func project(at point: Point) -> String? {
         regions.keys.sorted().first { regions[$0]?.contains(point) == true }
     }
     public mutating func reconcile(sessions incoming: [Session], projects: [Project]) {
+        if layerState != nil {
+            rememberLayerLayout()
+            self.sessions = incoming; self.projects = projects
+            return
+        }
         self.projects = projects
         let old = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
         sessions = incoming
@@ -249,8 +255,9 @@ public struct Workspace: Codable, Equatable, Sendable {
             return placement
         }
         if let id = projectID, var region = regions[id] {
-            for index in 0..<300 {
-                let column = index % 3, row = index / 3
+            for index in 0..<max(300, placements.count * 4 + 1) {
+                let columns = max(1, min(3, Int((region.width - 20) / 250)))
+                let column = index % columns, row = index / columns
                 let candidate = Placement(Point(region.x + 20 + Double(column) * 250, region.y + 64 + Double(row) * 172))
                 if !occupied.contains(where: { candidate.rect.intersects($0) }) {
                     let desiredHeight = max(region.height, candidate.position.y + Placement.height + 24 - region.y)
@@ -270,7 +277,7 @@ public struct Workspace: Codable, Equatable, Sendable {
                             placements.values.map { $0.position.x + Placement.width }.max() ?? 0) + 100
             let delta = Point(right - region.x, -region.y)
             regions[id] = Rect(right, 0, max(760, region.width), region.height + 200)
-            for session in sessions where session.projectID == id && session.id != excluding {
+            for session in geometrySessions where session.projectID == id && session.id != excluding {
                 if let placement = placements[session.id] { placements[session.id] = Placement(placement.position + delta) }
             }
             return vacantPlacement(projectID: id, excluding: excluding)
@@ -321,9 +328,9 @@ public struct Workspace: Codable, Equatable, Sendable {
         return best
     }
     public func validateRegion(id: String, rect: Rect, memberPositions: [String: Placement]) -> Bool {
-        guard rect.width >= 300, rect.height >= 240 else { return false }
+        guard [rect.x, rect.y, rect.width, rect.height, rect.x + rect.width, rect.y + rect.height].allSatisfy(\.isFinite), rect.width >= 300, rect.height >= 240 else { return false }
         if regions.contains(where: { $0.key != id && $0.value.intersects(rect) }) { return false }
-        for session in sessions {
+        for session in geometrySessions {
             guard let placement = memberPositions[session.id] ?? placements[session.id] else { continue }
             if rect.contains(placement.center) != (session.projectID == id) { return false }
         }
