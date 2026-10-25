@@ -365,12 +365,13 @@ final class CanvasNSView: NSView {
             }
             let move = NSMenu(title: "Move to project")
             move.autoenablesItems = false
-            for project in model.visibleProjects {
+            let canMove = model.canAssignProject && !model.pendingSessions.contains(id) && !model.isRefreshing
+            for project in model.workspace.projects {
                 let item = NSMenuItem(title: project.name, action: #selector(moveContext(_:)), keyEquivalent: "")
-                item.representedObject = project.id; item.target = self; item.isEnabled = model.canAssignProject; move.addItem(item)
+                item.representedObject = project.id; item.target = self; item.isEnabled = canMove; move.addItem(item)
             }
             let remove = NSMenuItem(title: "Remove from project", action: #selector(moveContext(_:)), keyEquivalent: "")
-            remove.target = self; remove.isEnabled = model.canAssignProject; move.addItem(remove)
+            remove.target = self; remove.isEnabled = canMove; move.addItem(remove)
             let parent = NSMenuItem(title: "Move to project", action: nil, keyEquivalent: ""); parent.submenu = move; menu.addItem(parent)
         } else {
             let create = NSMenuItem(title: "New session here…", action: #selector(createContext), keyEquivalent: ""); create.target = self; menu.addItem(create)

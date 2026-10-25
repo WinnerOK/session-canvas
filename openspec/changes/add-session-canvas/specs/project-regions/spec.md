@@ -19,7 +19,7 @@ The canvas SHALL display one region per visible source project, using stable pro
 - **THEN** the existing region's label changes without creating another region or resetting its bounds
 
 ### Requirement: Project discovery uses explicit source identity
-Projects and memberships SHALL come from source identities or validated desktop metadata, never from matching working directories or names. Explicit unassignment and remote/unknown exclusions SHALL take precedence over fallback mappings. Unsupported metadata SHALL retain confirmed canvas state and report an error. Mapping between desktop and server project IDs SHALL use only the connected local home's identity mapping.
+Projects and memberships SHALL use explicit source identity, never cwd/name matching. On supported metadata APIs, server project/null SHALL precede stale local assignments; older sources SHALL honor explicit legacy unassignment. Remote/unknown exclusions SHALL persist. Unsupported metadata SHALL retain confirmed state and report an error. Desktop/server mapping SHALL use only the connected local home.
 
 #### Scenario: A session shares a project's working folder
 - **WHEN** a session has the same working folder as a project but no explicit membership, or is explicitly projectless
@@ -60,6 +60,12 @@ On a source supporting confirmed membership changes, a completed drop into a dif
 - **WHEN** the user drops an A session into B's region
 - **THEN** the app requests direct reassignment from A to B without a deliberate intermediate unassignment
 
+#### Scenario: Verify the desktop metadata update
+- **WHEN** a recognized desktop connection supports the verified project-update contract
+- **THEN** the app confirms the target project and current thread metadata, sends only threadId/projectId to metadata/update, and reads back the same thread's project and cwd before committing coordinates
+- **AND** an empty project string removes membership, without resuming the thread or changing execution settings
+- **AND** stale preflight or mismatched readback reconciles current source facts without applying the proposed coordinates or automatically repeating the mutation
+
 #### Scenario: Remove a session's project
 - **WHEN** the user drops an assigned note into unassigned space and the source confirms removal
 - **THEN** the session has no project in Codex and its note remains outside every region
@@ -73,7 +79,7 @@ When a connection cannot confirm actual membership mutations, move-to-project co
 - **AND** no source mutation or canvas-only reassignment is submitted
 
 ### Requirement: Membership requires confirmation
-While a membership change is pending, the UI SHALL distinguish the proposed placement from confirmed membership and prevent another membership change for that session. On success it SHALL commit the placement. On rejection it SHALL restore the last confirmed placement and explain the failure.
+While a membership change is pending, the UI SHALL show a pending indicator, retain confirmed coordinates, and prevent another membership change for that session. On success it SHALL commit the placement. On rejection it SHALL retain confirmed placement or reconcile newer source membership and explain the failure.
 
 #### Scenario: The source rejects a project move
 - **WHEN** an assignment operation is rejected, including because the source forbids moving that active session
@@ -139,3 +145,4 @@ The UI SHALL provide an accessible move-to-project action and a remove-from-proj
 #### Scenario: Assign without dragging
 - **WHEN** the user chooses project B through a focused note's accessible project action
 - **THEN** the same confirmed reassignment occurs and the note is placed in available space in B's region
+- **AND** an explicitly chosen hidden/empty project may be targeted without treating an invisible spatial region as a drop target

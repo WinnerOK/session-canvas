@@ -44,7 +44,7 @@ protocol SessionSource: AnyObject {
     func connect() async throws
     func snapshot() async throws -> (sessions: [Session], projects: [Project])
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage
-    func assign(sessionID: String, projectID: String?, revision: String) async throws
+    func assign(sessionID: String, projectID: String?, revision: String) async throws -> Session
     func setArchived(sessionID: String, archived: Bool) async throws
     func creationDirectory(projectID: String) -> String?
     func create(title: String, prompt: String, projectID: String?, cwd: String) async throws -> CreatedSession
@@ -67,7 +67,7 @@ extension SessionSource {
 final class CodexSource: SessionSource {
     let mode: SourceMode
     private(set) var sourceID: String
-    let canAssignProject = false
+    private(set) var canAssignProject = false
     let canArchive = true
     private(set) var canCreate = false
     private(set) var creationUnavailableReason = "This Codex connection cannot create sessions in projects. Select the desktop-bundled Codex executable in Connection settings and reconnect."
@@ -105,6 +105,7 @@ final class CodexSource: SessionSource {
     private var codexHome: String
     private var desktopProjects: DesktopProjectCatalog?
     private var serverProjectsBySession: [String: String] = [:]
+    private var knownServerMemberships: Set<String> = []
     private var creating = false
     private var creationWorker: RPCConnection?
     private let workingDirectoryBase: URL
@@ -138,6 +139,7 @@ final class CodexSource: SessionSource {
         // Keep older/custom servers usable for browsing without sending an unverified create.
         if mode == .history, let response = try? await rpc.request("project/list", ["limit": .number(1)]), case .array = response["data"] {
             canCreate = true
+            canAssignProject = Self.supportsProjectMoves(userAgent: initialized["userAgent"].string ?? "")
         }
         if mode == .history && observeDesktop { desktop.start(codexHome: codexHome) }
     }
@@ -160,9 +162,10 @@ final class CodexSource: SessionSource {
                         hidden.insert(id)
                         continue
                     }
-                    var session = try CodexWire.session(value, live: mode == .shared)
+                    var session = try decodeSession(value)
                     session.archived = archived
                     serverProjectsBySession[session.id] = value["projectId"].string
+                    if value.object.keys.contains("projectId") { knownServerMemberships.insert(session.id) }
                     if let path = value["path"].string { rolloutPaths[session.id] = path }
                     session.latestResult = previous[session.id]?.latestResult ?? cachedResults[session.id] ?? session.latestResult
                     result[session.id] = session
@@ -173,12 +176,12 @@ final class CodexSource: SessionSource {
         }
         // Read only the connected home's exact metadata file; project identity is independent of cwd.
         if let catalog = try DesktopProjectCatalog.read(codexHome: codexHome) { desktopProjects = catalog }
-        for id in result.keys { result[id]?.projectID = desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id]) }
+        for id in result.keys { result[id]?.projectID = mappedProjectID(for: id) }
         for (id, value) in result { previous[id] = value }
         hiddenSessionIDs.formUnion(hidden)
         for id in removed.union(hiddenSessionIDs) { previous.removeValue(forKey: id) }
         // Reapply assignments for retained sessions too, including external project moves/removals.
-        for id in previous.keys { previous[id]?.projectID = desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id]) }
+        for id in previous.keys { previous[id]?.projectID = mappedProjectID(for: id) }
         let availableIDs = Set(previous.keys)
         desktop.observe(observedSessionIDs.map { availableIDs.intersection($0) } ?? availableIDs)
         // Bound parallel metadata reads; unchanged source revisions reuse saved evidence.
@@ -316,7 +319,7 @@ final class CodexSource: SessionSource {
                 let value = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(true)])
                 let thread = value["thread"]
                 guard thread["id"].string == sessionID else { throw CanvasError.message("Codex returned history for a different session.") }
-                let session = try CodexWire.session(thread, live: mode == .shared)
+                let session = try decodeSession(thread)
                 if cursor == nil { observation = observeLatestHistory(sessionID: sessionID, turns: thread["turns"].array, baseline: baseline, fileRevision: fileRevision, metadata: session) }
                 if stateOnly { return HistoryPage(entries: [], sessionObservation: observation) }
                 legacyHistory[sessionID] = CodexWire.history(thread["turns"].array, sessionID: sessionID)
@@ -358,8 +361,90 @@ final class CodexSource: SessionSource {
         savedFileRevisions[sessionID] = fileRevision
         return applyingObservations(to: session)
     }
-    func assign(sessionID: String, projectID: String?, revision: String) async throws {
-        throw CanvasError.message("Moving existing sessions between projects is not enabled for this connection. Move the session in Codex, then refresh this canvas.")
+    static func supportsProjectMoves(userAgent: String) -> Bool {
+        // The generated 0.164.0-alpha.11.1 schema and isolated server verify projectId
+        // on metadata/update. Older servers can silently ignore unknown fields.
+        let pattern = #"^(?:Codex Desktop|codex_cli_rs)/(\d+)\.(\d+)\.(\d+)(?:-alpha\.(\d+)\.(\d+))?(?: |$)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: userAgent, range: NSRange(userAgent.startIndex..., in: userAgent)) else { return false }
+        func number(_ index: Int) -> Int? { Range(match.range(at: index), in: userAgent).flatMap { Int(userAgent[$0]) } }
+        guard let major = number(1), let minor = number(2), let patch = number(3) else { return false }
+        if major != 0 { return major > 0 }
+        if minor != 164 { return minor > 164 }
+        if patch != 0 { return patch > 0 }
+        guard let alpha = number(4), let build = number(5) else { return true }
+        return alpha > 11 || alpha == 11 && build >= 1
+    }
+    private func mappedProjectID(for id: String) -> String? {
+        desktopProjects?.projectID(for: id, serverProjectID: serverProjectsBySession[id],
+                                   authoritativeServer: canAssignProject && knownServerMemberships.contains(id))
+    }
+    private func decodeSession(_ value: JSONValue) throws -> Session {
+        var session = try CodexWire.session(value, live: mode == .shared)
+        if canAssignProject && value.object.keys.contains("projectId") {
+            session.revision += "|project:" + (value["projectId"].string ?? "none")
+        }
+        return session
+    }
+    private func recordMembership(_ thread: JSONValue, sessionID: String) throws {
+        guard thread["id"].string == sessionID, thread.object.keys.contains("projectId"),
+              thread["projectId"] == .null || thread["projectId"].string != nil else {
+            throw CanvasError.message("Codex did not return confirmed session membership. Refresh before retrying the move.")
+        }
+        knownServerMemberships.insert(sessionID)
+        serverProjectsBySession[sessionID] = thread["projectId"].string
+        previous[sessionID]?.projectID = mappedProjectID(for: sessionID)
+    }
+    func assign(sessionID: String, projectID: String?, revision: String) async throws -> Session {
+        guard canAssignProject, let baseline = previous[sessionID], baseline.revision == revision else {
+            throw CanvasError.message("Project moves require a current session and a supported desktop Codex connection. Refresh or reconnect before retrying.")
+        }
+        if let catalog = try DesktopProjectCatalog.read(codexHome: codexHome) { desktopProjects = catalog }
+        guard desktopProjects?.allowsLocalMembership(for: sessionID) == true else {
+            throw CanvasError.message("This session has no confirmed local project membership. Organize it in its owning Codex host.")
+        }
+        let serverID: String?
+        if let projectID {
+            guard let mapped = desktopProjects?.serverProjectID(for: projectID) else { throw CanvasError.message("That project has no confirmed local Codex identity. Refresh before retrying.") }
+            let project = try await rpc.request("project/read", ["projectId": .string(mapped)])["project"]
+            guard project["id"].string == mapped else { throw CanvasError.message("Codex could not confirm the destination project.") }
+            serverID = mapped
+        } else { serverID = nil }
+        let before = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(false)])["thread"]
+        let expectedServerID = serverProjectsBySession[sessionID] ?? baseline.projectID.flatMap { desktopProjects?.serverProjectID(for: $0) }
+        try recordMembership(before, sessionID: sessionID)
+        guard before["projectId"].string == expectedServerID,
+              try decodeSession(before).revision == revision,
+              before["cwd"].string == baseline.cwd else {
+            throw CanvasError.message("The session changed before the move. Its current Codex project was retained; refresh and try again.")
+        }
+        var mutationError: Error?
+        do { _ = try await rpc.request("thread/metadata/update", ["threadId": .string(sessionID), "projectId": .string(serverID ?? "")]) }
+        catch {
+            mutationError = error
+            if let failure = error as? RPCFailure, [-32601, -32602].contains(failure.code) { canAssignProject = false }
+        }
+        // Read back even after a rejected/lost reply. Never repeat a mutation to discover
+        // its outcome, and never resume or alter the session's execution settings.
+        let after: JSONValue
+        do {
+            after = try await rpc.request("thread/read", ["threadId": .string(sessionID), "includeTurns": .bool(false)])["thread"]
+            try recordMembership(after, sessionID: sessionID)
+        } catch {
+            throw CanvasError.message("The project move could not be confirmed. Refresh to reconcile Codex membership before retrying; the request was not repeated.")
+        }
+        guard after["projectId"].string == serverID, mappedProjectID(for: sessionID) == projectID,
+              after["cwd"] == before["cwd"] else {
+            throw CanvasError.message(mutationError == nil ? "Codex did not retain the requested project. Its current membership will be refreshed." : "Codex rejected the project move. Its current membership will be refreshed.")
+        }
+        var confirmed = try decodeSession(after)
+        confirmed.projectID = projectID
+        // Metadata-only organization does not replace current work/result evidence.
+        confirmed.execution = baseline.execution; confirmed.requests = baseline.requests
+        confirmed.latestResult = previous[sessionID]?.latestResult ?? baseline.latestResult
+        confirmed.archived = baseline.archived
+        previous[sessionID] = confirmed
+        return applyingObservations(to: confirmed)
     }
     func creationDirectory(projectID: String) -> String? { desktopProjects?.rootPaths(for: projectID).first }
     func create(title: String, prompt: String, projectID: String?, cwd: String) async throws -> CreatedSession {
@@ -448,7 +533,8 @@ final class CodexSource: SessionSource {
         } catch { warning = "The session was created, but opening its saved history could not be confirmed. Check this session in Codex before creating a replacement." }
         await worker.stopAndWait()
         serverProjectsBySession[id] = confirmed["projectId"].string
-        var session = try CodexWire.session(confirmed, live: false)
+        if confirmed.object.keys.contains("projectId") { knownServerMemberships.insert(id) }
+        var session = try decodeSession(confirmed)
         session.projectID = desktopProjects?.projectID(for: id, serverProjectID: confirmed["projectId"].string)
         if confirmed["projectId"].string != expectedServerProject || session.projectID != projectID {
             warning = "The session was created, but Codex did not confirm the selected project. Open it in Codex to check its project."
@@ -517,11 +603,12 @@ final class DemoSource: SessionSource {
         else { entries.append(HistoryEntry(id: sessionID + "/progress", role: "Codex", text: session.requests.isEmpty ? "This demo session is working through its task." : "This demo session needs your attention. In a connected workspace, use Open in Codex to respond.")) }
         return HistoryPage(entries: entries)
     }
-    func assign(sessionID: String, projectID: String?, revision: String) async throws {
+    func assign(sessionID: String, projectID: String?, revision: String) async throws -> Session {
         guard let i = sessions.firstIndex(where: { $0.id == sessionID }), sessions[i].revision == revision else { throw CanvasError.message("The session changed during your drag. Please try again.") }
         if let projectID, !projects.contains(where: { $0.id == projectID }) { throw CanvasError.message("That project no longer exists.") }
         try await Task.sleep(for: .milliseconds(220))
         sessions[i].projectID = projectID; sessions[i].revision = UUID().uuidString
+        return sessions[i]
     }
     func create(title: String, prompt: String, projectID: String?, cwd: String) async throws -> CreatedSession {
         let session = Session(id: UUID().uuidString, title: title.isEmpty ? String(prompt.prefix(60)) : title, projectID: projectID, cwd: cwd, execution: .running)

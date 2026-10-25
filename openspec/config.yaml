@@ -9,6 +9,7 @@ context: |
   Opening a session never acknowledges its result. Viewer acknowledgment requires a loaded unread result in Finished; Acknowledge all explicitly records the latest known results of all Finished sessions in the current source, including filtered notes, without loading viewers. Recheck eligibility and persist a bulk snapshot atomically.
   Mark as unread reverses one known acknowledgment from the viewer in any session state, preserving execution, requests, source membership, and other results.
   Project regions represent actual Codex project membership, not canvas-only tags or working directories.
+  Desktop CLI metadata/update projectId supports confirmed existing-session assignment/reassignment/removal from verified 0.164.0-alpha.11.1. Preflight current identity/revision/membership/cwd, send only threadId/projectId (empty string clears), and read back before applying coordinates. Explicit server membership/null precedes stale legacy local metadata on supported connections; remote exclusions remain. Older/unknown/shared sources retain disabled moves. No thread resume or execution-setting change; no automatic mutation retry. Atomic external-write protection and durable pending recovery remain open.
   The selected delivery is a Mac-only SwiftUI/AppKit companion with a session/result viewer and SQLite storage.
   Do not introduce a web renderer or a cross-platform shell for this application.
   The default source combines saved discovery/history with read-only live desktop observations and explicit project identities.
