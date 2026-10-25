@@ -9,8 +9,9 @@ struct ProjectMembershipTests {
     @Test func moveSupportRequiresVerifiedDesktopVersion() {
         for version in ["0.164.0-alpha.11.1", "0.164.0", "0.165.0-alpha.1.0", "1.0.0"] {
             #expect(CodexSource.supportsProjectMoves(userAgent: "Codex Desktop/" + version + " (Mac OS; arm64)"))
+            #expect(CodexSource.supportsProjectMoves(userAgent: "session_canvas/" + version + " (Mac OS; arm64) dumb (session_canvas; 0.1.0)"))
         }
-        for agent in ["", "custom/1.0.0", "Codex Desktop/0.163.0-alpha.11.2", "Codex Desktop/0.164.0-alpha.10.9", "Codex Desktop/0.164.0-alpha.11.0"] {
+        for agent in ["", "custom/1.0.0", "Codex Desktop/0.163.0-alpha.11.2", "Codex Desktop/0.164.0-alpha.10.9", "Codex Desktop/0.164.0-alpha.11.0", "session_canvas/0.163.0-alpha.11.2 (Mac OS) dumb (session_canvas; 0.1.0)", "session_canvas/0.1.0 (Mac OS)"] {
             #expect(!CodexSource.supportsProjectMoves(userAgent: agent))
         }
     }
@@ -201,6 +202,8 @@ struct ProjectMembershipTests {
         home = str(pathlib.Path(__file__).parent)
         os.environ["CODEX_HOME"] = home
         os.environ["CODEX_SQLITE_HOME"] = home
+        # Finder-launched Canvas has no parent Codex originator override.
+        os.environ.pop("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", None)
         executable = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
         os.execv(executable, [executable] + sys.argv[1:])
         """#
@@ -288,7 +291,7 @@ private struct MembershipFixture {
             method, params = req["method"], req.get("params", {})
             behavior = (home / "behavior").read_text() if (home / "behavior").exists() else "normal"
             error = None
-            if method == "initialize": result = {"codexHome": str(home), "userAgent": "Codex Desktop/0.164.0-alpha.11.1 (Mac OS; arm64)"}
+            if method == "initialize": result = {"codexHome": str(home), "userAgent": "session_canvas/0.164.0-alpha.11.1 (Mac OS; arm64) dumb (session_canvas; 0.1.0)"}
             elif method == "project/list": result = {"data": []}
             elif method == "project/read": result = {"project": {"id": params["projectId"]}}
             elif method == "thread/list":

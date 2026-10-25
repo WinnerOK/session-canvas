@@ -49,6 +49,20 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 
 ## Evidence scope and entry points
 
+### Native-launch project-move detection, 2026-10-25
+
+The user's 16:14 recording shows the new unsupported-move alert after dropping a projectless session into a project. The request never reaches metadata/update because canAssignProject is false. The earlier installed-server check inherited `CODEX_INTERNAL_ORIGINATOR_OVERRIDE` from Codex, giving initialization a `Codex Desktop/<server-version>` prefix. A normally launched Canvas client receives `session_canvas/<server-version>` instead. The initial regex accepted desktop/CLI origin names only, so successful raw API verification did not prove normal-launch adapter availability.
+
+The reproducer is `python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py test --real-source --filter installedServerPersistsExistingSessionProjectMovesInIsolation --jobs 1` with the test wrapper removing that override. Before the fix, raw assignment/reassignment/removal passed, while the source failed `source.canAssignProject` and threw `Project moves require a current session and a supported desktop Codex connection. Refresh or reconnect before retrying.` The clean test's own initialization returned `session_canvas_membership_test/0.164.0-alpha.11.1 ... (session_canvas_membership_test; 0.1.0)`, confirming that the prefix names the client while the first version is the runtime version.
+
+The parser now also accepts the exact production `session_canvas` prefix while retaining the existing minimum version and unsupported-source guards. The version test covers both launch forms and rejects old native-prefixed servers and the Canvas client version alone. Source/model fixtures now return the native form. The installed test permanently removes the originator override and passes the same real source adapter and durable project-move round trips with temporary config/SQLite homes. Temporary user-agent prints were removed. No desktop observer or user's store was used.
+
+All seven targeted membership checks, including the clean installed-server check, passed. The full offline run passed **122 executed Swift tests** (48 core, 78 runtime reported, four opt-in checks skipped). Release compilation with one job, strict bundle signature, strict OpenSpec validation, whitespace, and 139 affected local document links passed. This verifies the reproduced launch-context failure; broader live-host presentation, native navigation, atomic external-write protection, and durable pending-operation recovery retain their prior open gates.
+
+| User correction | Contract | Verification |
+| --- | --- | --- |
+| Project transfer still reports unsupported in a normal application launch | [Detect support during a normal native launch](specs/project-regions/spec.md#scenario-detect-support-during-a-normal-native-launch) | [ProjectMembershipTests](../../../Tests/CanvasRuntimeTests/ProjectMembershipTests.swift): clean installed child first fails availability, then passes actual adapter moves; native-form version, source, model/menu, stale/failure, and persistence checks pass. |
+
 ### Existing-session project moves, 2026-10-25
 
 The user's cross-project drop hit an intentional unsupported-source guard. The installed desktop CLI has since advanced to **0.164.0-alpha.11.1**. Its generated experimental `ThreadMetadataUpdateParams` includes `projectId` (existing ID assigns; empty string removes; omission preserves). The official App Server guide documents metadata/update generally but does not establish this version-specific field; the installed schema and isolated server provide that evidence. The adapter now gates moves on recognized desktop version and project API availability, confirms the exact local destination, preflights thread identity/revision/membership/cwd, sends only threadId/projectId, and independently reads the thread back before committing placement. Shared/older/unknown connections retain the unsupported guard.
