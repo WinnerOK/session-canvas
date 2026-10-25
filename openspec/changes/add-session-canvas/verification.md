@@ -82,6 +82,8 @@ The initial implementation did not write to GitHub. In the user's subsequent com
 
 ## Remaining acceptance gates
 
+Hosted follow-up: [run 40136561569](https://github.com/WinnerOK/session-canvas/actions/runs/40136561569) compiled the Swift 6.1 application and test runner on both architectures, confirming the explicit numeric conversion. Both jobs then stalled before any Swift Testing event and were cancelled at the 25-minute job limit. OpenSpec and Python checks passed. A temporary 180-second diagnostic wrapper captures only its owned test-process stacks to distinguish test-runner startup, AppKit initialization, and main-thread execution; hosted acceptance remains open until the full suite completes.
+
 The following are not completed by documenting the corrections or by a green structural validation:
 
 - **Hosted CI/release acceptance:** first GitHub PR checks on both architectures and draft release upload after pushing the workflow files; actual runner/toolchain availability and repository token policy remain unverified. Task 9.5.
