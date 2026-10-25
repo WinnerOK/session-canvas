@@ -23,3 +23,7 @@ Preview defaults to a fresh demo database and verifies a newly written PNG. Use 
 ## Protect the running desktop during verification
 
 Use fixtures and demo captures first. Installed inventory checks must disable desktop observation. Running `test --live-desktop` or `preview --source desktop` requires explicit user authorization for that specific run; standing build/test permissions do not grant it. After a hung live check, stop its proven test-owned processes and continue with fixtures. Preserve ChatGPT and unrelated processes. See [verification safety](docs/native-application.md#verification-safety) before any live check.
+
+## Git and GitHub delivery
+
+The user has authorized routine task-branch creation, staging, commits, ordinary branch pushes, and GitHub PR creation/updates without further conversation-level confirmation during coding tasks. This project instruction records that authorization; the attempted global instruction/command-rule installation was declined and is not active. Read [the delivery workflow](docs/git-workflow.md) for current setup status. Use `codex/<topic>` branches and stage only task files. Complete the required checks before committing and opening a ready PR; use a draft for incomplete work. Return and attach every created PR. Direct main/protected-branch pushes, history rewrites, remote deletion, and PR merge need a separate explicit instruction.

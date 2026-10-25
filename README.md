@@ -32,6 +32,7 @@ GitHub Actions runs application/tooling tests and release builds for Apple Silic
 - [Domain glossary](GLOSSARY.md)
 - [Native application and build instructions](docs/native-application.md)
 - [GitHub checks and app releases](docs/ci-cd.md)
+- [Authorized agent Git/GitHub workflow](docs/git-workflow.md)
 - [Verified Codex integration and remaining limits](docs/integration-compatibility.md)
 - [Domain model, state rules, and edge cases](docs/domain-model.md)
 - [Separate local app vs. in-app Codex view](docs/delivery-options.md)

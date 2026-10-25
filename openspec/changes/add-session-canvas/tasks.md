@@ -109,6 +109,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 8.3 Run the launcher against actual tests, a signed app build, and native captures; inspect a new PNG and record evidence in verification.md.
 - [x] 8.4 Document the stable direct command for future Codex chats and synchronize the local-verification contract, guide, and strict validation.
 - [x] 8.5 Add the general launcher prefix to the main default.rules allow list after the repeated-prompt report; verify the exact reported command and changed preview parameters against that file, run the targeted regression, and document that existing chats need startup reload. File matching alone does not prove prompt-free execution.
+- [ ] 8.6 Save the user's global standing authorization and command rules for routine Git/GitHub branch/commit/push/PR work, verify policy matching and existing repository access without publishing test changes, and document the workflow. Application requirements are unaffected.
 
 ## 9. Session lifecycle visibility
 
