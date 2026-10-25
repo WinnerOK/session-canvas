@@ -48,6 +48,17 @@ Each release SHALL contain separate macOS 14-or-later `.app` ZIP archives for `a
 - **WHEN** a user selects the ZIP matching their Mac
 - **THEN** it contains Session Canvas.app with the advertised version, minimum OS, executable, and a verifiable checksum
 
+### Requirement: Native app bundles use the selected application icon
+Local and release macOS app bundles SHALL use the selected blue session-cards artwork with its mint activity indicator. Each bundle SHALL contain its multi-resolution ICNS resource in `Contents/Resources`, referenced by `CFBundleIconFile` before signing. The resource SHALL provide the standard 16, 32, 128, 256, and 512-point representations at 1× and 2×.
+
+#### Scenario: Build a local or release app
+- **WHEN** the shared app builder assembles a macOS app bundle
+- **THEN** its icon metadata resolves to the bundled ICNS export of the selected blue session-cards PNG before the signature is applied
+
+#### Scenario: The selected icon resource is missing
+- **WHEN** the shared app builder cannot copy the required icon resource
+- **THEN** the build fails before signing or reporting a successful bundle
+
 ### Requirement: Packaging verifies distributable integrity
 Packaging SHALL verify the executable architecture and ad-hoc bundle signature before archiving, preserve executable permissions, and propagate failures. The upload job SHALL verify archive checksums before modifying a GitHub Release.
 

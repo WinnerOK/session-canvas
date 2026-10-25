@@ -6,7 +6,7 @@ The user has granted standing authorization for routine Git delivery during codi
 
 Global instructions and a command-rule extension have been prepared and passed eleven policy checks, but the system request to install them was declined. The prepared changes to `~/.codex/AGENTS.md` and `~/.codex/rules/default.rules` have not been applied. Existing rules already allow branch creation, commits, and fetch; the proposed general push and PR rules remain pending.
 
-The GitHub plugin is installed and enabled. Plugin Management reports that it inherits **Allow low-risk actions**, which is not a Never ask setting. Its advertised publishing workflow combines the connector and CLI, so installing the plugin does not itself grant local Git command permissions. Repository/account access has not yet been verified. No additional skill is required to grant either kind of permission.
+The GitHub plugin is installed and enabled. Plugin Management reports that it inherits **Allow low-risk actions**, which is not a Never ask setting. Its advertised publishing workflow combines the connector and CLI, so installing the plugin does not itself grant local Git command permissions. Subsequent user-authorized fetch and remote-branch cleanup on 2026-10-25 verified SSH read/write access to this repository; GitHub CLI authentication remains unverified. No additional skill is required to grant either kind of permission.
 
 ## Delivery sequence
 
@@ -26,4 +26,4 @@ The user's standing authorization covers ordinary branch-and-PR delivery. Force-
 
 Codex loads rule files at startup. Existing chats can retain an older policy until Codex restarts. An `execpolicy check --rules ...` result demonstrates matching against the supplied files; it does not demonstrate runtime reload or dismiss a visible approval prompt.
 
-GitHub authentication and repository write access are independent of Codex's command permissions. The prepared installer includes read-only checks of the existing SSH remote and GitHub CLI repository access. These checks have not run because installation was declined. No test commit, branch push, or PR was created during preparation.
+GitHub authentication and repository write access are independent of Codex's command permissions. The prepared installer's read-only SSH/GitHub CLI probes did not run because installation was declined. Later explicitly requested repository operations verified SSH access independently, without installing the pending global rules. No test commit, branch push, or PR was created during the original preparation.

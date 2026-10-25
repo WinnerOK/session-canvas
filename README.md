@@ -25,6 +25,8 @@ python3 scripts/build-app.py
 
 The local app bundle is written to `dist/Session Canvas.app`. See the [native app guide](docs/native-application.md) for controls, packaging, and the opt-in workaround for this machine's SwiftPM installation.
 
+Local and release app bundles use the selected [blue session-cards icon](assets/branding/README.md). The branding folder also retains the original alternatives and [four light concepts](assets/branding/LIGHT-CONCEPTS.md).
+
 Codex uses a [stable verification launcher](docs/native-application.md#codex-verification-launcher) for builds, tests, and native captures. One saved permission covers the launcher with different filters, session IDs, and capture paths.
 
 GitHub Actions runs application/tooling tests and release builds for Apple Silicon and Intel on every pull request. To prepare a release, open **Actions → Release → Run workflow** and enter a tag such as `v0.2.0`; after verification, review and publish the generated draft with app ZIPs and SHA-256 files. Version-tag pushes also trigger releases. See the [CI/CD guide](docs/ci-cd.md) for setup, retries, and signing limitations.

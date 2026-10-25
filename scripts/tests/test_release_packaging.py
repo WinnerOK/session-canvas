@@ -34,6 +34,9 @@ class ReleasePackagingTests(unittest.TestCase):
             binary = root / "SessionCanvas"
             binary.write_bytes(b"executable")
             binary.chmod(0o755)
+            icon = root / "assets/branding/SessionCanvas.icns"
+            icon.parent.mkdir(parents=True)
+            icon.write_bytes((builder.ROOT / "assets/branding/SessionCanvas.icns").read_bytes())
             args = builder.parser().parse_args(["--binary", str(binary), "--version", "2.4.1", "--build-number", "37"])
             with patch.object(builder.subprocess, "run") as run:
                 bundle = builder.build_app(args, root=root)
@@ -44,6 +47,9 @@ class ReleasePackagingTests(unittest.TestCase):
             executable = bundle / "Contents/MacOS" / info["CFBundleExecutable"]
             self.assertEqual(executable.read_bytes(), binary.read_bytes())
             self.assertTrue(executable.stat().st_mode & 0o111)
+            bundled_icon = bundle / "Contents/Resources" / info["CFBundleIconFile"]
+            self.assertEqual(bundled_icon.read_bytes(), icon.read_bytes())
+            self.assertEqual(bundled_icon.read_bytes()[:4], b"icns")
             run.assert_called_once_with(["codesign", "--force", "--sign", "-", str(bundle)], check=True)
 
     def test_local_build_defaults_remain_available(self):

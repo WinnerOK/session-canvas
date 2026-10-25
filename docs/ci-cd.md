@@ -40,6 +40,8 @@ Each draft contains:
 
 Each ZIP contains `Session Canvas.app` for macOS 14 or later. The bundle's `CFBundleShortVersionString` is the numeric tag version, and `CFBundleVersion` is the Actions run number. Architecture and ad-hoc signature are checked before archiving; checksums are checked again before uploading. Separate native archives keep build and test coverage aligned with each architecture. This is not a universal binary.
 
+Both architecture bundles include the selected [blue session-cards icon](../assets/branding/README.md) as `Contents/Resources/SessionCanvas.icns`, referenced by `CFBundleIconFile` before signing. Local builds use the same resource.
+
 Download a ZIP and its checksum into the same directory, then verify before extracting:
 
 ```sh

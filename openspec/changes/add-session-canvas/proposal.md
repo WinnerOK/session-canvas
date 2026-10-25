@@ -21,6 +21,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 - Deliver a native Mac-only companion using SwiftUI/AppKit, with the in-app alternatives retained as historical research. Verify source capabilities and expose unsupported desktop operations explicitly.
 - Provide a stable local build/test/preview launcher with one user-authorized Codex prefix rule, local caches, and isolated captures so changing verification parameters does not repeat approval prompts.
 - Run pull-request checks on Apple Silicon and Intel macOS in GitHub Actions. Prepare tested, versioned app ZIPs and checksums as draft GitHub Releases from a manual run or version-tag push.
+- Use the selected blue session-cards application icon in local and release macOS bundles, with native icon sizes and resource metadata included before signing. Retain unselected concepts for comparison.
 
 ## Capabilities
 
