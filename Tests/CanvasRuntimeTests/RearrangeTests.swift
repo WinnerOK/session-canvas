@@ -6,6 +6,48 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct RearrangeTests {
+    @Test func squareRearrangePersistsSeparateProjectAndUnassignedBlocks() async throws {
+        let path = temporaryPath()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        let model = ApplicationModel(demo: true, storagePath: path)
+        defer { model.shutdown() }
+        await model.connect()
+        var fixture = Workspace()
+        let groups: [(String?, Int)] = [("canvas", 12), ("research", 6), (nil, 6)]
+        let now = Date()
+        let sessions = groups.flatMap { project, count in
+            (0..<count).map { index in
+                Session(id: "\(project ?? "free")-\(index)", title: "\(project == nil ? "Independent session" : "Project session") \(index + 1)",
+                        projectID: project, execution: .running, updatedAt: now.addingTimeInterval(Double(index)))
+            }
+        }
+        fixture.reconcile(sessions: sessions, projects: model.workspace.projects)
+        fixture.viewport = Viewport(origin: Point(30, 30), zoom: 0.5)
+        model.workspace = fixture
+        model.rearrange()
+        #expect(model.errorMessage == nil)
+        let arranged = model.workspace
+        #expect(arranged.sessions == sessions)
+        #expect(arranged.viewport == fixture.viewport)
+        let free = sessions.filter { $0.projectID == nil }.map { arranged.placements[$0.id]!.rect }
+        #expect(Set(free.map(\.x)).count == 2)
+        #expect(Set(free.map(\.y)).count == 3)
+        let projectBottom = arranged.regions.values.map { $0.y + $0.height }.max()!
+        #expect(free.allSatisfy { $0.y > projectBottom })
+        let project = arranged.regions["canvas"]!
+        #expect(max(project.width / project.height, project.height / project.width) < 1.1)
+        #expect(try CanvasDatabase(path: path).load(source: model.sourceID) == arranged)
+        model.rearrange()
+        #expect(model.workspace == arranged)
+        model.shutdown()
+        let restored = ApplicationModel(demo: true, storagePath: path)
+        defer { restored.shutdown() }
+        await restored.connect()
+        #expect(restored.workspace.placements == arranged.placements)
+        #expect(restored.workspace.regions == arranged.regions)
+        #expect(restored.workspace.viewport == arranged.viewport)
+    }
+
     @Test func rearrangeUsesVisibleProjectionAndPersistsWithoutChangingSourceFactsOrViewport() async throws {
         let path = temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }

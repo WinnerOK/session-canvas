@@ -57,6 +57,51 @@ import Testing
         try verify(result, moving: ids)
     }
 
+    @Test func unassignedGridUsesPhysicalCardProportionsAndGrowsWithTheCount() throws {
+        for count in [6, 100] {
+            var workspace = Workspace()
+            workspace.sessions = (0..<count).map { note("s\($0)", execution: .running, age: Double($0)) }
+            let ids = Set(workspace.sessions.map(\.id))
+            let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: ids)
+            let positions = result.placements.values.map(\.position)
+            let width = positions.map(\.x).max()! + Placement.width
+            let height = positions.map(\.y).max()! + Placement.height
+            #expect(max(width / height, height / width) < 1.1)
+            if count == 6 {
+                #expect(Set(positions.map(\.x)).count == 2)
+                #expect(Set(positions.map(\.y)).count == 3)
+            } else { #expect(Set(positions.map(\.x)).count > 6) }
+            #expect(orderedIDs(result, project: nil) == workspace.sessions.reversed().map(\.id))
+            try verify(result, moving: ids)
+            #expect(try CanvasRearranger.arrange(result, visibleSessionIDs: ids) == result)
+        }
+    }
+
+    @Test func mixedProjectsAndTheirMembersFormSeparateCompactBlocks() throws {
+        var workspace = Workspace()
+        let counts = [1, 40, 6, 20, 3, 12, 8, 2]
+        workspace.projects = counts.indices.map { Project(id: "p\($0)", name: "Project \($0)") }
+        for (index, count) in counts.enumerated() {
+            let project = "p\(index)"
+            workspace.regions[project] = Rect(Double(index) * 2000, 30000, 1500, 6000)
+            workspace.sessions += (0..<count).map { note("\(project)-\($0)", project: project, execution: .running, age: Double($0)) }
+        }
+        workspace.sessions += (0..<12).map { note("free-\($0)", execution: .running) }
+        let ids = Set(workspace.sessions.map(\.id))
+        let result = try CanvasRearranger.arrange(workspace, visibleSessionIDs: ids)
+        let width = result.regions.values.map { $0.x + $0.width }.max()!
+        let bottom = result.regions.values.map { $0.y + $0.height }.max()!
+        #expect(max(width / bottom, bottom / width) < 1.4)
+        let large = result.regions["p1"]!
+        #expect(max(large.width / large.height, large.height / large.width) < 1.2)
+        #expect(result.placements.filter { $0.key.hasPrefix("free-") }.values.allSatisfy { $0.position.y > bottom })
+        for (index, count) in counts.enumerated() {
+            #expect(orderedIDs(result, project: "p\(index)") == (0..<count).reversed().map { "p\(index)-\($0)" })
+        }
+        try verify(result, moving: ids)
+        #expect(try CanvasRearranger.arrange(result, visibleSessionIDs: ids) == result)
+    }
+
     @Test func carriedHiddenFootprintsAndInternalOffsetsArePreserved() throws {
         var workspace = Workspace()
         workspace.projects = [Project(id: "p", name: "Moving"), Project(id: "q", name: "Hidden project")]
