@@ -158,6 +158,14 @@ public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
     public init(id: String, outcome: Outcome, text: String) { self.id = id; self.outcome = outcome; self.text = text }
 }
 
+public struct ProjectMembershipConfirmation: Codable, Equatable, Sendable {
+    public var desktopRevision: String
+    public var serverProjectID: String?
+    public init(desktopRevision: String, serverProjectID: String?) {
+        self.desktopRevision = desktopRevision; self.serverProjectID = serverProjectID
+    }
+}
+
 public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var title: String
@@ -172,6 +180,7 @@ public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var archived: Bool?
     public var savedState: Bool?
     public var unknownReason: UnknownReason?
+    public var projectMembershipConfirmation: ProjectMembershipConfirmation?
     public var isArchived: Bool { archived == true }
     public var stateIsFromHistory: Bool { savedState == true }
     public init(id: String, title: String, projectID: String? = nil, cwd: String = "", execution: Execution = .unknown,

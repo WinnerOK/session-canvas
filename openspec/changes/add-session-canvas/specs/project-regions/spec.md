@@ -19,16 +19,27 @@ The canvas SHALL display one region per visible source project, using stable pro
 - **THEN** the existing region's label changes without creating another region or resetting its bounds
 
 ### Requirement: Project discovery uses explicit source identity
-Projects and memberships SHALL use explicit source identity, never cwd/name matching. On supported metadata APIs, server project/null SHALL precede stale local assignments; older sources SHALL honor explicit legacy unassignment. Remote/unknown exclusions SHALL persist. Unsupported metadata SHALL retain confirmed state and report an error. Desktop/server mapping SHALL use only the connected local home.
+Projects and memberships SHALL use explicit source identity, never cwd/name matching. Explicit desktop membership SHALL precede API fallback unless a verified Canvas move confirms that session against the unchanged desktop membership revision. API null alone SHALL NOT erase desktop assignments. Remote/unknown exclusions SHALL persist. Unsupported metadata SHALL retain confirmed state and report an error. Desktop/server mapping SHALL use only the connected local home.
 
 #### Scenario: A session shares a project's working folder
 - **WHEN** a session has the same working folder as a project but no explicit membership, or is explicitly projectless
 - **THEN** it remains unassigned rather than being grouped by its folder
 
 #### Scenario: New server membership precedes saved desktop assignment
-- **WHEN** the server confirms a session's project ID and the connected home's mapping resolves it to an existing desktop project
+- **WHEN** the server reports a session project with no explicit desktop membership, or Canvas has verified a move against the unchanged desktop membership revision
 - **THEN** the session uses that existing canvas project identity without creating a duplicate region
 - **AND** another home's mapping cannot assign it to that project
+
+#### Scenario: API null accompanies an existing desktop assignment
+- **WHEN** discovery reports no backend project for a session explicitly assigned in desktop metadata, without a verified Canvas move overriding it
+- **THEN** that session retains its desktop project and its visible project area remains available
+- **AND** an older flattened Canvas cache is reconciled back to desktop membership without source mutation
+
+#### Scenario: A verified move survives restart and later desktop changes
+- **WHEN** a Canvas move is verified by API readback
+- **THEN** its optional per-session confirmation is persisted and restored for the same source, including explicit removal
+- **AND** unrelated desktop edits retain it, while a change to that session's desktop membership permanently invalidates it
+- **AND** a failed or unverified outcome does not create confirmation
 
 #### Scenario: Saved project metadata is malformed
 - **WHEN** project metadata cannot be validated during refresh

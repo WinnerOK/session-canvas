@@ -14,6 +14,8 @@ Use **Rearrange** in the top toolbar to build compact, roughly square blocks: pr
 
 The application is implemented in SwiftUI/AppKit for macOS 14 and later, with SQLite persistence and no third-party package dependencies. Saved-session discovery/history work through the installed Codex source, with Guardian and other internal agent sessions hidden. Existing local projects and explicit memberships are imported from saved desktop metadata. The default connection follows live execution and attention state from the running Codex desktop, with automatic reconnection and saved-history fallback. Right-click a project area to create a saved empty session in that project and open it automatically in Codex. Names and projectless working folders are optional; creation verifies resumable history and releases its ownership before continuation. The new note/viewer stay visible despite filters, with Open in Codex for retry. With a supported desktop CLI (verified from 0.164.0-alpha.11.1), drag an existing session into, between, or out of project areas to change actual Codex membership after API readback. Older/shared connections retain the unsupported-move guard. An isolated demo exercises simulated execution and project moves.
 
+Saved desktop project assignments survive refresh even when the server returns no project membership. A confirmed Canvas move can override that session's unchanged desktop assignment and survives restart; later desktop membership changes take priority again.
+
 ```sh
 swift run SessionCanvas
 swift run SessionCanvas --demo

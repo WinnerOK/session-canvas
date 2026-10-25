@@ -8,12 +8,13 @@ public struct DesktopProjectCatalog: Sendable {
     private var nonlocalSessions: Set<String>
     private var serverIDs: [String: String]
     private var roots: [String: [String]]
+    private var membershipRevisions: [String: String] = [:]
 
-    public func projectID(for sessionID: String, serverProjectID: String? = nil, authoritativeServer: Bool = false) -> String? {
-        // New metadata APIs own membership, including explicit null. Legacy projectless
-        // entries can lag behind a confirmed API move; remote identities stay excluded.
-        if authoritativeServer {
-            guard !nonlocalSessions.contains(sessionID) else { return nil }
+    public func projectID(for sessionID: String, serverProjectID: String? = nil, confirmation: ProjectMembershipConfirmation? = nil) -> String? {
+        guard !nonlocalSessions.contains(sessionID) else { return nil }
+        // API null alone does not erase an existing desktop assignment. A verified
+        // move can supersede only the same desktop membership snapshot it observed.
+        if let confirmation, confirmation.desktopRevision == membershipRevision(for: sessionID) {
             return serverIDs.first { $0.value == serverProjectID }?.key
         }
         guard !excludedSessions.contains(sessionID) else { return nil }
@@ -21,6 +22,7 @@ public struct DesktopProjectCatalog: Sendable {
     }
     public func serverProjectID(for projectID: String) -> String? { serverIDs[projectID] }
     public func allowsLocalMembership(for sessionID: String) -> Bool { !nonlocalSessions.contains(sessionID) }
+    public func membershipRevision(for sessionID: String) -> String { membershipRevisions[sessionID] ?? "unassigned" }
     public func rootPaths(for projectID: String) -> [String] { roots[projectID] ?? [] }
 
     public init(data: Data, codexHome: String? = nil) throws {
@@ -56,6 +58,13 @@ public struct DesktopProjectCatalog: Sendable {
             }
         }
         excludedSessions = projectless.union(nonlocalSessions)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        for id in Set(state["thread-project-assignments"].object.keys).union(projectless).union(hosts.object.keys) {
+            let assignment = state["thread-project-assignments"][id]
+            let value = JSONValue.object(["projectId": assignment["projectId"], "projectKind": assignment["projectKind"],
+                                          "projectless": .bool(projectless.contains(id)), "host": hosts[id]])
+            membershipRevisions[id] = String(decoding: try encoder.encode(value), as: UTF8.self)
+        }
         serverIDs = [:]
         if let codexHome {
             for (id, value) in state["app-server-project-id-by-legacy-project-id-by-host"]["local:" + codexHome].object {
