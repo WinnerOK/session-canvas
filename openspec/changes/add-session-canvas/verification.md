@@ -1,5 +1,7 @@
 # Verification and correction coverage
 
+Current layer behavior is tracked in [add-session-layers](../add-session-layers/proposal.md), with [implementation tasks](../add-session-layers/tasks.md) and [execution evidence](../add-session-layers/verification.md). That change supersedes single-layout geometry, Unknown age hiding, and source-wide visibility reset. Historical evidence below retains its original scope; unrelated desktop integration gates remain open.
+
 Documentation audit: 2026-10-24; creation visibility/automatic-opening and release-automation verification updated through 2026-10-25. This ledger covers all user corrections in the implementation conversation. Requirements are the behavioral contract; this file records where they are implemented and how they were checked. It does not declare the full change implemented or ready to archive.
 
 The last implementation run before this documentation audit passed **60 tests: 26 core and 34 runtime**. Parameterized tests count as one test with multiple cases. The run included opt-in installed-source checks and actual-server creation in an isolated home. Release compilation, bundle signature verification, and strict OpenSpec validation also passed. This documentation-only audit does not represent a new application test run.
@@ -202,7 +204,7 @@ The complete offline run passed **86 executed Swift tests** (35 core, 54 runtime
 
 | Correction | Contract | Evidence |
 | --- | --- | --- |
-| Add Hide unknown inside Hide Idle, checked by default, to hide stale Unknown sessions | [Optional age hiding for Unknown](specs/canvas-workspace/spec.md#requirement-optional-age-hiding-for-unknown) | Core/runtime tests cover the shared cutoff, safe exceptions, default/migration, source-isolated persistence, same-position restoration, and viewer closure. |
+| Add Hide unknown inside Hide Idle, checked by default, to hide stale Unknown sessions | [Unknown sessions belong to Inactive](specs/canvas-workspace/spec.md#requirement-unknown-sessions-belong-to-inactive) | Core/runtime tests cover the shared cutoff, safe exceptions, default/migration, source-isolated persistence, same-position restoration, and viewer closure. |
 
 ### Archived attention state correction, 2026-10-25
 

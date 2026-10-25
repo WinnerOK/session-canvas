@@ -45,7 +45,9 @@ struct ImportRegressionTests {
         #expect(model.selectedSessionID == nil)
         #expect(model.history.isEmpty)
         #expect(model.acknowledgments.isEmpty)
-        #expect(model.workspace.placements == placements)
+        for (id, placement) in placements { #expect(model.workspace.placements[id] == placement) }
+        #expect(model.workspace.layerState?.assignments["normal"] == .active)
+        #expect(model.workspace.layerState?.assignments["unassigned"] == .inactive)
         #expect(try database.acknowledgments(source: sourceID).isEmpty)
         let log = fixture.folder.appendingPathComponent("read-log")
         let reads = (try? String(contentsOf: log, encoding: .utf8).split(separator: "\n")) ?? []
@@ -150,22 +152,26 @@ struct ImportRegressionTests {
         await model.connect()
         let before = try #require(model.workspace.sessions.first { $0.id == "normal" })
         #expect(model.state(before) == .unknown)
+        model.selectLayer(.inactive)
         let placement = model.workspace.placements[before.id]
         model.openSession(before.id)
         for _ in 0..<100 {
-            if !model.history.isEmpty && !model.isLoadingHistory { break }
+            if model.workspace.sessions.first(where: { $0.id == before.id })?.state(acknowledged: []) == .finished { break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        let result = try #require(model.history.compactMap(\.result).last)
         let observed = try #require(model.workspace.sessions.first { $0.id == before.id })
+        let result = try #require(observed.latestResult)
         #expect(model.state(observed) == .finished)
         #expect(observed.stateIsFromHistory)
         #expect(observed.unknownReason == nil)
         #expect(observed.updatedAt == before.updatedAt)
+        #expect(model.selectedLayer == .inactive && model.selectedSessionID == nil)
+        model.selectLayer(.active); model.openSession(before.id); await model.loadHistory(older: false)
         #expect(model.canAcknowledge(result, sessionID: before.id))
         await model.refresh()
         #expect(model.workspace.sessions.first { $0.id == before.id }?.state(acknowledged: []) == .finished)
-        #expect(model.workspace.placements[before.id] == placement)
+        #expect(model.workspace.layerState?.layouts[.inactive]?.placements[before.id] == placement)
+        #expect(model.workspace.project(at: try #require(model.workspace.placements[before.id]).center) == observed.projectID)
         model.acknowledge(result, sessionID: before.id)
         #expect(model.workspace.sessions.first { $0.id == before.id }?.state(acknowledged: [result.id]) == .idle)
         model.setIdleTimeout(.oneWeek)
@@ -237,6 +243,7 @@ struct ImportRegressionTests {
         model.settings = fixture.settings
         defer { model.shutdown() }
         await model.connect()
+        model.selectLayer(.inactive)
         try Data().write(to: fixture.folder.appendingPathComponent("block-history"))
         model.openSession("normal")
         for _ in 0..<100 {
@@ -248,15 +255,14 @@ struct ImportRegressionTests {
         model.workspace.sessions[index].execution = .running
         model.workspace.sessions[index].requests = ["new-approval": .permission]
         model.workspace.sessions[index].latestResult = SessionResult(id: "new-result", outcome: .completed, text: "Newer result")
+        model.updateActivityTime()
         try Data().write(to: fixture.folder.appendingPathComponent("release-history"))
-        for _ in 0..<100 {
-            if !model.history.isEmpty && !model.isLoadingHistory { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(!model.history.isEmpty)
-        #expect(model.state(model.workspace.sessions[index]) == .permission)
-        #expect(model.workspace.sessions[index].latestResult?.id == "new-result")
-        let displayed = try #require(model.history.compactMap(\.result).last)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(model.history.isEmpty && model.selectedSessionID == nil && model.selectedLayer == .inactive)
+        let current = try #require(model.workspace.sessions.first { $0.id == "normal" })
+        #expect(model.state(current) == .permission)
+        #expect(current.latestResult?.id == "new-result")
+        let displayed = SessionResult(id: "normal/last/completed", outcome: .completed, text: "Old")
         #expect(!model.canAcknowledge(displayed, sessionID: "normal"))
     }
 
@@ -318,7 +324,8 @@ struct ImportRegressionTests {
         await model.refresh()
         var stale = retained
         for i in stale.sessions.indices { stale.sessions[i].execution = .unknown }
-        #expect(model.workspace == stale)
+        #expect(model.workspace.sessions == stale.sessions && model.workspace.projects == stale.projects)
+        #expect(model.workspace.layerState?.assignments.values.allSatisfy { $0 == .inactive } == true)
         #expect(model.errorMessage != nil)
         model.shutdown()
         #expect(!(try database.load(source: model.sourceID)).sessions.contains { $0.id == "guardian" })
@@ -373,6 +380,7 @@ struct ImportRegressionTests {
         model.settings = fixture.settings
         defer { model.shutdown() }
         await model.connect()
+        model.selectLayer(.inactive)
         model.setStateVisible(.archived, true)
         try Data().write(to: fixture.folder.appendingPathComponent("legacy-history"))
         model.openSession("cached")
@@ -411,7 +419,7 @@ struct ImportRegressionTests {
         canvas.frame = NSRect(x: 0, y: 80, width: 400, height: 180)
         parent.addSubview(canvas)
         let baseline = try capture(parent)
-        model.workspace.sessions = [Session(id: "s", title: "Overflowing note")]
+        model.workspace.sessions = [Session(id: "s", title: "Overflowing note", execution: .idle)]
         model.workspace.placements["s"] = Placement(Point(40, noteY))
         canvas.update()
         let panned = try capture(parent)

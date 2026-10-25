@@ -4,10 +4,12 @@
 
 Represent real Codex projects as spatial regions and let the user change session membership through deliberate note placement.
 
+Canvas geometry, visible populations, filters, overview, and gestures below refer to the selected layer defined by [session-layers](../../../add-session-layers/specs/session-layers/spec.md). Source identities, actual memberships, results, and acknowledgments remain shared; explicitly source-wide actions keep that scope.
+
 ## ADDED Requirements
 
 ### Requirement: Regions represent actual projects
-The canvas SHALL display one region per visible source project, using stable project identity and the current name when text fits under canvas-workspace's zoom rules. Project visibility SHALL follow combined search, attention, and individual-project filters; projects with no visible sessions SHALL be omitted. Each session SHALL belong to zero or one project. Visible unassigned sessions SHALL appear outside every region.
+The selected layer SHALL display one independently positioned and sized region per visible source project, using stable project identity and the current name when text fits under canvas-workspace's zoom rules. Project visibility SHALL follow combined search, attention, and individual-project filters; projects with no visible sessions SHALL be omitted. Each session SHALL belong to zero or one project. Visible unassigned sessions SHALL appear outside every region.
 
 #### Scenario: Discover existing membership
 - **WHEN** initial synchronization discovers projects and their sessions
@@ -50,7 +52,7 @@ Projects and memberships SHALL use explicit source identity, never cwd/name matc
 - **THEN** existing confirmed canvas data is retained and the failure is shown
 
 ### Requirement: Region geometry has one drop target
-Regions SHALL be rectangular with non-overlapping interiors and no nesting. A note's target SHALL be the region whose interior contains its center at pointer release in canvas coordinates. A center on a boundary or outside every region SHALL target unassigned space. The UI SHALL preview the target during dragging.
+Occupied regions SHALL be rectangular with non-overlapping interiors and no nesting within one layer. Geometry on other layers and dormant empty regions SHALL impose no collision constraint. A note's target SHALL be the region whose interior contains its center at pointer release in canvas coordinates. A center on a boundary or outside every region SHALL target unassigned space. The UI SHALL preview the target during dragging.
 
 #### Scenario: A note partially overlaps a region
 - **WHEN** part of a note overlaps a region but its center is outside the region at drop
@@ -133,16 +135,16 @@ An authoritative membership change made outside the canvas SHALL relocate the af
 - **THEN** the app rejects the stale drop and reconciles the note to the authoritative membership
 
 ### Requirement: Region editing preserves membership
-The user SHALL be able to move and resize regions. Manual region movement SHALL carry all member notes by the same displacement. Resizing SHALL retain all member-note centers. Edits SHALL reject region overlaps or enclosed nonmember centers. Explicit Rearrange SHALL translate hidden members with their project while reflowing only visible members. Geometry edits SHALL NOT issue membership mutations.
+The user SHALL be able to move and resize regions. Manual region movement SHALL carry all current member notes on the affected layer by the same displacement. Resizing SHALL retain all member-note centers. Edits SHALL reject region overlaps or enclosed nonmember centers. Explicit Rearrange SHALL translate hidden members with their project while reflowing only visible members. Geometry edits SHALL NOT issue membership mutations.
 
 #### Scenario: Move an entire region
 - **WHEN** the user moves a region to a nonconflicting position
-- **THEN** all its member notes move by the same displacement with no project membership changes
+- **THEN** all its current member notes on that layer move by the same displacement with no project membership changes
 
 #### Scenario: Move a project while zoomed out
 - **WHEN** the user drags any part of a project area in the overview, including an area too small for a label
 - **THEN** its area and label preview the movement and the region commits on release
-- **AND** all member notes move by the same canvas-coordinate displacement, including hidden members
+- **AND** all current member notes on that layer move by the same canvas-coordinate displacement, including filtered members
 - **AND** the viewport and unrelated projects remain unchanged
 - **AND** clicking without dragging still zooms into the project, Escape cancels the drag, and Space + drag pans the canvas
 - **AND** existing region collision and membership-preservation rules still apply

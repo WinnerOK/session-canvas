@@ -15,9 +15,9 @@ struct ContentView: View {
                         if !model.workspace.sessions.isEmpty && model.visibleSessions.isEmpty && !model.isRefreshing {
                             VStack(spacing: 14) {
                                 Image(systemName: "line.3.horizontal.decrease.circle").font(.system(size: 32)).foregroundStyle(.secondary)
-                                Text("No sessions to show").font(.title2.weight(.medium))
-                                Text("Change attention or project visibility, or clear your search.").font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                                Button("Show all sessions") { model.showAllSessions() }.buttonStyle(.borderedProminent)
+                                Text("No \(model.selectedLayer.label.lowercased()) to show").font(.title2.weight(.medium))
+                                Text("Change filters, clear your search, or select another layer in the sidebar.").font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                Button("Show all in this layer") { model.showAllSessions() }.buttonStyle(.borderedProminent)
                             }.frame(maxWidth: 360).padding(28).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
                         }
                         if model.workspace.sessions.isEmpty && !model.isRefreshing {
@@ -38,6 +38,10 @@ struct ContentView: View {
                     HStack(spacing: 14) {
                         Image(systemName: "hand.draw").foregroundStyle(.tertiary)
                         Text("Scroll to pan · Pinch to zoom · Right-click to create").font(.caption).foregroundStyle(.secondary)
+                        if model.hasUnsavedLayout {
+                            Text("Layout not saved").font(.caption).foregroundStyle(.orange)
+                            Button("Retry save") { model.retryLayoutSave() }.font(.caption)
+                        }
                         Spacer(minLength: 8)
                         Text("\(model.visibleSessions.count) sessions").font(.caption).foregroundStyle(.secondary)
                         Divider().frame(height: 14)
@@ -89,7 +93,14 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 5) {
-                    sidebarRow("All sessions", symbol: "square.grid.2x2", count: model.workspace.sessions.count, selected: !model.visibility.isFiltered && model.search.isEmpty) { model.showAllSessions() }
+                    Text("LAYERS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary).padding(.horizontal, 10).padding(.bottom, 8)
+                    ForEach(CanvasLayer.allCases, id: \.rawValue) { layer in
+                        sidebarRow(layer.label, symbol: model.selectedLayer == layer ? "circle.inset.filled" : "circle", count: model.layerCounts[layer, default: 0], selected: model.selectedLayer == layer) { model.selectLayer(layer) }
+                            .accessibilityIdentifier("layer-\(layer.rawValue)")
+                            .accessibilityValue(model.selectedLayer == layer ? "Selected" : "Not selected")
+                    }
+                    Text("\(model.workspace.sessions.count) sessions in this source").font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.vertical, 6)
+                    Button("Show all in this layer") { model.showAllSessions() }.buttonStyle(.link).font(.caption).padding(.horizontal, 10)
                     HStack {
                         Text("ATTENTION").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
                         Spacer()
@@ -97,7 +108,7 @@ struct ContentView: View {
                             Button("Show all") { model.showAllAttentionStates() }.buttonStyle(.link).font(.caption2)
                         }
                     }.padding(.top, 24).padding(.bottom, 8).padding(.horizontal, 10)
-                    ForEach(NoteState.allCases, id: \.rawValue) { state in
+                    ForEach(model.selectedLayer.states, id: \.rawValue) { state in
                         attentionRow(state, count: model.stateCounts[state, default: 0])
                     }
                     VStack(alignment: .leading, spacing: 10) {
@@ -105,9 +116,7 @@ struct ContentView: View {
                         Picker("Hide Idle after", selection: Binding(get: { model.visibility.idleTimeout }, set: { model.setIdleTimeout($0) })) {
                             ForEach(IdleTimeout.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
-                        Toggle("Hide unknown", isOn: Binding(get: { model.visibility.hideUnknown }, set: { model.setHideUnknown($0) }))
-                            .toggleStyle(.checkbox).help("Apply the same age limit to Unknown sessions. Never disables age hiding.")
-                        Text("Active sessions and results to review stay visible.").font(.caption2).foregroundStyle(.secondary)
+                        Text("Older Idle sessions move to Stale. Work and unread results stay Active. Archived and Unknown belong to Inactive.").font(.caption2).foregroundStyle(.secondary)
                     }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 20)
                     HStack {
                         Text("PROJECTS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)

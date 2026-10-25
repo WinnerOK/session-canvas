@@ -4,6 +4,8 @@
 
 Give existing Codex sessions stable spatial homes in a persistent free-roam workspace that the user can navigate and rearrange.
 
+Canvas geometry, visible populations, filters, overview, and gestures below refer to the selected layer defined by [session-layers](../../../add-session-layers/specs/session-layers/spec.md). Source identities, actual memberships, results, and acknowledgments remain shared; explicitly source-wide actions keep that scope.
+
 ## ADDED Requirements
 
 ### Requirement: Native macOS application
@@ -93,45 +95,39 @@ The user SHALL be able to drag a note to a new canvas position. A completed drag
 - **THEN** its last confirmed position and membership are restored without a source mutation
 
 ### Requirement: Visibility filters combine and persist
-The user SHALL be able to independently show or hide each attention state and hide or restore individual projects. Search, attention-state visibility, and project visibility SHALL combine. Visibility choices SHALL persist per source without changing source sessions, memberships, acknowledgments, or note positions. A temporary creation reveal SHALL follow session-actions without changing these saved choices.
+The user SHALL independently hide applicable attention states and projects within the selected layer. Search, state, and project choices SHALL combine without changing classification, source facts, acknowledgment, or layout. Choices SHALL persist per source and layer. Temporary creation reveal SHALL bypass only its classified layer's filters.
 
-#### Scenario: Hide multiple attention states
-- **WHEN** the user unchecks Running and Finished
-- **THEN** sessions in either state are hidden while sessions in other enabled states remain eligible
-- **AND** subsequent state changes reevaluate visibility using the current derived note state
+#### Scenario: Filter a layer
+- **WHEN** the user hides Running and a project on Active
+- **THEN** those exclusions compose with search, while Stale and Inactive keep independent choices
+- **AND** state counts ignore their own state exclusions
 
-#### Scenario: A project has no visible sessions
-- **WHEN** no session in a project matches the current search and visibility choices
-- **THEN** the project is omitted from the sidebar, canvas, overview, accessibility navigation, and Fit to Content bounds
-
-#### Scenario: Hide and restore one project
-- **WHEN** the user hides a project
-- **THEN** its sessions and region disappear from the workspace
-- **AND** the Hidden projects menu offers an individual restore action
-- **AND** restoration retains its original geometry and still respects search and attention filters
+#### Scenario: Hide and restore a project
+- **WHEN** the user hides a project on the selected layer
+- **THEN** its region and notes disappear from drawing, sidebar, overview, accessibility, and fit bounds
+- **AND** Hidden projects offers restoration with the same saved geometry and remaining filters
 
 #### Scenario: Everything is filtered out
-- **WHEN** the current filters hide all known sessions and no creation reveal is active
-- **THEN** an explicit empty view offers Show all sessions to reset visibility and search
-- **AND** an open viewer for a hidden session is closed
+- **WHEN** the selected layer has no visible sessions
+- **THEN** the empty state offers Show all in this layer and other layers remain selectable
+- **AND** reset clears search and only selected-layer state/project exclusions, preserving selection and the idle cutoff
 
 #### Scenario: Reopen a filtered workspace
-- **WHEN** the app reopens the same connected source
-- **THEN** saved attention and project visibility choices are restored
-- **AND** another source's choices remain independent
+- **WHEN** the same source is reopened
+- **THEN** its selected layer and per-layer exclusions are restored independently of other sources
+- **AND** projects with no visible matching sessions are omitted
 
 ### Requirement: Layout survives reopening
-The system SHALL persist note positions, project-region bounds, and viewport for this user's canvas. Reopening the app SHALL restore that layout without resetting it to source listing order. A failed layout save SHALL be visible and offer a retry.
+The system SHALL persist independent note positions, project bounds, and viewport for each layer within a source. Reopening SHALL restore those layouts and selected layer without resetting to source order. Save failure SHALL be explicit and retryable under session-layers; source-driven failures SHALL not regress authoritative source facts.
 
-#### Scenario: Restore the same workspace
-- **WHEN** the user closes and reopens the app after rearranging the canvas
-- **THEN** its saved notes, regions, and viewport are restored
-- **AND** latest session metadata is reconciled without resetting unrelated positions
+#### Scenario: Restore independent layouts
+- **WHEN** a project has different bounds and note positions across the three layers
+- **THEN** restart restores each layout with current source membership and shared acknowledgment
 
-#### Scenario: A position cannot be saved
-- **WHEN** durable layout storage rejects a note movement
-- **THEN** the app indicates that the position is unsaved and offers retry
-- **AND** it does not report the layout as durably saved
+#### Scenario: A layout cannot be saved
+- **WHEN** durable storage rejects an edit or automatic transition
+- **THEN** no partial layout is saved and the error identifies unsaved state or a rejected user edit
+- **AND** retry retains the prior durable snapshot
 
 ### Requirement: Explicit visible-session rearrangement
 Rearrange SHALL reflow visible notes by Attention order, newest activity, then stable ID, with visible projects first and unassigned notes below. Hidden members SHALL retain project-relative offsets while receiving its displacement; other hidden notes SHALL stay fixed. The command SHALL preserve source facts, acknowledgment, filters, selection, history, and viewport, validate membership/collisions, and save before applying the whole layout.
@@ -190,11 +186,15 @@ The system SHALL place newly discovered notes without covering existing notes, w
 - **THEN** the app creates a region in available canvas space and places the note inside it
 
 ### Requirement: Updates preserve spatial context
-Session title, execution, and acknowledgment updates SHALL refresh the existing note without changing its position. Authoritative membership changes SHALL relocate only the affected note as defined by project-regions.
+Title, execution, and acknowledgment changes SHALL preserve position while a session stays on the same layer. Classification changes SHALL use session-layers destination placement within the same actual project. Authoritative project changes SHALL invalidate obsolete remembered membership and relocate the affected note without rearranging unrelated projects.
 
-#### Scenario: A session finishes and is renamed
-- **WHEN** a known session receives a new title and a terminal result
-- **THEN** its existing note updates its title and state at the same position
+#### Scenario: Finish and rename within Active
+- **WHEN** an Active session receives a terminal result and title change
+- **THEN** its note updates at the same Active position
+
+#### Scenario: Return from another layer
+- **WHEN** state or age changes a session's layer
+- **THEN** its destination uses a valid remembered position or free space inside the same actual project
 
 ### Requirement: Inventory gaps do not remove notes
 The system SHALL retain known notes during disconnects, incomplete discovery, or unavailable inventory pages. Source removal SHALL require authoritative evidence of deletion or internal-agent exclusion. Archive visibility SHALL use confirmed source archive state and the lifecycle visibility settings, preserving geometry for restoration.
@@ -205,52 +205,41 @@ The system SHALL retain known notes during disconnects, incomplete discovery, or
 
 #### Scenario: Archive and restore outside the canvas
 - **WHEN** the source confirms a known session was archived and subsequently restored
-- **THEN** its note follows archive visibility settings and is restored to its saved position if that position still matches its membership
+- **THEN** its note enters Inactive and then its derived destination layer, restoring a valid remembered position within current membership or allocating a free one
 
 ### Requirement: Persisted archive and idle-age visibility
-Attention SHALL include an Archived checkbox immediately above Unknown, unchecked by default, using the same state filtering as other rows. Visibility SHALL retain Hide Idle after with Never, 15 minutes, 1 hour, 1 day, 1 week, or 1 month (30 days). Choices SHALL persist per source without changing geometry, membership, or acknowledgment. Show all sessions SHALL clear all filters.
+The selected layer SHALL offer applicable state filters: five Active states, Idle for Stale, and Archived immediately above Unknown for Inactive. Fresh filters SHALL enable applicable states; migration SHALL retain exclusions. Hide Idle after SHALL be shared per source and route eligible Idle to Stale, retaining all existing interval options.
 
-#### Scenario: Hide or show archived sessions with missing history
-- **WHEN** the user toggles Archived under Attention while an archived session has unavailable execution or local history
-- **THEN** its note is hidden or shown using Archived, independently of the Unknown checkbox and the Idle timeout
-- **AND** its result remains unacknowledged and its geometry is preserved
+#### Scenario: Show archived sessions
+- **WHEN** Inactive is selected and Archived is enabled
+- **THEN** confirmed archives appear regardless of missing history, independently of Unknown and the cutoff
+- **AND** their result acknowledgment is unchanged
 
-#### Scenario: Migrate the former archive visibility control
-- **WHEN** saved visibility contains the former hideArchived option or predates archive visibility
-- **THEN** the Archived checkbox preserves that option, defaulting to unchecked for older payloads
-- **AND** other state/project/age choices are retained, with no second archive visibility control
+#### Scenario: Expire an Idle session
+- **WHEN** eligible Idle activity reaches the configured cutoff
+- **THEN** it moves from Active to Stale within 30 seconds without changing source activity or project membership
+- **AND** its viewer closes if it leaves the selected layer
 
-#### Scenario: Expire an idle session
-- **WHEN** a known Idle session reaches the chosen interval since its source activity timestamp
-- **THEN** its note leaves the visible set on the next clock update within 30 seconds and its viewer closes
-- **AND** new source activity or a higher-priority state makes it eligible again without changing its saved placement
+#### Scenario: Protect work and unread results
+- **WHEN** execution, a pending request, an unread result, Never, or unavailable/future activity prevents age classification
+- **THEN** an otherwise non-Inactive session remains Active
+- **AND** explicit layer filters still apply
 
-#### Scenario: Protect work and unreviewed results
-- **WHEN** age hiding would exclude running execution, a pending input/permission request, or a known unacknowledged result
-- **THEN** the age filter keeps it eligible regardless of age, including when the displayed state is Unknown
-- **AND** existing explicit attention/project/search filters retain their established semantics
+#### Scenario: Migrate old visibility
+- **WHEN** an unversioned workspace is converted
+- **THEN** legacy archive/state/project exclusions and cutoff are preserved in the applicable per-layer preferences
+- **AND** valid geometry and shared acknowledgments are retained atomically
 
-#### Scenario: Restore visibility
-- **WHEN** the user checks Archived, chooses Never, or selects Show all sessions
-- **THEN** the corresponding hidden notes and nonempty project areas return at their saved positions
+### Requirement: Unknown sessions belong to Inactive
+Unknown sessions SHALL belong to Inactive regardless of age, cached unread results, or last-known work. The former Hide unknown age toggle SHALL be removed. Authoritative state recovery SHALL reclassify the same session without acknowledgment or source membership mutation.
 
-### Requirement: Optional age hiding for Unknown
-Visibility SHALL include Hide unknown directly below Hide Idle after, checked by default including for old preferences. Its per-source choice SHALL persist and apply the same source-activity cutoff to Unknown. Never SHALL disable age hiding for both Idle and Unknown. Hiding SHALL NOT change source state, acknowledgment, membership, or geometry. The Attention Unknown choice SHALL remain independent.
+#### Scenario: Retain uncertain sessions in Inactive
+- **WHEN** the cutoff changes, Never is selected, or Unknown has missing/future activity
+- **THEN** Unknown remains in Inactive under that layer's Unknown filter
 
-#### Scenario: Expire stale Unknown sessions by default
-- **WHEN** an Unknown session with no active work, pending request, or unacknowledged result reaches the selected activity-age limit
-- **THEN** it leaves the visible set within 30 seconds and its open viewer closes
-- **AND** counts and project visibility use the same projection without changing its Unknown state or saved placement
-
-#### Scenario: Retain Unknown when age hiding is disabled or unavailable
-- **WHEN** Hide unknown is unchecked, the timeout is Never, or the activity timestamp is missing or in the future
-- **THEN** Unknown sessions remain eligible under the age filter
-- **AND** unchecking Hide unknown restores expired Unknown notes and their project areas at their saved positions
-
-#### Scenario: Restore the saved Unknown preference
-- **WHEN** visibility is loaded for the same source after reopening
-- **THEN** the saved Hide unknown choice is retained independently of other sources and Attention choices
-- **AND** a preference without that field starts checked
+#### Scenario: Recover current state
+- **WHEN** verified latest evidence establishes Running or Finished
+- **THEN** the same session enters Active's region for its actual project without automatically selecting Active
 
 ### Requirement: Compact source activity age
 Each detailed session note SHALL show last source activity using one largest unit: whole minutes, hours, days, then the capped label 1 month ago at 30 days and beyond. Polling, viewing, acknowledgment, and archive changes SHALL NOT manufacture a newer activity timestamp. Labels SHALL refresh within 30 seconds without requiring manual refresh; missing timestamps SHALL display Activity unavailable and SHALL NOT expire a session by age.
@@ -279,20 +268,20 @@ Find a session SHALL apply a localized case-insensitive substring match to sessi
 #### Scenario: Clear or restart search
 - **WHEN** the user clears search or starts a new application instance
 - **THEN** the title restriction is removed without restoring hidden attention states or projects
-- **AND** Show all sessions additionally resets the other visibility filters
+- **AND** Show all in this layer additionally resets selected-layer attention/project exclusions while preserving the cutoff
 
 ### Requirement: Workspace counters explain their scope
-All sessions SHALL count known current-source user sessions; canvas/project counters SHALL count visible sessions/projects. Attention counts SHALL apply search/project/age rules before attention-state exclusions. Results to review SHALL count visible sessions with an unread latest result, including higher-priority states. Visible counters SHALL include creation reveal. Acknowledge all SHALL retain its separate all-Finished scope.
+Layer counts SHALL show populations before filters; the source total SHALL count all known source sessions. Canvas/project/review counts SHALL use the selected visible layer. Attention counts SHALL apply search/project filters before state exclusions. Source-wide Finished bulk acknowledgment SHALL remain independent of layer selection and visible counts.
 
-#### Scenario: Hide a populated attention state
-- **WHEN** the user unchecks Finished
-- **THEN** its row can still show how many Finished sessions match the remaining filters while canvas/project counts exclude them
-- **AND** All sessions continues to count the known inventory
+#### Scenario: Hide a state
+- **WHEN** Finished is hidden on Active
+- **THEN** its Attention count still reflects search/project matches, while visible counters exclude it
+- **AND** layer population counts and the source total remain unchanged
 
-#### Scenario: Review counts differ from bulk targets
-- **WHEN** an unread result belongs to a visible Running or Unknown session
-- **THEN** it contributes to results to review without becoming eligible for Acknowledge all
-- **AND** the canvas footer also displays the current viewport zoom percentage
+#### Scenario: Bulk review from another layer
+- **WHEN** Acknowledge all is invoked from Inactive
+- **THEN** it captures source-wide eligible Finished results, excluding Unknown and Archived
+- **AND** resulting Idle age transitions preserve the selected layer and viewport
 
 ### Requirement: Native navigation inputs remain discoverable
 The app SHALL expose pan/zoom gestures and native shortcuts for creation, refresh, connection settings, fit, and visibility reset. Tab/Shift + Tab SHALL cycle rendered notes and overview projects; Return/keypad Enter SHALL activate focus. Escape SHALL cancel active canvas drag/resize previews. These controls SHALL preserve the corresponding pointer-command behavior.
@@ -300,7 +289,7 @@ The app SHALL expose pan/zoom gestures and native shortcuts for creation, refres
 #### Scenario: Use native gestures and commands
 - **WHEN** the user scrolls, drags the background, or uses Space + drag
 - **THEN** the canvas pans; pinch or Command + scroll instead zooms around the pointer
-- **AND** Command + N creates, Command + R refreshes, Command + comma opens Connection Settings, Command + 0 fits content, and Command + 1 shows all sessions
+- **AND** Command + N creates, Command + R refreshes, Command + comma opens Connection Settings, Command + 0 fits content, and Command + 1 shows all sessions in the selected layer without changing its cutoff
 
 #### Scenario: Navigate without clicking a note
 - **WHEN** the canvas has keyboard focus and the user presses Tab or Shift + Tab followed by Return

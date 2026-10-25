@@ -2,9 +2,9 @@
 
 ## Context
 
-See [proposal.md](proposal.md) for motivation and [session-layers](specs/session-layers/spec.md) for the proposed behavior. This is planning only; the following are implementation decisions, not claims about shipped behavior.
+See [proposal.md](proposal.md) for motivation and [session-layers](specs/session-layers/spec.md) for the behavior contract. Implementation and actual verification evidence are tracked in [verification.md](verification.md).
 
-Read-only inspection found:
+Baseline inspection before implementation found:
 
 - [Models.swift](../../../Sources/CanvasCore/Models.swift) gives `Workspace` a single `placements`, `regions`, and `viewport`. `validateRegion` iterates all source sessions and regions. `vacantPlacement` also uses the entire workspace, including filtered notes, and can expand or translate a full project when necessary.
 - [ApplicationModel.swift](../../../Sources/SessionCanvas/ApplicationModel.swift) filters rendering through `visibleSessions`, while `editRegion` carries every member of a project and validates against shared geometry. Source refresh, background history recovery, acknowledgment, and the 30-second activity clock can alter the visible population independently.

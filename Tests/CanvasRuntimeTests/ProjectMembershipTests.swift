@@ -90,6 +90,7 @@ struct ProjectMembershipTests {
         defer { model.shutdown() }
         model.showAllSessions()
         let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
+        model.selectLayer(model.layer(session))
         let placement = try #require(model.workspace.placements[session.id])
         let local = Point(placement.position.x + 8, placement.position.y + 8)
         model.moveNote(id: session.id, position: local, expectedRevision: session.revision)

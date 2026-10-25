@@ -4,6 +4,10 @@
 
 Let the user inspect and acknowledge existing session results, continue in Codex, and create sessions in the spatial context where work belongs.
 
+Canvas geometry, visible populations, filters, overview, and gestures below refer to the selected layer defined by [session-layers](../../../add-session-layers/specs/session-layers/spec.md). Source identities, actual memberships, results, and acknowledgments remain shared; explicitly source-wide actions keep that scope.
+
+Explicit creation reveal selects only the confirmed session's derived layer before opening its viewer. Same-layer/same-project creation retains clicked placement and viewport; crossing layers uses destination geometry and explicit focus. An unexpectedly Unknown creation is revealed in Inactive.
+
 ## ADDED Requirements
 
 ### Requirement: Viewer displays source activity time
@@ -19,7 +23,7 @@ Session menus and the viewer SHALL offer Archive session or Unarchive session us
 #### Scenario: Archive reviewed work
 - **WHEN** the user archives a currently Idle session with its latest result acknowledged
 - **THEN** the same source identity becomes archived and follows the saved visibility settings
-- **AND** showing archived sessions allows restoring it at the same position
+- **AND** selecting Inactive allows restoring it to its derived layer, using valid remembered destination geometry
 
 #### Scenario: Archive is unsafe or rejected
 - **WHEN** the session is active, Unknown, Finished with an unreviewed result, changes before submission, or the source rejects archive
@@ -210,7 +214,7 @@ After verified desktop creation, the app SHALL automatically open the exact retu
 - **THEN** Canvas retains the note/viewer and shows the warning without automatically opening an unverified session
 
 ### Requirement: Created notes use the confirmed session
-After creation is confirmed, the canvas SHALL show one note for the returned source session at the requested location, adjusted only as needed to avoid note collisions and match confirmed membership. The note SHALL derive its state from actual execution evidence and remain synchronized with the same session visible in Codex.
+After creation is confirmed, the canvas SHALL show one note for that source identity on its derived layer within confirmed membership. Same-layer creation SHALL retain valid clicked placement or the nearest vacancy; cross-layer creation SHALL use destination geometry and explicit focus. The note SHALL derive state from actual evidence and remain synchronized with Codex.
 
 #### Scenario: Create and discover the same session
 - **WHEN** creation returns a session identity and later inventory synchronization returns that session
@@ -221,7 +225,7 @@ After creation is confirmed, the canvas SHALL show one note for the returned sou
 - **THEN** its single note and confirmed project membership remain on the canvas
 
 ### Requirement: Created sessions remain visible and actionable
-After confirmed creation, the app SHALL temporarily reveal that session despite search, attention, or project filters and open its viewer with Open in Codex and a success notice. Saved filters SHALL remain unchanged. The reveal SHALL survive refresh and end on filter/search changes, Apply filters, another creation, or reconnect. The notice SHALL explain filter exceptions and empty-session omission from Codex's list.
+After confirmed creation, the app SHALL select that session's derived layer, reveal it despite that layer's filters, and open its viewer with Open in Codex and a success notice. Saved filters SHALL remain unchanged. Reveal SHALL survive refresh and end on layer/filter/search changes, Apply filters, another creation, or reconnect. The notice SHALL explain filter exceptions and empty-session omission from Codex's list.
 
 #### Scenario: Creation would match a hidden state or project
 - **WHEN** a new session would be hidden by Unknown, search, or its selected project's visibility
@@ -238,15 +242,15 @@ After confirmed creation, the app SHALL temporarily reveal that session despite 
 - **AND** Canvas does not fabricate a first user message or start a model turn to populate that list
 
 ### Requirement: Context creation preserves the clicked location
-Creation SHALL keep the clicked world position when valid for confirmed membership and collisions, otherwise choose the nearest valid position using all geometry, including hidden notes, instead of the origin discovery grid. Within the context's project, creation SHALL preserve pan and zoom through collision adjustment and viewer resizing. Automatic focus SHALL occur only for a different chosen/confirmed project or an explicit focus action.
+Same-layer creation SHALL retain valid clicked placement or the nearest vacancy using current-layer geometry, including filtered notes. Within that layer and context project, pan/zoom SHALL survive collision adjustment and viewer resizing. A changed project, changed classified layer, or explicit focus SHALL allow automatic focus; other layers SHALL not supply obstacles or overwrite destination bounds.
 
 #### Scenario: Create a projectless session at a free point
-- **WHEN** the user chooses New session here outside projects at a free location
+- **WHEN** the user chooses New session here outside projects at a free location on the confirmed session's layer
 - **THEN** the note's top-left position is that clicked world coordinate and its screen position remains anchored there
 - **AND** creating the session and opening its viewer do not pan or zoom the canvas
 
 #### Scenario: Create while zoomed out or panned
-- **WHEN** the user creates at a valid clicked location with an existing pan or distant zoom
+- **WHEN** the user creates on the same classified layer at a valid clicked location with an existing pan or distant zoom
 - **THEN** creation preserves that viewport rather than centering or enlarging the note automatically
 
 #### Scenario: A visible or hidden note occupies the requested placement

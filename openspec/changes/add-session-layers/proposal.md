@@ -28,6 +28,6 @@ None in the main-spec inventory: `openspec list --specs` currently returns no sp
 
 The native SwiftUI/AppKit application and Canvas-owned SQLite payloads are affected: `Models.swift`, `Database.swift`, `CanvasRearranger.swift`, `ApplicationModel.swift`, `ContentView.swift`, `NativeCanvasView.swift`, overview/accessibility consumers, demo fixtures, and geometry/runtime tests. Existing source transport and acknowledgment identities remain shared and unchanged. No new dependency or source API is required.
 
-Implementation also updates the glossary, domain/native guides, README, OpenSpec context, and the baseline change's proposal/design/specs/tasks/verification/function inventory. This proposal only creates planning artifacts; implementation and native acceptance remain open in [verification.md](verification.md).
+Implementation updates the glossary, domain/native guides, README, OpenSpec context, and the baseline change's proposal/design/specs/tasks/verification/function inventory. Completed work and actual verification evidence are recorded in [verification.md](verification.md); unrelated desktop integration gates remain open.
 
 Out of scope: manual layer assignment, custom layers, a combined-layer view, cross-layer project synchronization of geometry, new desktop membership APIs, session execution, and enabling currently unsupported real-source project moves.

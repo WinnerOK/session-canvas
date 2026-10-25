@@ -39,6 +39,9 @@ final class CanvasNSView: NSView {
     private var spaceDown = false
     private var regionHover: String?
     private var tracking: NSTrackingArea?
+    private var dragGeneration: Int?
+    private var dragLayer: CanvasLayer?
+    private var displayedLayer: CanvasLayer?
     private enum Drag {
         case note(id: String, position: Point, revision: String)
         case region(id: String, bounds: Rect, zoomOnClick: Bool)
@@ -88,6 +91,12 @@ final class CanvasNSView: NSView {
         }
     }
     func update() {
+        if displayedLayer != model.selectedLayer {
+            displayedLayer = model.selectedLayer; focusedItem = nil; localViewport = nil
+        }
+        if drag != nil && (dragGeneration != model.geometryGeneration || dragLayer != model.selectedLayer) {
+            drag = nil; localViewport = nil; regionHover = nil; focusedItem = nil
+        }
         if fitVersion != model.fitRequest && bounds.width > 0 {
             fitVersion = model.fitRequest
             if fitVersion > 0 { fitContent() }
@@ -264,6 +273,7 @@ final class CanvasNSView: NSView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         mouseDownPoint = point(event); currentPoint = mouseDownPoint; moved = false
+        dragGeneration = model.geometryGeneration; dragLayer = model.selectedLayer
         let world = viewport.world(mouseDownPoint)
         if !spaceDown, showsProjectOverview, let item = projectOverviews.reversed().first(where: { $0.frame.contains(NSPoint(x: mouseDownPoint.x, y: mouseDownPoint.y)) }) {
             focusedItem = .project(item.project.id)
@@ -292,6 +302,9 @@ final class CanvasNSView: NSView {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
+        guard dragGeneration == model.geometryGeneration, dragLayer == model.selectedLayer else {
+            drag = nil; localViewport = nil; regionHover = nil; needsDisplay = true; return
+        }
         currentPoint = point(event)
         switch drag {
         case .note(let id, let original, let revision):

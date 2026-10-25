@@ -42,6 +42,7 @@ def parser():
     preview.add_argument("--storage", help="Separate verification .sqlite file; a fresh one is used by default")
     preview.add_argument("--capture", help="Output .png; defaults to a fresh directory under .build/verification")
     preview.add_argument("--show-session")
+    preview.add_argument("--layer", choices=("active", "stale", "inactive"), help="Capture exactly one saved canvas layer")
     preview.add_argument("--created-session-preview", action="store_true")
     preview.add_argument("--hide-sidebar", action="store_true")
     preview.add_argument("--show-result", action="store_true")
@@ -169,6 +170,8 @@ def capture_window(args, task_env, storage, capture):
         command.append("--demo")
     if args.show_session:
         command += ["--show-session", args.show_session]
+    if args.layer:
+        command += ["--layer", args.layer]
     for flag in ("created_session_preview", "hide_sidebar", "show_result"):
         if getattr(args, flag):
             command.append("--" + flag.replace("_", "-"))

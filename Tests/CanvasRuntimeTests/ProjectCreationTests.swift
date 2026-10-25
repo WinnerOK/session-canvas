@@ -15,6 +15,7 @@ struct ProjectCreationTests {
         model.settings = fixture.settings
         await model.connect()
         defer { model.shutdown() }
+        model.selectLayer(.inactive)
         let point = Point(-8200, -4700)
         let viewport = Viewport(origin: Point(7000, 4000), zoom: 0.78)
         model.workspace.viewport = viewport
@@ -60,9 +61,9 @@ struct ProjectCreationTests {
         let screen = Point(700 - Placement.width * zoom / 2, 350 - Placement.height * zoom / 2)
         let point = viewport.world(screen)
         if obstructed {
-            model.workspace.sessions.append(Session(id: "hidden", title: "Hidden session", execution: .unknown))
+            model.workspace.sessions.append(Session(id: "hidden", title: "Hidden session", execution: .idle))
             model.workspace.placements["hidden"] = Placement(point + Point(-80, -30))
-            model.setStateVisible(.unknown, false)
+            model.setStateVisible(.idle, false)
         }
         let event = try #require(NSEvent.mouseEvent(with: .rightMouseDown,
             location: canvas.convert(NSPoint(x: screen.x, y: screen.y), to: nil), modifierFlags: [], timestamp: 0,
@@ -173,8 +174,8 @@ struct ProjectCreationTests {
         #expect(start["cwd"].string == created.session.cwd)
     }
 
-    @Test(arguments: [String?.none, "desktop-project"])
-    func creationRevealsItsSessionEvenWhenUnknownIsHidden(projectID: String?) async throws {
+    @Test(arguments: [String?.none, "desktop-project"], [CanvasLayer.active, .inactive])
+    func creationRevealsItsSessionEvenWhenUnknownIsHidden(projectID: String?, origin: CanvasLayer) async throws {
         let fixture = try CreationFixture()
         defer { fixture.remove() }
         var opened: [URL] = []
@@ -182,10 +183,12 @@ struct ProjectCreationTests {
         model.settings = fixture.settings
         await model.connect()
         defer { model.shutdown() }
+        model.selectLayer(.inactive)
         model.setStateVisible(.unknown, false)
         model.setProjectVisible("desktop-project", false)
         model.workspace.sessions.append(Session(id: "old", title: "Older work", execution: .unknown))
         model.search = "older work"
+        model.selectLayer(origin)
         model.beginCreation(at: Point(500, 500))
         await model.create(title: "Created from the dialog", prompt: "", projectID: projectID, cwd: fixture.folder.path)
         #expect(model.creation == nil)

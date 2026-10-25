@@ -65,7 +65,7 @@ struct SemanticZoomTests {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
         model.workspace.projects = [Project(id: "p", name: "Project"), Project(id: "q", name: "Neighbor")]
         model.workspace.regions = ["p": Rect(0, 0, 760, 580), "q": Rect(1000, 0, 760, 580)]
-        model.workspace.sessions = [Session(id: "p", title: "First", projectID: "p"), Session(id: "q", title: "Second", projectID: "q")]
+        model.workspace.sessions = [Session(id: "p", title: "First", projectID: "p", execution: .idle), Session(id: "q", title: "Second", projectID: "q", execution: .idle)]
         model.workspace.placements = ["p": Placement(Point(20, 64)), "q": Placement(Point(1020, 64))]
         model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.4)
         let original = model.workspace
@@ -109,7 +109,7 @@ struct SemanticZoomTests {
             let id = "p\(index)"
             model.workspace.projects.append(Project(id: id, name: "Project \(index)"))
             model.workspace.regions[id] = Rect(Double(index) * 820, 0, 760, 580)
-            model.workspace.sessions.append(Session(id: id, title: "Session", projectID: id))
+            model.workspace.sessions.append(Session(id: id, title: "Session", projectID: id, execution: .idle))
         }
         let canvas = CanvasNSView(model: model)
         canvas.frame = NSRect(x: 0, y: 0, width: 1400, height: 700)
@@ -142,14 +142,14 @@ struct SemanticZoomTests {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
         model.workspace.projects = [Project(id: "p", name: "Project without enough label space")]
         model.workspace.regions["p"] = region
-        model.workspace.sessions = [Session(id: "s", title: "Session", projectID: "p")]
+        model.workspace.sessions = [Session(id: "s", title: "Session", projectID: "p", execution: .idle)]
         model.workspace.viewport = Viewport(origin: Point(40, 40), zoom: 0.4)
         let canvas = CanvasNSView(model: model)
         canvas.frame = NSRect(x: 0, y: 0, width: 800, height: 400)
         canvas.update()
         let original = try pixels(canvas)
         model.workspace.projects[0].name = ""
-        model.workspace.sessions.append(Session(id: "extra", title: "Another session", projectID: "p"))
+        model.workspace.sessions.append(Session(id: "extra", title: "Another session", projectID: "p", execution: .idle))
         canvas.update()
         #expect(try pixels(canvas) == original, "Names and counts must not change a text-free project area")
         let element = try #require(canvas.accessibilityChildren()?.first as? NSAccessibilityElement)
@@ -161,7 +161,7 @@ struct SemanticZoomTests {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
         model.workspace.projects = [Project(id: "p", name: "Large project")]
         model.workspace.regions["p"] = Rect(0, 0, 760, 9000)
-        model.workspace.sessions = [Session(id: "s", title: "Review service changes", projectID: "p")]
+        model.workspace.sessions = [Session(id: "s", title: "Review service changes", projectID: "p", execution: .idle)]
         model.workspace.placements["s"] = Placement(Point(20, 64))
         model.workspace.viewport = Viewport(origin: Point(40, 40), zoom: 0.05)
         let canvas = CanvasNSView(model: model)
@@ -187,7 +187,7 @@ struct SemanticZoomTests {
         for (index, project) in model.workspace.projects.enumerated() {
             let x = Double(index) * 820
             model.workspace.regions[project.id] = Rect(x, 0, 760, 580)
-            let session = Session(id: project.id + "-session", title: "Verify the implementation", projectID: project.id)
+            let session = Session(id: project.id + "-session", title: "Verify the implementation", projectID: project.id, execution: .idle)
             model.workspace.sessions.append(session)
             model.workspace.placements[session.id] = Placement(Point(x + 20, 64))
         }
@@ -202,7 +202,7 @@ struct SemanticZoomTests {
             let original = try pixels(canvas)
             for index in model.workspace.projects.indices { model.workspace.projects[index].name = "" }
             for project in model.workspace.projects {
-                model.workspace.sessions.append(Session(id: project.id + "-extra", title: "Another session", projectID: project.id))
+                model.workspace.sessions.append(Session(id: project.id + "-extra", title: "Another session", projectID: project.id, execution: .idle))
             }
             canvas.update()
             #expect(try pixels(canvas) == original, "Names and counts must not change distant project areas")
