@@ -37,12 +37,16 @@ The terminal outcome of a turn, including completion, failure, or interruption.
 _Avoid_: Session, successful completion
 
 **Acknowledgment**:
-The user's explicit recognition of a particular result as seen while viewing that session; opening it alone is not acknowledgment.
+The user's explicit record that a particular result has been reviewed, made in the viewer or through Acknowledge all. Mark as unread removes that record; opening a session alone is not acknowledgment.
 _Avoid_: Permission approval, task completion
 
 **Note state**:
-The attention signal shown by a session note, derived from its execution state and whether its latest result has been acknowledged.
+The attention signal shown by a session note, derived from its archive status, execution state, and whether its latest result has been acknowledged.
 _Avoid_: Execution state, note color
+
+**Archived**:
+A session state confirmed by Codex that takes precedence over execution and result attention until the session is restored.
+_Avoid_: Unknown, acknowledged result, deleted session
 
 **Session viewer**:
 The view of an existing session and its results within Session Canvas, where the user can explicitly acknowledge a displayed result.

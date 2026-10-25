@@ -14,6 +14,7 @@ final class ApplicationModel: ObservableObject {
     @Published var selectedSessionID: String?
     @Published var search = "" { didSet { revealedCreationID = nil; closeHiddenSelection() } }
     @Published private(set) var visibility = CanvasVisibility()
+    @Published private(set) var activityNow = Date()
     @Published var history: [HistoryEntry] = []
     @Published var nextHistoryCursor: String?
     @Published var isLoadingHistory = false
@@ -38,7 +39,9 @@ final class ApplicationModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var generation = UUID()
     private var saveTask: Task<Void, Never>?
+    private var activityTask: Task<Void, Never>?
     private let nativeOpener: ((URL) -> Void)?
+    private let observedSessionIDs: Set<String>?
 
     struct CreationContext: Identifiable {
         let id = UUID()
@@ -46,10 +49,18 @@ final class ApplicationModel: ObservableObject {
         var projectID: String?
     }
 
-    init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil) {
+    init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil, observedSessionIDs: Set<String>? = nil) {
         self.nativeOpener = nativeOpener
+        self.observedSessionIDs = observedSessionIDs
         mode = demo ? .demo : .history
         settings = UserDefaults.standard.data(forKey: "connectionSettings").flatMap { try? JSONDecoder().decode(ConnectionSettings.self, from: $0) } ?? .defaults
+        activityTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self else { return }
+                self.updateActivityTime()
+            }
+        }
         do {
             let path: String
             if let storagePath { path = storagePath }
@@ -77,8 +88,13 @@ final class ApplicationModel: ObservableObject {
     }
     private func matchesVisibility(_ session: Session) -> Bool {
         matchesSearch(session) && !visibility.hiddenStates.contains(state(session)) &&
-            !visibility.hiddenProjectIDs.contains(session.projectID ?? "")
+            !visibility.hiddenProjectIDs.contains(session.projectID ?? "") && matchesLifecycle(session)
     }
+    private func matchesLifecycle(_ session: Session) -> Bool {
+        visibility.includesLifecycle(session, acknowledged: acknowledgments[session.id] ?? [], now: activityNow)
+    }
+    func updateActivityTime(now: Date = Date()) { activityNow = now; closeHiddenSelection() }
+    func activityLabel(_ session: Session) -> String { ActivityTime.label(session.updatedAt, now: activityNow) }
     var creationIsOutsideFilters: Bool {
         guard let session = workspace.sessions.first(where: { $0.id == revealedCreationID }) else { return false }
         return !matchesVisibility(session)
@@ -94,7 +110,7 @@ final class ApplicationModel: ObservableObject {
     }
     var hiddenProjects: [Project] { workspace.projects.filter { visibility.hiddenProjectIDs.contains($0.id) } }
     var stateCounts: [NoteState: Int] {
-        Dictionary(grouping: workspace.sessions.filter { $0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "") }, by: state).mapValues(\.count)
+        Dictionary(grouping: workspace.sessions.filter { $0.id == revealedCreationID || matchesSearch($0) && !visibility.hiddenProjectIDs.contains($0.projectID ?? "") && matchesLifecycle($0) }, by: state).mapValues(\.count)
     }
     func visibleProject(at point: Point) -> String? {
         visibleProjects.first { workspace.regions[$0.id]?.contains(point) == true }?.id
@@ -116,7 +132,38 @@ final class ApplicationModel: ObservableObject {
     func showAllProjects() {
         var next = visibility; next.hiddenProjectIDs = []; setVisibility(next)
     }
-    func showAllSessions() { search = ""; setVisibility(CanvasVisibility()) }
+    func setIdleTimeout(_ timeout: IdleTimeout) { var next = visibility; next.idleTimeout = timeout; setVisibility(next) }
+    func setHideUnknown(_ hidden: Bool) { var next = visibility; next.hideUnknown = hidden; setVisibility(next) }
+    func showAllSessions() { search = ""; var next = CanvasVisibility(); next.hiddenStates = []; setVisibility(next) }
+    var canRearrange: Bool { connected && !isRefreshing && !isCreating && pendingSessions.isEmpty && database != nil && !visibleSessions.isEmpty }
+    func rearrange() {
+        guard canRearrange, let database else { return }
+        do {
+            let next = try CanvasRearranger.arrange(workspace, visibleSessionIDs: Set(visibleSessions.map(\.id)), acknowledgments: acknowledgments)
+            try database.save(next, source: sourceID)
+            workspace = next
+        } catch { errorMessage = "Couldn’t rearrange sessions. \(error.localizedDescription)" }
+    }
+    func canArchive(_ session: Session) -> Bool {
+        archiveEligible(session) && !pendingSessions.contains(session.id) && !isRefreshing
+    }
+    private func archiveEligible(_ session: Session) -> Bool { connected && source?.canArchive == true && (session.isArchived || state(session) == .idle && session.unknownReason == nil) }
+    func toggleArchive(_ id: String) async {
+        guard let source, let session = workspace.sessions.first(where: { $0.id == id }), canArchive(session) else { return }
+        let token = generation
+        pendingSessions.insert(id)
+        defer { if token == generation { pendingSessions.remove(id) } }
+        await refresh()
+        guard token == generation, let current = workspace.sessions.first(where: { $0.id == id }),
+              current.revision == session.revision, current.isArchived == session.isArchived, archiveEligible(current) else { return }
+        do {
+            try await source.setArchived(sessionID: id, archived: !session.isArchived)
+            guard token == generation else { return }
+            if let i = workspace.sessions.firstIndex(where: { $0.id == id }) { workspace.sessions[i].archived = !session.isArchived }
+            persist(); closeHiddenSelection()
+            await refresh()
+        } catch { if token == generation { errorMessage = "Archive change failed. \(error.localizedDescription)" } }
+    }
     private func setVisibility(_ next: CanvasVisibility) {
         do {
             if let source {
@@ -159,7 +206,7 @@ final class ApplicationModel: ObservableObject {
         if mode == .demo {
             let saved = try? database?.load(source: "demo-v1")
             next = DemoSource(restored: saved?.sessions ?? [])
-        } else { next = CodexSource(mode: mode, settings: settings) }
+        } else { next = CodexSource(mode: mode, settings: settings, observedSessionIDs: observedSessionIDs) }
         source = next
         let cachedSourceID = next.sourceID
         do {
@@ -185,6 +232,16 @@ final class ApplicationModel: ObservableObject {
                 for i in self.workspace.sessions.indices { self.workspace.sessions[i].execution = .unknown }
                 self.closeHiddenSelection()
             }
+            next.onSessionObservation = { [weak self] observation, baseline in
+                guard let self, self.generation == token,
+                      let index = self.workspace.sessions.firstIndex(where: { $0.id == observation.id }),
+                      self.workspace.sessions[index].revision == baseline.revision,
+                      self.workspace.sessions[index].latestResult?.id == baseline.latestResult?.id,
+                      self.workspace.sessions[index].requests.isEmpty,
+                      self.workspace.sessions[index].execution == .unknown || self.workspace.sessions[index].stateIsFromHistory else { return }
+                self.applyHistoryObservation(observation, at: index)
+                self.closeHiddenSelection(); self.persist()
+            }
             try await next.connect()
             guard generation == token else { return }
             if next.sourceID != cachedSourceID {
@@ -193,6 +250,7 @@ final class ApplicationModel: ObservableObject {
                 visibility = try database?.visibility(source: next.sourceID) ?? CanvasVisibility()
                 for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
             }
+            next.restoreCachedResults(workspace.sessions)
             connected = true
             connectionStatus = next.connectionStatus; hasLiveState = next.hasLiveState
             await refresh()
@@ -225,6 +283,7 @@ final class ApplicationModel: ObservableObject {
             for session in snapshot.sessions {
                 var updated = session
                 if updated.latestResult == nil { updated.latestResult = merged[session.id]?.latestResult }
+                if updated.archived == nil { updated.archived = merged[session.id]?.archived }
                 merged[session.id] = updated
             }
             for id in source.removedSessionIDs { merged.removeValue(forKey: id) }
@@ -259,6 +318,7 @@ final class ApplicationModel: ObservableObject {
         guard let source, let id = selectedSessionID else { return }
         isLoadingHistory = true; historyError = nil
         let token = generation, cursor = older ? nextHistoryCursor : nil
+        let baseline = workspace.sessions.first { $0.id == id }
         defer { if generation == token && selectedSessionID == id { isLoadingHistory = false } }
         do {
             let page = try await source.history(sessionID: id, cursor: cursor)
@@ -266,13 +326,28 @@ final class ApplicationModel: ObservableObject {
             if older { history = page.entries + history }
             else { history = page.entries }
             nextHistoryCursor = page.nextCursor
-            if !older, let result = page.entries.compactMap(\.result).last,
-               let i = workspace.sessions.firstIndex(where: { $0.id == id }) {
-                workspace.sessions[i].latestResult = result
+            if !older, let i = workspace.sessions.firstIndex(where: { $0.id == id }), workspace.sessions[i] == baseline {
+                if let observation = page.sessionObservation, observation.id == id {
+                    applyHistoryObservation(observation, at: i)
+                } else if let result = page.entries.compactMap(\.result).last {
+                    workspace.sessions[i].latestResult = result
+                }
                 persist()
                 closeHiddenSelection()
             }
         } catch { if generation == token && selectedSessionID == id { historyError = error.localizedDescription } }
+    }
+    private func applyHistoryObservation(_ observation: Session, at index: Int) {
+        // Keep local geometry/membership/archive facts; current live work outranks saved history.
+        if workspace.sessions[index].requests.isEmpty && (workspace.sessions[index].execution == .unknown || workspace.sessions[index].stateIsFromHistory) {
+            workspace.sessions[index].execution = observation.execution
+            workspace.sessions[index].requests = observation.requests
+            workspace.sessions[index].savedState = observation.savedState
+            workspace.sessions[index].unknownReason = observation.unknownReason
+        }
+        workspace.sessions[index].latestResult = observation.latestResult
+        workspace.sessions[index].revision = observation.revision
+        workspace.sessions[index].updatedAt = observation.updatedAt
     }
     func canAcknowledge(_ result: SessionResult, sessionID: String) -> Bool {
         guard selectedSessionID == sessionID, !isLoadingHistory,
@@ -287,42 +362,87 @@ final class ApplicationModel: ObservableObject {
             closeHiddenSelection()
         } catch { errorMessage = "Acknowledgment was not saved. Please retry. \(error.localizedDescription)" }
     }
-    func moveNote(id: String, position: Point, expectedRevision: String) {
-        guard let session = workspace.sessions.first(where: { $0.id == id }), let previous = workspace.placements[id], !pendingSessions.contains(id) else { return }
+    private var acknowledgeAllTargets: [(session: String, result: String)] {
+        workspace.sessions.compactMap { session in
+            guard state(session) == .finished, let result = session.latestResult else { return nil }
+            return (session.id, result.id)
+        }
+    }
+    var acknowledgeAllCount: Int { acknowledgeAllTargets.count }
+    var canAcknowledgeAll: Bool { connected && !isRefreshing && database != nil && acknowledgeAllCount > 0 }
+    func acknowledgeAll() {
+        guard canAcknowledgeAll, let database else { return }
+        let targets = acknowledgeAllTargets
+        do {
+            try database.acknowledge(source: sourceID, results: targets)
+            var next = acknowledgments
+            for target in targets { next[target.session, default: []].insert(target.result) }
+            acknowledgments = next
+            closeHiddenSelection()
+        } catch { errorMessage = "Acknowledgments were not saved. Please retry. \(error.localizedDescription)" }
+    }
+    func canMarkUnread(_ result: SessionResult, sessionID: String) -> Bool {
+        selectedSessionID == sessionID && !isLoadingHistory && selectedSession != nil &&
+            (history.contains(where: { $0.result?.id == result.id }) || selectedSession?.latestResult?.id == result.id) &&
+            (acknowledgments[sessionID] ?? []).contains(result.id)
+    }
+    func markUnread(_ result: SessionResult, sessionID: String) {
+        guard canMarkUnread(result, sessionID: sessionID), let database else { return }
+        do {
+            try database.removeAcknowledgment(source: sourceID, session: sessionID, result: result.id)
+            acknowledgments[sessionID]?.remove(result.id)
+            closeHiddenSelection()
+        } catch { errorMessage = "Result was not marked unread. Please retry. \(error.localizedDescription)" }
+    }
+    func moveNote(id: String, position: Point, expectedRevision: String, explicitProjectAction: Bool = false) {
+        guard let session = workspace.sessions.first(where: { $0.id == id }), workspace.placements[id] != nil, !pendingSessions.contains(id), !isRefreshing else { return }
         guard session.revision == expectedRevision else { errorMessage = "The session changed during the drag. Its current placement was retained."; return }
         let proposed = Placement(position), target = workspace.project(at: proposed.center)
-        if let target, visibleRegions[target] == nil {
+        if let target, visibleRegions[target] == nil, !explicitProjectAction {
             errorMessage = "That project is hidden. Show it before moving a session there."; return
         }
         if session.projectID == target { workspace.placements[id] = proposed; persist(); return }
         guard canAssignProject else {
-            errorMessage = "Codex desktop project membership is not exposed by this connection. The note stayed in its original area. You can try project regions in Demo workspace."
+            errorMessage = "Moving existing sessions requires a newer desktop Codex connection. Select the desktop-bundled executable in Connection settings and reconnect. The session stayed in its original project."
             objectWillChange.send(); return
         }
         guard let source else {
             errorMessage = "The session changed during the drag. Its current placement was retained."; return
         }
         pendingSessions.insert(id)
-        workspace.placements[id] = proposed
         let token = generation
         Task {
             defer { if generation == token { pendingSessions.remove(id) } }
             do {
-                try await source.assign(sessionID: id, projectID: target, revision: expectedRevision)
+                let confirmed = try await source.assign(sessionID: id, projectID: target, revision: expectedRevision)
+                guard generation == token else { return }
+                guard confirmed.id == id, confirmed.projectID == target,
+                      let index = workspace.sessions.firstIndex(where: { $0.id == id }) else {
+                    throw CanvasError.message("Codex did not confirm the requested project. Refresh before retrying.")
+                }
+                guard workspace.sessions[index].projectID == session.projectID || workspace.sessions[index].projectID == target else {
+                    throw CanvasError.message("The session moved to another project while this request was pending. Its current membership will be refreshed.")
+                }
+                workspace.sessions[index].projectID = confirmed.projectID
+                workspace.sessions[index].projectMembershipConfirmation = confirmed.projectMembershipConfirmation
+                workspace.sessions[index].revision = confirmed.revision
+                workspace.sessions[index].updatedAt = confirmed.updatedAt
+                workspace.placements[id] = proposed
+                persist()
+            } catch {
                 guard generation == token else { return }
                 await refresh()
                 guard generation == token else { return }
-                workspace.placements[id] = proposed
-                persist()
-            } catch { if generation == token { workspace.placements[id] = previous; errorMessage = error.localizedDescription } }
+                errorMessage = error.localizedDescription
+            }
         }
     }
     func moveToProject(id: String, projectID: String?) {
-        guard let session = workspace.sessions.first(where: { $0.id == id }) else { return }
+        guard let session = workspace.sessions.first(where: { $0.id == id }), !pendingSessions.contains(id), !isRefreshing else { return }
         var copy = workspace
         let placement = copy.vacantPlacement(projectID: projectID, excluding: id)
         workspace.regions = copy.regions
-        moveNote(id: id, position: placement.position, expectedRevision: session.revision)
+        moveNote(id: id, position: placement.position, expectedRevision: session.revision, explicitProjectAction: true)
     }
     func editRegion(id: String, rect: Rect) {
         guard let original = workspace.regions[id] else { return }
@@ -405,7 +525,7 @@ final class ApplicationModel: ObservableObject {
     }
     func shutdown() {
         persist(); generation = UUID(); connected = false; hasLiveState = false
-        changeTask?.cancel(); changeTask = nil; refreshTask?.cancel(); loadTask?.cancel(); saveTask?.cancel()
+        changeTask?.cancel(); changeTask = nil; refreshTask?.cancel(); loadTask?.cancel(); saveTask?.cancel(); activityTask?.cancel()
         source?.close()
     }
 }

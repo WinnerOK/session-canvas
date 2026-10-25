@@ -19,3 +19,7 @@ Use `python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.p
 Rule files load at Codex startup. An already-running chat can retain an older policy and an existing approval prompt; explain that Codex needs to reload the rules rather than claiming a file check updated the active chat. `codex execpolicy check --rules ...` proves file matching only.
 
 Preview defaults to a fresh demo database and verifies a newly written PNG. Use `--source desktop` for actual saved-session inspection and `test --real-source` for the opt-in installed-source checks. Read [the native guide](docs/native-application.md#codex-verification-launcher) for options and permission setup. Report command or capture failures as failed verification.
+
+## Protect the running desktop during verification
+
+Use fixtures and demo captures first. Installed inventory checks must disable desktop observation. Running `test --live-desktop` or `preview --source desktop` requires explicit user authorization for that specific run; standing build/test permissions do not grant it. After a hung live check, stop its proven test-owned processes and continue with fixtures. Preserve ChatGPT and unrelated processes. See [verification safety](docs/native-application.md#verification-safety) before any live check.

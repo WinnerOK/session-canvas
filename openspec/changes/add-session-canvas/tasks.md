@@ -65,7 +65,8 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 
 - [x] 5.1 Implement non-overlapping regions and world-coordinate center/boundary rules; verify borders, partial overlaps, zoom invariance, and invisible-region exclusion in core/runtime tests.
 - [ ] 5.2 Implement confirmed assignment/reassignment/removal plus keyboard alternatives; verify source rejection restores confirmed placement and running-session restrictions are reported.
-  - [x] 5.2.1 Exercise confirmed moves and preserved execution with the isolated demo; keep real-source move controls disabled and reject unsupported cross-boundary drops.
+  - [x] 5.2.1 Exercise confirmed moves and preserved execution with the isolated demo; reject unsupported cross-boundary drops. Supported desktop updates were subsequently enabled in section 17.
+  - [x] 5.2.2 Verify actual installed-server assignment/reassignment/removal through the source adapter in isolated homes, plus fixture/model confirmation, rejection, persistence, and stale-cache precedence.
 - [ ] 5.3 Implement conditional membership changes, pending-operation recovery, and external-change reconciliation; verify a racing external move wins over a stale drop and an uncertain mutation is not blindly retried.
 - [ ] 5.4 Implement region movement/resizing and source project removal; verify members move together, invalid geometry edits are rejected, and no geometry edit mutates membership.
   - [x] 5.4.1 Verify local region movement/resizing, member retention, hidden-member movement, collision rejection, and no geometry-driven reassignment.
@@ -109,18 +110,103 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 8.4 Document the stable direct command for future Codex chats and synchronize the local-verification contract, guide, and strict validation.
 - [x] 8.5 Add the general launcher prefix to the main default.rules allow list after the repeated-prompt report; verify the exact reported command and changed preview parameters against that file, run the targeted regression, and document that existing chats need startup reload. File matching alone does not prove prompt-free execution.
 
-## 9. GitHub checks and app releases
+## 9. Session lifecycle visibility
 
-- [x] 9.1 Add reusable pull-request/main CI with Apple Silicon and Intel macOS tests, Python tooling checks, release builds/signature checks, and strict OpenSpec validation; keep installed-source tests opt-in and repository permissions read-only.
-- [x] 9.2 Resolve release versions to exact commits, reuse all required checks, and create/update only draft GitHub Releases from Actions dispatch or version-tag pushes. Create new tags only after checks pass; refuse moved tags and published asset replacement.
-- [x] 9.3 Add validated bundle versions/build numbers and architecture-specific ZIP/checksum packaging; verify metadata, executable permissions, failure propagation, and a local Apple Silicon archive.
-- [x] 9.4 Document GitHub setup, manual/tag release flows, draft review, checksum verification, and ad-hoc signing limitations; synchronize SDD and verify local structure/links.
-- [ ] 9.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
-  - [x] 9.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
-  - [x] 9.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head: hosted run 40198030452, commit 1a52884, Xcode 16.4 / Swift 6.1.2; 12 Python checks, the normal 71-test Swift run, release builds, and bundle signatures passed on both architectures.
+- [x] 9.1 Reproduce unloaded terminal sessions remaining Unknown before viewer opening, hydrate stable saved results during discovery, preserve live priority, and explain uncertain/missing histories.
+- [x] 9.2 Bound bulk rollout reads, verify source identity/paths and incomplete appends, invalidate saved evidence on later work/file changes, and cache unchanged evidence.
+- [x] 9.2.1 Reproduce the desktop subscription echo storm, ignore own echoes, deduplicate other-owner refollows, and move writes off the main thread; check both own and other-observer echoes.
+- [x] 9.2.2 Pace/coalesce subscriptions, disable desktop observation in saved-inventory tests, isolate the live test behind a separate exact-filter opt-in, and cap default build jobs after the reported CPU/crash incident; verify these boundaries using fixtures only.
+- [x] 9.3 Include archived discovery and implement source-confirmed archive/restore from session menus and viewer, protecting active, Unknown, and unreviewed sessions.
+- [x] 9.4 Display one-unit source activity on notes and relative/exact time in the viewer, refreshing without manufacturing activity.
+- [x] 9.5 Persist archive hiding and idle timeout per source, preserve geometry/acknowledgment, protect work and unreviewed results, and reevaluate visibility on time/activity changes; section 11 extends age hiding to optional Unknown.
+- [x] 9.6 Complete offline core/runtime regressions, demo capture, release build, signature, strict OpenSpec/whitespace/link validation, and record earlier installed-source observations and the failed live run separately. Further live verification is deferred after the user's safety correction.
+- [ ] 9.7 Complete real-host archive/restore UI acceptance across host versions; fixtures and isolated server verification do not establish every live-host flow.
+- [x] 9.8 Add explicit single-session live-test scoping and a host CPU/RSS/time watchdog, verify abort/success/busy-host cleanup with mocked processes and the subscription boundary with a local socket fixture.
+- [x] 9.9 Record the newly authorized one-session ChatGPT check: one observed Running session, peak main-process CPU 19.58%, maximum RSS growth 44.36 MiB, 30.01 seconds including build, same surviving host PID and no remaining test helpers. Full-inventory, prolonged, cross-version, and real-host archive/restore UI acceptance remain open.
+
+## 10. Archived attention state
+
+- [x] 10.1 Reproduce Archived with missing history displaying Unknown; make confirmed Archived take display priority while preserving execution/result evidence and acknowledgment.
+- [x] 10.2 Move archive visibility to an Attention checkbox immediately above Unknown, unchecked by default; use the common filter/count/accessibility/overview projection and remove the duplicate toggle/badge.
+- [x] 10.3 Preserve legacy hideArchived choices through hiddenStates membership and a compatible payload codec; verify both choices, Show all, source isolation, restore, geometry, and Finished-only acknowledgment including Archived.
+- [x] 10.4 Complete offline regressions, native demo inspection of the archived session/Attention row, release/signature, strict validation, whitespace, and affected local links; update PR evidence without live desktop testing.
+- [x] 10.5 Preserve known archive metadata across legacy history reads and incomplete inventory, including cached sessions; reproduce the downgrade before fixing it and verify archive/restore/failure on the same source fixture.
+
+## 11. Optional Unknown age hiding
+
+- [x] 11.1 Add Hide unknown directly below Hide Idle after, checked by default including old preferences, with source-isolated persistence and the same activity cutoff; Never disables age hiding for both states.
+- [x] 11.2 Preserve running execution, pending requests, and any known unacknowledged result even when displayed as Unknown; restore expired notes/projects without changing state, geometry, membership, or acknowledgment.
+- [x] 11.3 Complete offline regression, native demo inspection, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without desktop IPC.
+
+## 12. Latest-history state recovery
+
+- [x] 12.1 Reproduce latest Completed remaining Unknown through both paged and legacy API history when the local rollout is missing; return a validated latest-turn observation and retain it across ordinary refresh.
+- [x] 12.2 Preserve newer unfinished/unsupported turns, pending requests, live execution, and source/workspace revisions against older history; keep archive/project/geometry/acknowledgment independent and exclude older pages from recovery.
+- [x] 12.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without connecting to the installed desktop.
+
+## 13. Automatic cached-result recovery
+
+- [x] 13.1 Reproduce unopened cached Completed notes staying Unknown; seed same-source result hints and automatically verify missing local evidence after discovery, publishing individual state updates without viewer/inventory reloads or acknowledgment.
+- [x] 13.2 Use one worker and at least one second between checks, request one latest turn when supported, discard legacy transcript entries, cache successful/failed attempts by source/file/result revision, exclude active/requesting/archived/internal/no-result/later-work sessions, honor explicit session scope, and cancel queued/in-flight publication on close/reconnect/disconnect.
+- [x] 13.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without live desktop testing.
+
+## 14. Bulk and reversible acknowledgment
+
+- [x] 14.1 Add labeled Acknowledge all to the top toolbar; atomically record exact latest-result identities of every current-source Finished session, including filtered notes, without loading viewers or acknowledging other states/later results.
+- [x] 14.2 Add Mark as unread to the same viewer control for a known acknowledged result in any state, including unavailable history; persist exact-identity deletion and preserve work/requests, source facts, other records, and geometry on success or failure.
+- [x] 14.3 Complete offline regressions, release/signature, native toolbar/unread-control inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
+## 15. Explicit visible-session rearrangement
+
+- [x] 15.1 Add a pure compact-layout planner: projects first, unassigned notes below, canonical Attention/activity/identity ordering in each area, idempotent coordinates, and no source facts/viewport changes. Adaptive square-oriented packing in section 18 supersedes the original geometric source order.
+- [x] 15.2 Preserve hidden project-relative offsets during project movement (clarified in section 16), retain nonparticipating hidden geometry, validate membership/region/note constraints, jump past tall blocked ranges, and reject invalid plans in full.
+- [x] 15.3 Add labeled Rearrange to the top toolbar, use the current visible projection, save the whole workspace before applying it, preserve viewer/filters/acknowledgment, and guard busy/empty cases.
+- [x] 15.4 Complete offline core/runtime regressions, release/signature, native arranged-layout/toolbar inspection, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
+## 16. Hidden members move with their project
+
+- [x] 16.1 Apply the user's clarification: every visible project may move, carrying hidden members by one shared displacement while independently reflowing only visible members; fully hidden projects and hidden unassigned notes stay fixed.
+- [x] 16.2 Reserve project/hidden-footprint envelopes, preserve hidden-hidden internal geometry, verify membership/collisions and idempotence, and retain save-before-apply/restart behavior.
+- [x] 16.3 Complete offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update PR evidence without installed desktop testing.
+
+## 17. Existing-session project membership API
+
+- [x] 17.1 Verify the installed 0.164.0-alpha.11.1 schema and isolated actual server for metadata/update projectId assignment, reassignment, and empty-string removal; preserve exact session/cwd and start no turn.
+- [x] 17.2 Gate support on known desktop versions/project API availability, resolve local identities, preflight and read back metadata-only moves, and retain remote exclusions. Scoped verified confirmation in section 20 supersedes the initial blanket server-precedence rule.
+- [x] 17.3 Keep confirmed coordinates pending, prevent duplicate session moves, commit only confirmed identities/membership, reconcile failed/ambiguous outcomes without mutation replay, and retain state/requests/review/viewport.
+- [x] 17.4 Complete full offline regressions, isolated adapter verification, release/signature and SDD/link/whitespace checks, then update delivery evidence. Atomic preflight/write races, durable pending recovery, and live-host move presentation remain explicitly unverified.
+
+## 18. Compact square-oriented Rearrange
+
+- [x] 18.1 Replace fixed three/six-column note grids with adaptive physical-size grids; prefer the smallest longer side, then bounding area and wider orientation, retaining Attention/activity/identity row order.
+- [x] 18.2 Pack differently sized project envelopes with deterministic non-rotating free-space reuse and eight width candidates; preserve hidden offsets, fixed nonparticipants, viewport, and atomic persistence.
+- [x] 18.3 Complete shape/density/order/collision/idempotence and model/storage regressions, full offline tests, release/signature, native demo inspection, and strict OpenSpec/whitespace/local-link checks. Keep exact optimum and live-desktop acceptance outside this evidence.
+
+## 19. Native-launch membership detection
+
+- [x] 19.1 Inspect the 16:14 recording and reproduce the unsupported-move guard with an isolated installed server after removing the inherited originator override; distinguish successful raw API moves from disabled adapter support.
+- [x] 19.2 Accept the exact native Canvas user-agent prefix while retaining server-version thresholds and unknown/older/shared guards; use the native form in source/model fixtures and the clean environment in installed verification.
+- [x] 19.3 Complete affected and full offline checks, clean-launch installed-server regression, release/signature and strict SDD/whitespace/link checks; record the missed environment assumption and deliver the fix without live-desktop observation.
+
+## 20. Preserve desktop membership during API discovery
+
+- [x] 20.1 Reproduce a desktop-assigned session becoming unassigned on API null; confirm the real saved project catalog still exists using read-only counts and test recovery of a previously flattened Canvas snapshot.
+- [x] 20.2 Preserve explicit desktop membership by default; replace capability-based precedence with typed per-session verified confirmation, persist/restore it per source, include desktop membership in revisions, and permanently invalidate it after observed desktop changes.
+- [x] 20.3 Cover legacy-assigned and projectless move/removal round trips, SQLite confirmation restoration, unrelated edits, later desktop changes and nonresurrection, stale/rejected/unknown moves, and the clean installed-server adapter.
+- [x] 20.4 Complete full offline regressions, release/signature, strict OpenSpec/whitespace/link checks, and update delivery evidence without observing or mutating the user's desktop sessions.
+
+## 21. GitHub checks and app releases
+
+- [x] 21.1 Add reusable pull-request/main CI with Apple Silicon and Intel macOS tests, Python tooling checks, release builds/signature checks, and strict OpenSpec validation; keep installed-source tests opt-in and repository permissions read-only.
+- [x] 21.2 Resolve release versions to exact commits, reuse all required checks, and create/update only draft GitHub Releases from Actions dispatch or version-tag pushes. Create new tags only after checks pass; refuse moved tags and published asset replacement.
+- [x] 21.3 Add validated bundle versions/build numbers and architecture-specific ZIP/checksum packaging; verify metadata, executable permissions, failure propagation, and a local Apple Silicon archive.
+- [x] 21.4 Document GitHub setup, manual/tag release flows, draft review, checksum verification, and ad-hoc signing limitations; synchronize SDD and verify local structure/links.
+- [ ] 21.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
+  - [x] 21.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
+  - [x] 21.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head: hosted run 40198030452, commit 1a52884, Xcode 16.4 / Swift 6.1.2; 12 Python checks, the normal 71-test Swift run, release builds, and bundle signatures passed on both architectures.
     - [x] Diagnose the hosted UI-test hang with process samples and early exit with LLDB. Use the real hosted form's native Return/default-button route, retain one-create/navigation assertions and canvas mouse regressions, remove temporary diagnostics, and bound/verify test completion.
     - [x] Normalize OCR snapshots to 2× density with English, best-candidate exact text checks, and language correction disabled; seven semantic-zoom tests pass locally. Retain failed hosted test logs/fixture PNGs for diagnosis. Verify the revised native submit test completes locally and on both hosted architectures.
-  - [ ] 9.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
+  - [ ] 21.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
 
 ## Workflow follow-up
 

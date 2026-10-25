@@ -5,14 +5,24 @@ public struct DesktopProjectCatalog: Sendable {
     public var projects: [Project]
     private var assignments: [String: String]
     private var excludedSessions: Set<String>
+    private var nonlocalSessions: Set<String>
     private var serverIDs: [String: String]
     private var roots: [String: [String]]
+    private var membershipRevisions: [String: String] = [:]
 
-    public func projectID(for sessionID: String, serverProjectID: String? = nil) -> String? {
+    public func projectID(for sessionID: String, serverProjectID: String? = nil, confirmation: ProjectMembershipConfirmation? = nil) -> String? {
+        guard !nonlocalSessions.contains(sessionID) else { return nil }
+        // API null alone does not erase an existing desktop assignment. A verified
+        // move can supersede only the same desktop membership snapshot it observed.
+        if let confirmation, confirmation.desktopRevision == membershipRevision(for: sessionID) {
+            return serverIDs.first { $0.value == serverProjectID }?.key
+        }
         guard !excludedSessions.contains(sessionID) else { return nil }
         return assignments[sessionID] ?? serverIDs.first { $0.value == serverProjectID }?.key
     }
     public func serverProjectID(for projectID: String) -> String? { serverIDs[projectID] }
+    public func allowsLocalMembership(for sessionID: String) -> Bool { !nonlocalSessions.contains(sessionID) }
+    public func membershipRevision(for sessionID: String) -> String { membershipRevisions[sessionID] ?? "unassigned" }
     public func rootPaths(for projectID: String) -> [String] { roots[projectID] ?? [] }
 
     public init(data: Data, codexHome: String? = nil) throws {
@@ -39,13 +49,21 @@ public struct DesktopProjectCatalog: Sendable {
         let known = Set(projects.map(\.id))
         let projectless = Set(state["projectless-thread-ids"].array.compactMap(\.string))
         let hosts = state["thread-project-membership-host-ids"]
-        excludedSessions = projectless.union(hosts.object.compactMap { id, value in
+        nonlocalSessions = Set(hosts.object.compactMap { id, value in
             value.string != nil && value.string != "local" ? id : nil
         })
         for (id, value) in state["thread-project-assignments"].object {
             if value["projectKind"].string != "local" || !known.contains(value["projectId"].string ?? "") {
-                excludedSessions.insert(id)
+                nonlocalSessions.insert(id)
             }
+        }
+        excludedSessions = projectless.union(nonlocalSessions)
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        for id in Set(state["thread-project-assignments"].object.keys).union(projectless).union(hosts.object.keys) {
+            let assignment = state["thread-project-assignments"][id]
+            let value = JSONValue.object(["projectId": assignment["projectId"], "projectKind": assignment["projectKind"],
+                                          "projectless": .bool(projectless.contains(id)), "host": hosts[id]])
+            membershipRevisions[id] = String(decoding: try encoder.encode(value), as: UTF8.self)
         }
         serverIDs = [:]
         if let codexHome {

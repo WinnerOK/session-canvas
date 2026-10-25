@@ -61,10 +61,18 @@ struct ContentView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { model.beginCreation(at: model.workspace.viewport.world(Point(300, 160))) } label: { Label("New session", systemImage: "plus") }
                     .help("New session (⌘N)")
+                Button("Rearrange", systemImage: "square.grid.3x3") { model.rearrange() }
+                    .labelStyle(.titleAndIcon).disabled(!model.canRearrange)
+                    .help("Arrange visible sessions by status and recent activity. Hidden project members travel with their project.")
+                    .accessibilityIdentifier("rearrange")
                 Button { model.fitRequest += 1 } label: { Label("Fit to content", systemImage: "viewfinder") }
                     .help("Fit to content (⌘0)")
                 Button { model.toggleFullScreen() } label: { Label("Toggle full screen", systemImage: "arrow.up.left.and.arrow.down.right") }
                     .help("Toggle full screen (⌃⌘F)")
+                Button("Acknowledge all", systemImage: "checkmark.circle") { model.acknowledgeAll() }
+                    .labelStyle(.titleAndIcon).disabled(!model.canAcknowledgeAll)
+                    .help("Mark the latest results of all \(model.acknowledgeAllCount) Finished sessions as reviewed, including hidden sessions")
+                    .accessibilityIdentifier("acknowledge-all")
                 TextField("Find a session", text: $model.search).textFieldStyle(.roundedBorder).frame(width: 190)
                 Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }.disabled(!model.connected || model.isRefreshing).help("Refresh sessions")
                 Button { model.showsSettings = true } label: { Image(systemName: "slider.horizontal.3") }.help("Connection settings")
@@ -89,9 +97,18 @@ struct ContentView: View {
                             Button("Show all") { model.showAllAttentionStates() }.buttonStyle(.link).font(.caption2)
                         }
                     }.padding(.top, 24).padding(.bottom, 8).padding(.horizontal, 10)
-                    ForEach([NoteState.running, .waiting, .permission, .finished, .idle, .unknown], id: \.rawValue) { state in
+                    ForEach(NoteState.allCases, id: \.rawValue) { state in
                         attentionRow(state, count: model.stateCounts[state, default: 0])
                     }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("VISIBILITY").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
+                        Picker("Hide Idle after", selection: Binding(get: { model.visibility.idleTimeout }, set: { model.setIdleTimeout($0) })) {
+                            ForEach(IdleTimeout.allCases, id: \.self) { Text($0.label).tag($0) }
+                        }
+                        Toggle("Hide unknown", isOn: Binding(get: { model.visibility.hideUnknown }, set: { model.setHideUnknown($0) }))
+                            .toggleStyle(.checkbox).help("Apply the same age limit to Unknown sessions. Never disables age hiding.")
+                        Text("Active sessions and results to review stay visible.").font(.caption2).foregroundStyle(.secondary)
+                    }.font(.system(size: 12)).padding(.horizontal, 10).padding(.top, 20)
                     HStack {
                         Text("PROJECTS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary)
                         Spacer()
@@ -171,6 +188,10 @@ struct SessionViewer: View {
                         Text("SESSION").font(.system(size: 9, weight: .semibold)).tracking(1.8).foregroundStyle(.tertiary)
                         Text(session.title).font(.title3.weight(.semibold)).textSelection(.enabled)
                         Label(model.state(session).label, systemImage: model.state(session).symbol).font(.caption).foregroundStyle(Color(nsColor: model.state(session).color))
+                        Text("Last activity · \(model.activityLabel(session))").font(.caption).foregroundStyle(.secondary)
+                        if session.updatedAt.timeIntervalSince1970 > 0 {
+                            Text(session.updatedAt.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
                     }
                     Spacer()
                     Button { model.selectedSessionID = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Close viewer")
@@ -186,7 +207,14 @@ struct SessionViewer: View {
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 if model.mode == .history {
-                    Label(session.execution == .unknown ? "Saved history · session is not loaded in Codex" : "Live state from Codex desktop", systemImage: session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                    if session.isArchived {
+                        if let reason = session.unknownReason {
+                            Label(reason == .historyMissing ? reason.label : "Saved history is incomplete", systemImage: "clock.arrow.circlepath")
+                                .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                        }
+                    } else {
+                        Label(session.execution == .unknown ? session.unknownReason?.label ?? "Current state unavailable" : session.stateIsFromHistory ? "State from saved history" : "Live state from Codex desktop", systemImage: session.stateIsFromHistory || session.execution == .unknown ? "clock.arrow.circlepath" : "waveform").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     ViewThatFits(in: .horizontal) {
@@ -196,6 +224,10 @@ struct SessionViewer: View {
                             HStack(spacing: 8) { openInCodexButton(session); reloadButton }
                         }
                     }
+                    Button(session.isArchived ? "Unarchive session" : "Archive session", systemImage: session.isArchived ? "tray.and.arrow.up" : "archivebox") {
+                        Task { await model.toggleArchive(session.id) }
+                    }.disabled(!model.canArchive(session))
+                        .help("Archive Idle sessions after acknowledging their result. Active and Unknown sessions cannot be archived here.")
                     if let latest = session.latestResult, !model.history.contains(where: { $0.result?.id == latest.id }) {
                         Button("View latest result") { Task { await model.loadHistory(older: false) } }
                             .buttonStyle(.link).font(.caption).disabled(model.isLoadingHistory)
@@ -245,15 +277,19 @@ struct SessionViewer: View {
     private var displayedResult: SessionResult? { model.history.last { $0.result != nil }?.result }
 
     private func acknowledgeButton(_ session: Session) -> some View {
-        let result = displayedResult
+        let result = displayedResult ?? session.latestResult.flatMap { (model.acknowledgments[session.id] ?? []).contains($0.id) ? $0 : nil }
         let acknowledged = result.map { (model.acknowledgments[session.id] ?? []).contains($0.id) } ?? false
-        let available = result.map { model.canAcknowledge($0, sessionID: session.id) } ?? false
+        let available = result.map { acknowledged ? model.canMarkUnread($0, sessionID: session.id) : model.canAcknowledge($0, sessionID: session.id) } ?? false
         return Button {
-            if let result { model.acknowledge(result, sessionID: session.id) }
+            if let result {
+                if acknowledged { model.markUnread(result, sessionID: session.id) }
+                else { model.acknowledge(result, sessionID: session.id) }
+            }
         } label: {
-            Label(acknowledged ? "Acknowledged" : "Acknowledge result", systemImage: acknowledged ? "checkmark.seal.fill" : "checkmark")
+            Label(acknowledged ? "Mark as unread" : "Acknowledge result", systemImage: acknowledged ? "arrow.uturn.backward" : "checkmark")
         }.buttonStyle(.borderedProminent).fixedSize().disabled(!available)
-            .help("Available only for Finished sessions with a loaded, unacknowledged result")
+            .help(acknowledged ? "Mark the displayed result as unread" : "Available only for Finished sessions with a loaded, unacknowledged result")
+            .accessibilityIdentifier("result-acknowledgment")
     }
 
     private func openInCodexButton(_ session: Session) -> some View {

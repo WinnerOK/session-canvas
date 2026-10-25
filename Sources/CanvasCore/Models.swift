@@ -39,13 +39,22 @@ public struct Viewport: Codable, Equatable, Sendable {
 }
 
 public enum Execution: String, Codable, Sendable { case unknown, idle, running }
+public enum UnknownReason: String, Codable, Sendable {
+    case historyMissing, incompleteHistory
+    public var label: String {
+        switch self {
+        case .historyMissing: return "Saved history is not available on this Mac"
+        case .incompleteHistory: return "Saved history does not establish the current state"
+        }
+    }
+}
 public enum RequestKind: String, Codable, Sendable { case input, permission }
 public enum Outcome: String, Codable, Sendable {
     case completed, failed, stopped
     public var label: String { rawValue.capitalized }
 }
 public enum NoteState: String, CaseIterable, Codable, Sendable {
-    case running, waiting, permission, finished, idle, unknown
+    case running, waiting, permission, finished, idle, archived, unknown
     public var label: String {
         switch self {
         case .running: return "Running"
@@ -53,6 +62,7 @@ public enum NoteState: String, CaseIterable, Codable, Sendable {
         case .permission: return "Permission required"
         case .finished: return "Finished"
         case .idle: return "Idle"
+        case .archived: return "Archived"
         case .unknown: return "Unknown"
         }
     }
@@ -63,16 +73,82 @@ public enum NoteState: String, CaseIterable, Codable, Sendable {
         case .permission: return "hand.raised"
         case .finished: return "checkmark.circle"
         case .idle: return "moon"
+        case .archived: return "archivebox"
         case .unknown: return "questionmark.circle"
         }
     }
 }
 
 public struct CanvasVisibility: Codable, Equatable, Sendable {
-    public var hiddenStates: Set<NoteState> = []
+    public var hiddenStates: Set<NoteState> = [.archived]
     public var hiddenProjectIDs: Set<String> = []
+    public var idleTimeout: IdleTimeout = .never
+    public var hideUnknown = true
     public init() {}
-    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty }
+    public var isFiltered: Bool { !hiddenStates.isEmpty || !hiddenProjectIDs.isEmpty || idleTimeout != .never }
+    enum CodingKeys: String, CodingKey { case hiddenStates, hiddenProjectIDs, hideArchived, idleTimeout, hideUnknown }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hiddenStates = try c.decodeIfPresent(Set<NoteState>.self, forKey: .hiddenStates) ?? [.archived]
+        hiddenProjectIDs = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenProjectIDs) ?? []
+        let hidden = try c.decodeIfPresent(Bool.self, forKey: .hideArchived) ?? true
+        if hidden { hiddenStates.insert(.archived) } else { hiddenStates.remove(.archived) }
+        idleTimeout = try c.decodeIfPresent(IdleTimeout.self, forKey: .idleTimeout) ?? .never
+        hideUnknown = try c.decodeIfPresent(Bool.self, forKey: .hideUnknown) ?? true
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        // Keep the old payload readable; the in-memory setting has one owner, hiddenStates.
+        try c.encode(hiddenStates.subtracting([.archived]), forKey: .hiddenStates)
+        try c.encode(hiddenStates.contains(.archived), forKey: .hideArchived)
+        try c.encode(hiddenProjectIDs, forKey: .hiddenProjectIDs)
+        try c.encode(idleTimeout, forKey: .idleTimeout)
+        try c.encode(hideUnknown, forKey: .hideUnknown)
+    }
+    public func includesLifecycle(_ session: Session, acknowledged: Set<String>, now: Date) -> Bool {
+        guard session.execution != .running, session.requests.isEmpty else { return true }
+        if let result = session.latestResult, !acknowledged.contains(result.id) { return true }
+        let state = session.state(acknowledged: acknowledged)
+        let eligible = (state == .idle && session.unknownReason == nil) || (state == .unknown && hideUnknown)
+        guard eligible else { return true }
+        guard let seconds = idleTimeout.seconds, session.updatedAt.timeIntervalSince1970 > 0 else { return true }
+        return now.timeIntervalSince(session.updatedAt) < seconds
+    }
+}
+
+public enum IdleTimeout: String, CaseIterable, Codable, Sendable {
+    case never, fifteenMinutes, oneHour, oneDay, oneWeek, oneMonth
+    public var seconds: TimeInterval? {
+        switch self {
+        case .never: return nil
+        case .fifteenMinutes: return 900
+        case .oneHour: return 3600
+        case .oneDay: return 86400
+        case .oneWeek: return 604800
+        case .oneMonth: return 2592000
+        }
+    }
+    public var label: String {
+        switch self {
+        case .never: return "Never"
+        case .fifteenMinutes: return "15 minutes"
+        case .oneHour: return "1 hour"
+        case .oneDay: return "1 day"
+        case .oneWeek: return "1 week"
+        case .oneMonth: return "1 month"
+        }
+    }
+}
+
+public enum ActivityTime {
+    public static func label(_ date: Date, now: Date = Date()) -> String {
+        guard date.timeIntervalSince1970 > 0 else { return "Activity unavailable" }
+        let age = max(0, now.timeIntervalSince(date))
+        if age >= 2592000 { return "1 month ago" }
+        if age >= 86400 { return "\(Int(age / 86400))d ago" }
+        if age >= 3600 { return "\(Int(age / 3600))h ago" }
+        return "\(Int(age / 60))m ago"
+    }
 }
 
 public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
@@ -80,6 +156,14 @@ public struct SessionResult: Codable, Equatable, Identifiable, Sendable {
     public var outcome: Outcome
     public var text: String
     public init(id: String, outcome: Outcome, text: String) { self.id = id; self.outcome = outcome; self.text = text }
+}
+
+public struct ProjectMembershipConfirmation: Codable, Equatable, Sendable {
+    public var desktopRevision: String
+    public var serverProjectID: String?
+    public init(desktopRevision: String, serverProjectID: String?) {
+        self.desktopRevision = desktopRevision; self.serverProjectID = serverProjectID
+    }
 }
 
 public struct Session: Codable, Equatable, Identifiable, Sendable {
@@ -92,13 +176,22 @@ public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var latestResult: SessionResult?
     public var updatedAt: Date
     public var revision: String
+    // Optional storage fields preserve decoding of existing workspace snapshots.
+    public var archived: Bool?
+    public var savedState: Bool?
+    public var unknownReason: UnknownReason?
+    public var projectMembershipConfirmation: ProjectMembershipConfirmation?
+    public var isArchived: Bool { archived == true }
+    public var stateIsFromHistory: Bool { savedState == true }
     public init(id: String, title: String, projectID: String? = nil, cwd: String = "", execution: Execution = .unknown,
-                requests: [String: RequestKind] = [:], latestResult: SessionResult? = nil, updatedAt: Date = Date(), revision: String = "0") {
+                requests: [String: RequestKind] = [:], latestResult: SessionResult? = nil, updatedAt: Date = Date(), revision: String = "0", isArchived: Bool = false) {
         self.id = id; self.title = title.isEmpty ? "Untitled session" : title
         self.projectID = projectID; self.cwd = cwd; self.execution = execution; self.requests = requests
         self.latestResult = latestResult; self.updatedAt = updatedAt; self.revision = revision
+        self.archived = isArchived; self.savedState = false
     }
     public func state(acknowledged: Set<String>) -> NoteState {
+        if isArchived { return .archived }
         guard execution != .unknown else { return .unknown }
         if requests.values.contains(.permission) { return .permission }
         if requests.values.contains(.input) { return .waiting }
@@ -249,7 +342,11 @@ public struct HistoryEntry: Identifiable, Equatable, Sendable {
 public struct HistoryPage: Sendable {
     public var entries: [HistoryEntry]
     public var nextCursor: String?
-    public init(entries: [HistoryEntry], nextCursor: String? = nil) { self.entries = entries; self.nextCursor = nextCursor }
+    /// Present only when reading the latest history established a source observation.
+    public var sessionObservation: Session?
+    public init(entries: [HistoryEntry], nextCursor: String? = nil, sessionObservation: Session? = nil) {
+        self.entries = entries; self.nextCursor = nextCursor; self.sessionObservation = sessionObservation
+    }
 }
 
 public enum CanvasError: LocalizedError {
