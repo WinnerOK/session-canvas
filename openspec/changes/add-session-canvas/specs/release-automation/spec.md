@@ -15,6 +15,13 @@ Every pull request and push to `main` SHALL run the normal Swift Testing suites,
 - **WHEN** the test command exits without Swift Testing reporting a completed successful run
 - **THEN** CI fails even if the process exit status is zero
 
+### Requirement: Failed hosted tests retain evidence
+CI SHALL retain the failed application-test log and generated fixture PNGs as architecture-specific workflow artifacts for seven days. This evidence SHALL come from the isolated normal suite with installed-source checks disabled.
+
+#### Scenario: A native rendering regression fails on a hosted runner
+- **WHEN** the application-test step fails after producing a log or fixture captures
+- **THEN** the job uploads those available files for diagnosis
+
 ### Requirement: Release creation uses the verified source revision
 The repository SHALL provide a manually dispatched GitHub Actions release workflow and a `v*` tag-push trigger. Releases SHALL accept only `vMAJOR.MINOR.PATCH` numeric versions. An existing tag SHALL resolve to its commit; a new manually requested tag SHALL target the selected workflow revision. Both architecture checks and strict specification validation MUST pass for that exact revision before creating or updating a draft release.
 

@@ -119,7 +119,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
   - [x] 9.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
   - [ ] 9.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head.
     - [x] Diagnose the hosted UI-test hang with process samples and early exit with LLDB. Use the real hosted form's native Return/default-button route, retain one-create/navigation assertions and canvas mouse regressions, remove temporary diagnostics, and bound/verify test completion.
-    - [x] Keep exact unclipped-text checks across OCR versions by using English and the top five Vision candidates with language correction disabled; verify the revised native submit test completes locally.
+    - [x] Normalize OCR snapshots to 2× density with English, best-candidate exact text checks, and language correction disabled; seven semantic-zoom tests pass locally. Retain failed hosted test logs/fixture PNGs for diagnosis. Verify the revised native submit test completes locally and on both hosted architectures.
   - [ ] 9.5.3 Exercise a real draft release upload separately; the PR request does not create a product release.
 
 ## Workflow follow-up

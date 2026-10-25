@@ -58,6 +58,16 @@ jobs:
           swift test --disable-xctest 2>&1 | tee .build/application-tests.log
           grep -Eq 'Test run with [0-9]+ tests.*passed' .build/application-tests.log
           grep -Fq 'Suite ProjectCreationTests passed' .build/application-tests.log
+      - name: Save failed test evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-tests-${{ matrix.arch }}
+          path: |
+            .build/application-tests.log
+            /private/tmp/session-canvas-*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Release build and bundle verification
         if: ${{ !inputs.release_tag }}
         run: |

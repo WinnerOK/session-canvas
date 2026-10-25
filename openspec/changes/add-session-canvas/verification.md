@@ -86,6 +86,8 @@ Hosted follow-up: [run 40136561569](https://github.com/WinnerOK/session-canvas/a
 
 The final current-worktree launcher run completed **43 runtime tests in six suites and 28 core tests in two suites**, with successful run summaries and installed-source opt-ins disabled. This includes the revised native default-button action and all OCR zoom cases. It supersedes the exploratory early-exit and failing local test attempts above.
 
+[Hosted run 40197595028](https://github.com/WinnerOK/session-canvas/actions/runs/40197595028) confirmed that the native Return/default-button regression completes on Apple Silicon and Intel, including exactly one creation and captured navigation. Both normal 71-test runs reached completion with one remaining OCR failure at 60% zoom (`walting` rather than `waiting`); five candidates alone did not resolve it. OCR capture now renders into an explicit 2× bitmap instead of using screen-dependent backing density, with English, the single best candidate, and no language correction. All seven semantic-zoom tests, including every OCR zoom case, pass locally with this change; the 700×400-point note fixture writes a 1400×800-pixel PNG. Hosted acceptance remains pending the next run. Failed test logs and fixture PNGs are retained as artifacts for seven days.
+
 The following are not completed by documenting the corrections or by a green structural validation:
 
 - **Hosted CI/release acceptance:** first GitHub PR checks on both architectures and draft release upload after pushing the workflow files; actual runner/toolchain availability and repository token policy remain unverified. Task 9.5.

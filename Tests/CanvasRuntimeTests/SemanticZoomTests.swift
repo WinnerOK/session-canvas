@@ -246,7 +246,12 @@ struct SemanticZoomTests {
     }
 
     private func recognize(_ canvas: CanvasNSView, artifact: String, crop: NSRect? = nil) throws -> [String] {
-        let bitmap = try #require(canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds))
+        // Keep OCR input at Retina density even on hosted runners with a 1x display.
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil,
+            pixelsWide: Int(ceil(canvas.bounds.width * 2)), pixelsHigh: Int(ceil(canvas.bounds.height * 2)),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.size = canvas.bounds.size
         canvas.cacheDisplay(in: canvas.bounds, to: bitmap)
         if crop == nil { try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/private/tmp/session-canvas-\(artifact).png")) }
         var cgImage = try #require(bitmap.cgImage)
@@ -259,6 +264,6 @@ struct SemanticZoomTests {
         request.recognitionLanguages = ["en-US"]
         request.usesLanguageCorrection = false
         try VNImageRequestHandler(cgImage: cgImage).perform([request])
-        return request.results?.flatMap { $0.topCandidates(5).map { $0.string.lowercased() } } ?? []
+        return request.results?.compactMap { $0.topCandidates(1).first?.string.lowercased() } ?? []
     }
 }
