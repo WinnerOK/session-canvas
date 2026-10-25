@@ -256,8 +256,9 @@ struct SemanticZoomTests {
         }
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["en-US"]
         request.usesLanguageCorrection = false
         try VNImageRequestHandler(cgImage: cgImage).perform([request])
-        return request.results?.compactMap { $0.topCandidates(1).first?.string.lowercased() } ?? []
+        return request.results?.flatMap { $0.topCandidates(5).map { $0.string.lowercased() } } ?? []
     }
 }

@@ -272,20 +272,11 @@ struct ProjectCreationTests {
         defer { window.orderOut(nil) }
         try await Task.sleep(for: .milliseconds(200))
         form.layoutSubtreeIfNeeded()
-        // Click the trailing submit button inside the form's 28-point padding.
-        // This exercises SwiftUI's actual button action rather than calling create directly.
-        let point = form.convert(NSPoint(x: form.bounds.maxX - 80,
-            y: form.isFlipped ? form.bounds.maxY - 38 : 38), to: nil)
-        let eventNumber = 73811
-        let mouseDown = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, eventNumber: eventNumber, clickCount: 1, pressure: 1))
-        let mouseUp = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, eventNumber: eventNumber, clickCount: 1, pressure: 1))
-        // AppKit buttons can consume mouse-up in a nested tracking loop before mouse-down returns.
-        NSApp.postEvent(mouseUp, atStart: true)
-        window.sendEvent(mouseDown)
-        // Newer SwiftUI controls return from mouse-down without entering that tracking loop.
-        window.sendEvent(mouseUp)
+        // Return activates the hosted form's actual default submit button.
+        let submit = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+            isARepeat: false, keyCode: 36))
+        #expect(window.performKeyEquivalent(with: submit))
         for _ in 0..<100 {
             if model.creation == nil { break }
             try await Task.sleep(for: .milliseconds(30))

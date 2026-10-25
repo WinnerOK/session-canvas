@@ -57,6 +57,7 @@ jobs:
           mkdir -p .build
           swift test --disable-xctest 2>&1 | tee .build/application-tests.log
           grep -Eq 'Test run with [0-9]+ tests.*passed' .build/application-tests.log
+          grep -Fq 'Suite ProjectCreationTests passed' .build/application-tests.log
       - name: Release build and bundle verification
         if: ${{ !inputs.release_tag }}
         run: |
