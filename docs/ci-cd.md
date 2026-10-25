@@ -59,4 +59,4 @@ python3 scripts/package-release.py --tag v0.2.0 --build-number 1 --arch arm64
 
 Use `--binary PATH` to package an already built executable, including one built through the local toolchain workaround. Package on the matching architecture; the script rejects an executable without the requested architecture. Outputs are under ignored `dist/`. Local packaging does not create a GitHub release.
 
-The workflow configuration and packaging have local verification evidence. A successful local run does not prove that GitHub-hosted Intel/macOS jobs or release upload permissions have executed successfully; those acceptance checks remain open until the first hosted runs.
+The [hosted PR verification](https://github.com/WinnerOK/session-canvas/actions/runs/40198030452) passed on both architectures with Xcode 16.4 / Swift 6.1.2: 12 Python tests, the normal 71-test Swift run, release compilation, bundle signature verification, and OpenSpec. Installed-source checks remain disabled. Actual draft-release creation/upload is a separate acceptance check and has not been run for this PR.
