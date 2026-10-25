@@ -1,12 +1,12 @@
 # Agent Git and GitHub workflow
 
-The user has granted standing authorization for routine Git delivery during coding tasks: create a working branch, stage task files, commit verified changes, push the working branch, and create or update a GitHub pull request without asking for conversation-level permission again. This project's `AGENTS.md` records the authorization. Operating-system/sandbox and plugin approvals are separate controls.
+The user has granted standing authorization for routine Git delivery during coding tasks: create a working branch, stage task files, commit verified changes, push the working branch, and create or update a GitHub pull request without asking for conversation-level permission again. Global `~/.codex/AGENTS.md` and this project's `AGENTS.md` record the authorization. Operating-system/sandbox and plugin approvals are separate controls.
 
 ## Setup status, 2026-10-25
 
-Global instructions and a command-rule extension have been prepared and passed eleven policy checks, but the system request to install them was declined. The prepared changes to `~/.codex/AGENTS.md` and `~/.codex/rules/default.rules` have not been applied. Existing rules already allow branch creation, commits, and fetch; the proposed general push and PR rules remain pending.
+After renewed authorization, global instructions and the command-rule extension were installed in `~/.codex/AGENTS.md` and `~/.codex/rules/default.rules`. Eleven checks against the installed policy passed, covering add, commit, branch creation/switching, push, PR creation/update, and repository inspection; PR merge, hard reset, and arbitrary API mutation received no new allow rule. The SSH remote check succeeded, and GitHub CLI reported ADMIN access for `WinnerOK/session-canvas` with base branch `main`.
 
-The GitHub plugin is installed and enabled. Plugin Management reports that it inherits **Allow low-risk actions**, which is not a Never ask setting. Its advertised publishing workflow combines the connector and CLI, so installing the plugin does not itself grant local Git command permissions. Subsequent user-authorized fetch and remote-branch cleanup on 2026-10-25 verified SSH read/write access to this repository; GitHub CLI authentication remains unverified. No additional skill is required to grant either kind of permission.
+The GitHub plugin is installed and enabled. Plugin Management reports that it inherits **Allow low-risk actions**, which is not a Never ask setting. Its advertised publishing workflow combines the connector and CLI; local Git/CLI command rules are now installed separately. Subsequent user-authorized fetch and remote-branch cleanup on 2026-10-25 verified SSH read/write access independently; the permission installer also confirmed SSH reading and GitHub CLI repository access. No plugin permission setting was changed, and no additional skill is required for this workflow.
 
 ## Delivery sequence
 
@@ -18,12 +18,12 @@ The GitHub plugin is installed and enabled. Plugin Management reports that it in
 
 Invoke `git` and `gh` directly. Write a multiline PR description to a file and pass `--body-file`. The installed `mattpocock-skills:pr` skill can guide the description when applicable; no additional skill is needed to grant command permission.
 
-## Prepared command permissions
+## Saved command permissions
 
-The proposed routine allow list covers `git add`, `git commit`, `git switch -c`, `git switch --`, `git fetch`, `git push`, `git ls-remote`, `gh repo view`, and `gh pr create/edit/view/list/checks/diff/status`. For an existing branch, use `git switch -- BRANCH`. Read-only inspection normally stays inside the workspace; network operations or protected `.git` writes can use `sandbox_permissions="require_escalated"` once the corresponding saved prefix is installed and loaded.
+The routine allow list covers `git add`, `git commit`, `git switch -c`, `git switch --`, `git fetch`, `git push`, `git ls-remote`, `gh repo view`, and `gh pr create/edit/view/list/checks/diff/status`. For an existing branch, use `git switch -- BRANCH`. Read-only inspection normally stays inside the workspace; network operations or protected `.git` writes can use `sandbox_permissions="require_escalated"` with the corresponding loaded saved prefix. Match the command prefix rather than narrowing an approval amendment to one branch, PR title, or file list.
 
 The user's standing authorization covers ordinary branch-and-PR delivery. Force-push, published-history rewrites, deleting remote branches, direct pushes to the main/protected branch, and merging a PR require a separate explicit instruction. Prefix rules match command names and do not enforce arbitrary flag/ref combinations; this boundary is part of the agent's standing instructions. There is no generic `git`, `gh`, or `gh api` allow rule.
 
 Codex loads rule files at startup. Existing chats can retain an older policy until Codex restarts. An `execpolicy check --rules ...` result demonstrates matching against the supplied files; it does not demonstrate runtime reload or dismiss a visible approval prompt.
 
-GitHub authentication and repository write access are independent of Codex's command permissions. The prepared installer's read-only SSH/GitHub CLI probes did not run because installation was declined. Later explicitly requested repository operations verified SSH access independently, without installing the pending global rules. No test commit, branch push, or PR was created during the original preparation.
+GitHub authentication and repository write access are independent of Codex's command permissions. The renewed permission installation completed read-only checks of the existing SSH remote and GitHub CLI repository access. No test commit, branch push, or PR was created during permission setup.
