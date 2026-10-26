@@ -237,6 +237,8 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 25.1 Complete fixture reproduction, phase measurements, prioritized remedies, strict SDD/whitespace/link checks, and a documented explicit responsiveness gate.
 - [ ] 25.2 Move history framing/decoding off the UI actor, avoid rescanning received bytes, and bound queued work; preserve transport order, disconnect/reconnect isolation, timeout, and identity checks.
 - [ ] 25.3 Bound history payload/projection work, add cancellation and revision-aware bounded latest-page caching, and address full-transcript legacy/local paging.
+  - [x] 25.3.1 Verify reverse-pagination support in the installed experimental schema and current adapter/viewer: descending turn pages, cursor continuation, and newest-first presentation already exist. Record descending item paging and lighter turn views as available schema capabilities, without claiming live-server cost or complete summary-content verification.
+  - [ ] 25.3.2 Evaluate lighter turn summaries plus bounded descending item pages and on-demand detail. Preserve supported dialogue/plans/outcome text and identities, avoid presenting partial content as complete, and verify single-item size limits independently of page counts.
 - [ ] 25.4 Pass the synthetic 250 ms heartbeat gate and separately verify huge visible messages, native interactions, and a specifically authorized representative long session. Do not infer UI/installed-source acceptance from fixture timing.
 
 ## Workflow follow-up

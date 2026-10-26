@@ -37,6 +37,21 @@ At 4 MiB, bytes visited fell from 543,162,661 to 4,194,597 and process CPU from 
 
 ## Repair order
 
+### Server-side reverse pagination
+
+The 2026-10-26 follow-up regenerated the desktop-bundled **0.164.0-alpha.11.1** schema with `app-server generate-json-schema --experimental`. It declares:
+
+- `thread/turns/list`: `sortDirection: "desc"` (also the default), turn `limit`, opaque `cursor`/`nextCursor`, and `itemsView: "notLoaded" | "summary" | "full"`. The default items view is `summary`.
+- `thread/items/list`: `sortDirection: "desc"`, item `limit`, optional `turnId`, and cursor-based continuation. Its default direction is ascending, so descending must be explicit. Each returned item carries its `turnId`.
+
+Canvas already requests descending turn pages and uses `nextCursor` for older history. It reverses each received page into the model's chronological order; the viewer reverses the accumulated entries for newest-first display. Loading older pages prepends them to the model and therefore places them below newer entries in the viewer. This is already server-side latest-page loading, not downloading oldest-first and reversing an entire transcript.
+
+The remaining excess is **full item detail for twelve turns**, including tool outputs, plus the quadratic transport scan. The refined repair should retain descending loading while evaluating turn summaries and bounded descending item pages, fetching additional detail only when needed. Summary mode must first be checked for preserved dialogue/plans/result text and IDs; partial results must not be represented as complete history. A single item may still be very large, so item-count limits do not replace byte/work limits or the framing fix.
+
+These capabilities were checked against generated local schemas (`ThreadTurnsListParams`, `ThreadTurnsListResponse`, `ThreadItemsListParams`, `ThreadItemsListResponse`), not a live user session. The schema does not establish whether a cold server internally scans or hydrates the full saved transcript before producing its page. No application behavior changed in this follow-up.
+
+### Prioritized changes
+
 | Priority | Change | Expected benefit and required checks |
 | --- | --- | --- |
 | First | Retain an incremental delimiter-search offset, inspecting only bytes received since the preceding unsuccessful search; reset correctly after complete frames and reconnect | Removes the reproduced quadratic scan. Cover split delimiters, multiple lines per chunk, incomplete frames, size limits, and connection replacement. Preserve ordered delivery. |

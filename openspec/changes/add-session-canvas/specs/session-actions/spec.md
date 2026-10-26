@@ -89,6 +89,14 @@ The viewer SHALL show selectable dialogue, plans, and terminal outcomes with rol
 - **WHEN** the user opens another session or switches sources before a history request returns
 - **THEN** the old reply cannot populate or acknowledge the newly selected viewer
 
+### Requirement: Latest history is requested first
+When server-side history pagination is available, the viewer SHALL request descending pages from the newest history without first requesting the complete transcript. Older history SHALL use source cursors and appear below loaded newer entries. A limited or summary response SHALL NOT be presented as complete history when additional supported content remains available.
+
+#### Scenario: Open a long session and load older entries
+- **WHEN** the user opens a session on a source supporting paged history
+- **THEN** the adapter requests the latest descending page, and the viewer shows its newest entry first
+- **AND** requesting older history uses the continuation cursor and retains newer entries above it
+
 ### Requirement: History loading preserves UI responsiveness
 Receiving, framing, decoding, and projecting history SHALL keep the canvas and viewer controls responsive. A turn-count limit SHALL NOT be treated as a byte or work limit. Cancelled or superseded loads SHALL stop unnecessary local processing and SHALL NOT populate the current viewer. Oversized content SHALL provide a recoverable explanation and native opening rather than monopolizing the UI actor.
 

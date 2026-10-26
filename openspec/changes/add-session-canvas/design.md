@@ -212,6 +212,8 @@ The [history performance investigation](../../../docs/history-loading-performanc
 
 The preferred repair sequence is incremental delimiter search, a serial worker for framing/decoding with bounded handoff, bounded dialogue projection/page bytes, then revision-aware bounded caching and cancellation. A temporary incremental-search-only prototype passed the minimized heartbeat cases and was removed after measurement. Legacy/local paging and very long individual text layout require separate checks. This investigation adds a reproducible failing gate and documentation; it does not implement those application changes. Preserve source identity, result/acknowledgment keys, newest-first order, and stale-observation protection in any repair.
 
+The installed 0.164.0-alpha.11.1 experimental schema confirms descending turn and item pagination, and `summary`/`notLoaded` turn item views. Current code already requests descending turn pages; its `full` view can still transfer large hidden tool outputs. Preserve latest-first cursor loading while evaluating lighter turn summaries and descending item pages with on-demand detail. Check complete supported dialogue/plans/result identities before changing view modes, and retain byte/work limits because a single item may be huge. Schema support does not prove cold-server hydration costs; these remain unmeasured.
+
 ## Risks / Trade-offs
 
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
