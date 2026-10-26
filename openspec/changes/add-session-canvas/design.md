@@ -206,6 +206,12 @@ Keep title search transient, localized, and case-insensitive. Compute visible se
 
 Diagnostic probes emit structure/state/count evidence, and transport errors avoid arbitrary server/stderr contents. They do not prove full desktop acceptance. The [functional inventory](functional-coverage.md) distinguishes code inspection, existing automated coverage, and remaining acceptance gates. This audit changes documentation only and requires no storage migration or application behavior change.
 
+## Long-history processing investigation
+
+The [history performance investigation](../../../docs/history-loading-performance.md) tracks a reproduced stall before SwiftUI rendering. `RPCConnection` receives chunks, scans its growing JSONL buffer, and decodes generic `JSONValue` on `MainActor`. `CodexSource` requests twelve full turns and only then projects supported dialogue; legacy mode reads the entire transcript before slicing forty entries. The local rollout reader runs detached but also builds the full transcript before that slice. Opening the same session requests its latest page again; successful modern pages have no revision-keyed viewer cache. A stale-reply guard protects published selection, but does not cancel transport/decode work.
+
+The preferred repair sequence is incremental delimiter search, a serial worker for framing/decoding with bounded handoff, bounded dialogue projection/page bytes, then revision-aware bounded caching and cancellation. A temporary incremental-search-only prototype passed the minimized heartbeat cases and was removed after measurement. Legacy/local paging and very long individual text layout require separate checks. This investigation adds a reproducible failing gate and documentation; it does not implement those application changes. Preserve source identity, result/acknowledgment keys, newest-first order, and stale-observation protection in any repair.
+
 ## Risks / Trade-offs
 
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.

@@ -89,6 +89,18 @@ The viewer SHALL show selectable dialogue, plans, and terminal outcomes with rol
 - **WHEN** the user opens another session or switches sources before a history request returns
 - **THEN** the old reply cannot populate or acknowledge the newly selected viewer
 
+### Requirement: History loading preserves UI responsiveness
+Receiving, framing, decoding, and projecting history SHALL keep the canvas and viewer controls responsive. A turn-count limit SHALL NOT be treated as a byte or work limit. Cancelled or superseded loads SHALL stop unnecessary local processing and SHALL NOT populate the current viewer. Oversized content SHALL provide a recoverable explanation and native opening rather than monopolizing the UI actor.
+
+#### Scenario: A short page contains large tool output
+- **WHEN** the latest history page contains a large tool payload that is omitted from the viewer
+- **THEN** loading it keeps the UI responsive and does not require rendering that payload
+- **AND** dialogue and terminal result identities remain correct
+
+#### Scenario: Close or switch during a large history read
+- **WHEN** the user closes the viewer or selects another session during history processing
+- **THEN** the interaction is processed promptly and superseded work is cancelled or discarded before expensive local processing
+
 ### Requirement: Viewer controls remain above history
 Acknowledge result or Mark as unread, Open in Codex, Reload history, and pagination controls SHALL remain in a fixed panel above the transcript. The panel SHALL adapt to narrow viewer widths without clipping button labels.
 

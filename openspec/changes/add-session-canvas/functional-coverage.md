@@ -46,6 +46,8 @@ The code links identify implementation; test links identify existing regression 
 
 ## Attention and session actions
 
+The [long-history investigation](../../../docs/history-loading-performance.md) adds an explicit [responsiveness requirement](specs/session-actions/spec.md#requirement-history-loading-preserves-ui-responsiveness) and [fixture regression](specs/local-verification/spec.md#requirement-synthetic-history-responsiveness-regression). `HistoryPerformanceTests` drives the production adapter/transport; its explicit performance gate currently fails. Ordinary skipped-suite results do not close that acceptance gap.
+
 | Function | SDD contract | Implementation / evidence |
 | --- | --- | --- |
 | State precedence, text/icons/colors, terminal outcomes, multiple pending requests | [Deterministic note state](specs/session-attention/spec.md#requirement-deterministic-note-state), [Terminal evidence creates Finished](specs/session-attention/spec.md#requirement-terminal-evidence-creates-finished), [Waiting is not finishing](specs/session-attention/spec.md#requirement-waiting-is-not-finishing), [Requests remain until resolved](specs/session-attention/spec.md#requirement-requests-remain-until-resolved) | [Session.state / NoteState](../../../Sources/CanvasCore/Models.swift), [CodexWire](../../../Sources/CanvasCore/CodexWire.swift), [DesktopObservation](../../../Sources/SessionCanvas/DesktopRuntime.swift); [CanvasCoreTests](../../../Tests/CanvasCoreTests/CanvasCoreTests.swift), [LiveStateTests](../../../Tests/CanvasRuntimeTests/LiveStateTests.swift) |

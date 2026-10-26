@@ -55,6 +55,19 @@ class VerificationTests(unittest.TestCase):
             self.assertNotIn("SESSION_CANVAS_TEST_OBSERVED_SESSION", verify.environment(True, True))
             self.assertEqual(verify.environment(True, True, "chosen")["SESSION_CANVAS_TEST_OBSERVED_SESSION"], "chosen")
 
+    def test_history_performance_is_explicit_and_does_not_enable_real_sources(self):
+        self.assertTrue(verify.parser().parse_args(["test", "--history-performance"]).history_performance)
+        with patch.dict(os.environ, {"SESSION_CANVAS_TEST_HISTORY_PERFORMANCE": "1"}):
+            self.assertNotIn("SESSION_CANVAS_TEST_HISTORY_PERFORMANCE", verify.environment())
+            task_env = verify.environment(history_performance=True)
+            self.assertEqual(task_env["SESSION_CANVAS_TEST_HISTORY_PERFORMANCE"], "1")
+            self.assertNotIn("SESSION_CANVAS_TEST_REAL_SOURCE", task_env)
+            self.assertNotIn("SESSION_CANVAS_TEST_LIVE_DESKTOP", task_env)
+        for source_option in ("--real-source", "--live-desktop"):
+            with self.subTest(source_option=source_option), patch.object(verify.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                verify.main(["test", "--history-performance", source_option])
+            run.assert_not_called()
+
     def test_live_desktop_cannot_be_enabled_for_a_broad_run(self):
         for arguments in (["test", "--live-desktop"], ["test", "--real-source", "--live-desktop"],
                           ["test", "--real-source", "--live-desktop", "--filter", "LiveStateTests"],
