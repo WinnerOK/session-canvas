@@ -34,6 +34,7 @@ def parser():
     commands.add_parser("build", parents=[common], help="Build and sign the local app bundle")
     tests = commands.add_parser("test", parents=[common], help="Run Swift Testing, with optional installed-source checks")
     tests.add_argument("--real-source", action="store_true")
+    tests.add_argument("--history-performance", action="store_true", help="Run the synthetic history responsiveness regression without a desktop connection")
     tests.add_argument("--live-desktop", action="store_true", help="Connect one live desktop observer; requires separate user authorization and the exact live test filter")
     tests.add_argument("--observe-session", help="Exact session ID for the single authorized live desktop test")
     tests.add_argument("--filter", help="Swift Testing name filter")
@@ -50,12 +51,15 @@ def parser():
     return cli
 
 
-def environment(real_source=False, live_desktop=False, observed_session=None):
+def environment(real_source=False, live_desktop=False, observed_session=None, history_performance=False):
     task_env = os.environ.copy()
     task_env.pop("SESSION_CANVAS_TEST_REAL_SOURCE", None)
     task_env.pop("SESSION_CANVAS_TEST_LIVE_DESKTOP", None)
     task_env.pop("SESSION_CANVAS_TEST_OBSERVED_SESSION", None)
     task_env.pop("SESSION_CANVAS_TEST_CAPTURE_CREATION", None)
+    task_env.pop("SESSION_CANVAS_TEST_HISTORY_PERFORMANCE", None)
+    if history_performance:
+        task_env["SESSION_CANVAS_TEST_HISTORY_PERFORMANCE"] = "1"
     if real_source:
         task_env["SESSION_CANVAS_TEST_REAL_SOURCE"] = "1"
     if live_desktop:
@@ -188,6 +192,11 @@ def capture_window(args, task_env, storage, capture):
 def main(argv=None):
     cli = parser()
     args = cli.parse_args(argv)
+    if getattr(args, "history_performance", False):
+        if args.real_source or args.live_desktop:
+            cli.error("--history-performance uses fixtures only and cannot be combined with installed-source checks")
+        if not args.filter:
+            args.filter = "HistoryPerformanceTests"
     if getattr(args, "live_desktop", False) and (not args.real_source or args.filter != "installedDesktopFeedsLiveStateIntoTheApplication" or not (args.observe_session or "").strip()):
         cli.error("--live-desktop requires --real-source, the exact live-test filter, and --observe-session ID; authorize that single live run separately")
     # Validate outputs before building or launching anything.
@@ -197,7 +206,7 @@ def main(argv=None):
         cli.error("--created-session-preview requires --show-session")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (ROOT / ".build/compiler-cache").mkdir(parents=True, exist_ok=True)
-    task_env = environment(getattr(args, "real_source", False), getattr(args, "live_desktop", False), getattr(args, "observe_session", None))
+    task_env = environment(getattr(args, "real_source", False), getattr(args, "live_desktop", False), getattr(args, "observe_session", None), getattr(args, "history_performance", False))
     if args.command == "test":
         command = swift_command(args, "test") + ["--disable-xctest"]
         if args.filter:

@@ -310,7 +310,7 @@ final class CodexSource: SessionSource {
         let baseline = previous[sessionID]
         let fileRevision = rolloutRevision(sessionID: sessionID)
         if supportsPagedHistory != false {
-            var params: [String: JSONValue] = ["threadId": .string(sessionID), "limit": .number(Double(limit)), "sortDirection": .string("desc"), "itemsView": .string("full")]
+            var params: [String: JSONValue] = ["threadId": .string(sessionID), "limit": .number(Double(limit)), "sortDirection": .string("desc"), "itemsView": .string("summary")]
             if let cursor { params["cursor"] = .string(cursor) }
             do {
                 let value = try await rpc.request("thread/turns/list", params)

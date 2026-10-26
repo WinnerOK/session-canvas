@@ -8,6 +8,19 @@ The repository SHALL provide read-only probes for saved inventory/history, one e
 - **THEN** successful output reports verified identity and dialogue/terminal counts without printing dialogue
 - **AND** invalid identity/path or parsing failure returns a nonzero exit status with no conversation content
 
+### Requirement: Synthetic history responsiveness regression
+The launcher SHALL offer an explicit fixture-only history check using the production adapter and transport. It SHALL report bytes, entry counts, elapsed/process CPU time, and UI-actor heartbeat gaps without transcript text. Ordinary verification SHALL clear inherited performance opt-ins. Performance mode SHALL reject installed-source options and propagate failed budgets.
+
+#### Scenario: Reproduce a blocked history viewer without the desktop
+- **WHEN** test --history-performance runs
+- **THEN** a temporary synthetic server supplies history through the production adapter with desktop observation disabled
+- **AND** the default filter selects only the performance suite; a UI-actor heartbeat gap of 250 ms or greater in the fixed synthetic cases fails the command
+
+#### Scenario: Ordinary checks omit machine-dependent timing
+- **WHEN** normal tests run without the explicit performance option
+- **THEN** the timing suite is skipped while functional framing and summary-pagination regressions remain enabled
+- **AND** ordinary results alone do not establish installed-session performance acceptance
+
 ### Requirement: Stable authorized local verification command
 Development tooling SHALL provide one direct Python launcher for building, testing, and previewing the current checkout. A user-authorized Codex command-prefix rule SHALL cover its absolute path with varying supported arguments, while retaining the workspace sandbox and other command rules. The launcher SHALL accept a bounded set of operations without arbitrary shell-command passthrough.
 

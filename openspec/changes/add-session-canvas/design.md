@@ -206,6 +206,14 @@ Keep title search transient, localized, and case-insensitive. Compute visible se
 
 Diagnostic probes emit structure/state/count evidence, and transport errors avoid arbitrary server/stderr contents. They do not prove full desktop acceptance. The [functional inventory](functional-coverage.md) distinguishes code inspection, existing automated coverage, and remaining acceptance gates. This audit changes documentation only and requires no storage migration or application behavior change.
 
+## Long-history processing investigation
+
+The [history performance investigation](../../../docs/history-loading-performance.md) reproduced a quadratic delimiter scan on `MainActor` before SwiftUI rendering. `RPCStreamReader` now reads at most 64 KiB per iteration on a dedicated serial dispatch queue, maintains delimiter-search progress, validates a 64 MiB per-frame bound, and decodes outside the UI actor. Delivery waits for one UI callback to finish before the worker continues, bounding the handoff queue. Connection generations reject replaced-reader values/EOF; normal EOF drains final complete replies before disconnecting. Blocking pipe reads do not occupy Swift's cooperative executor.
+
+`CodexSource` requests at most twelve descending turn summaries (`itemsView: summary`), then projects only supplied dialogue, plans, and terminal outcomes. Older history uses the source cursor only after Load older history. The model stores chronological entries and reverses them for display; prepending older pages keeps them below current entries. A per-load token and busy/exhaustion guards prevent duplicate page requests and obsolete load completion from changing the current viewer's loading state. Result and acknowledgment identities remain stable across pages. The user selected summary-only history, so full item/detail fetching is not part of this flow.
+
+The installed 0.164.0-alpha.11.1 experimental schema declares this summary mode and descending turn/item cursors. Fixture/model checks cover summary content, three pages, ordering, no eager detail request, duplicate/exhausted loads, and latest-result acknowledgment. Performance checks retain an adversarial large reply even when summary was requested, including the original twelve-turn payload. Revision-aware caching, per-request cancellation of shared transport work, legacy/local full-transcript reads before slicing, huge visible text layout, and cold installed-server hydration remain separate acceptance work. The detached rollout fallback retains its existing path/identity and file/record limits.
+
 ## Risks / Trade-offs
 
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
