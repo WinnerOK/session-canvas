@@ -248,6 +248,7 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 26.1 Reproduce early member hiding with actual note-title bitmap changes and accessibility targets across fourteen scales; confirm failure at 32–54% where unassigned notes still render text.
 - [x] 26.2 Share the compact-text layout decision between project overview activation and note rendering; retain individual member interaction until that layout no longer fits. Update overview gesture/layer fixtures to use the actual overview range.
 - [x] 26.3 Verify the full offline suite, native demo rendering, release build/signature, strict OpenSpec/whitespace, and affected local document links; record actual evidence.
+- [ ] 26.4 Complete hosted OpenSpec and both macOS architecture checks. Run 40367450550 refused all jobs before any step because GitHub account payments or spending limits require attention; PR #14 remains draft pending hosted verification.
 
 ## Workflow follow-up
 
