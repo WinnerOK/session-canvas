@@ -254,33 +254,20 @@ public struct Workspace: Codable, Equatable, Sendable {
         if let point, let placement = nearestPlacement(to: point, projectID: projectID, occupied: occupied) {
             return placement
         }
-        if let id = projectID, var region = regions[id] {
+        if let id = projectID, let region = regions[id] {
+            let members = Set(geometrySessions.filter { $0.projectID == id }.map(\.id))
+            let memberRects = placements.filter { $0.key != excluding && members.contains($0.key) }.map(\.value.rect)
             for index in 0..<max(300, placements.count * 4 + 1) {
                 let columns = max(1, min(3, Int((region.width - 20) / 250)))
                 let column = index % columns, row = index / columns
                 let candidate = Placement(Point(region.x + 20 + Double(column) * 250, region.y + 64 + Double(row) * 172))
-                if !occupied.contains(where: { candidate.rect.intersects($0) }) {
+                if !memberRects.contains(where: { candidate.rect.intersects($0) }) {
                     let desiredHeight = max(region.height, candidate.position.y + Placement.height + 24 - region.y)
                     let expanded = Rect(region.x, region.y, region.width, desiredHeight)
-                    if !regions.contains(where: { $0.key != id && $0.value.intersects(expanded) }) &&
-                        !placements.contains(where: { entry in
-                            entry.key != excluding && sessions.first(where: { $0.id == entry.key })?.projectID != id && expanded.contains(entry.value.center)
-                        }) {
-                        region = expanded; regions[id] = region
-                        return candidate
-                    }
+                    self = DownwardGrowthPlanner.place(candidate, in: expanded, projectID: id, workspace: self, excluding: excluding)
+                    return candidate
                 }
             }
-            // If surrounding geometry blocks growth, translate this entire region into free space.
-            // This preserves its members' relative positions and never changes their membership.
-            let right = max(regions.values.map { $0.x + $0.width }.max() ?? 0,
-                            placements.values.map { $0.position.x + Placement.width }.max() ?? 0) + 100
-            let delta = Point(right - region.x, -region.y)
-            regions[id] = Rect(right, 0, max(760, region.width), region.height + 200)
-            for session in geometrySessions where session.projectID == id && session.id != excluding {
-                if let placement = placements[session.id] { placements[session.id] = Placement(placement.position + delta) }
-            }
-            return vacantPlacement(projectID: id, excluding: excluding)
         }
         let left = regions.isEmpty ? 0 : (regions.values.map(\.x).min() ?? 0) - 1400
         for index in 0..<100000 {

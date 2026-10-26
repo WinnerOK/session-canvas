@@ -116,7 +116,15 @@ Within the current membership area, a move remains a local layout operation. The
 
 If a response is lost, recover the pending operation and read source membership before deciding its outcome. Do not replay an uncertain mutation. A bridge that cannot protect against unseen external membership changes does not satisfy the stale-drop scenario.
 
-Region interiors do not overlap. Move member notes together with their region. Reject edits that leave member centers outside, overlap another region, or enclose nonmember centers. Auto-placement for discovery/external moves chooses vacant space in the correct region, expanding or relocating geometry without displacing unrelated notes or enclosing unrelated centers.
+Region interiors do not overlap. Move member notes together with their region. Reject manual edits that leave member centers outside, overlap another region, or enclose nonmember centers. Automatic discovery/external-move placement uses anchored downward growth and the blocking cascade below when the destination is full.
+
+### Anchored downward growth (issue #11)
+
+Keep existing free-slot and remembered/nearest-position behavior. When a project needs a grid row, retain its x/y, width, and current member positions and extend its bottom. Slot search tests the target's own members; an unassigned card in the new row is a movable blocker rather than a reason to skip rows or relocate the target.
+
+Plan on a workspace copy in CanvasCore. Represent each neighboring project as its region plus all current member card rectangles, retaining exact offsets even for protruding cards; each unassigned card is its own block. Reserve the expanded target, its current members, and the incoming card first. Visit other blocks by their original footprint's top edge, breaking ties by stable typed identity. Only a block intersecting an already affected block joins the cascade. Move it downward to clear all earlier reserved footprints, jumping past colliding bottoms with a 24-unit gap and repeating if another footprint becomes obstructed. Reserve its final footprint before continuing. Unaffected pre-existing geometry remains fixed; no global Rearrange, horizontal movement, automatic shrink, or viewport focus is introduced.
+
+Publish the complete plan through the existing layer reconciliation and save/retry boundary. The geometry projection already includes filtered current occupants and excludes other layers and dormant records. Update remembered project-relative positions after the whole plan. A source-driven save failure retains the complete valid in-memory layout as unsaved and the previous durable snapshot; retry does not rerun the cascade. Existing SQLite payloads suffice; no migration or Codex mutation is required. Cover direct discovery, multiple arrivals, layer returns, protrusions, filters, stable refresh/reopen, and save failure with fixtures.
 
 ### 6. Creation and navigation retain the same conversation
 

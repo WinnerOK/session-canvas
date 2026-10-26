@@ -6,6 +6,8 @@ Creating a session at a free clicked location keeps that position and the curren
 
 When zooming out, projects hide their member notes at exactly the same point that session notes stop showing compact text. Until that point, sessions inside projects remain individually visible and clickable.
 
+When a full project needs space for an arriving session, it keeps its position and width and grows downward. Blocking projects move down with their notes, and blocking unassigned notes move down individually, propagating only through the affected chain. Same-layer hidden notes participate; other layers and the current pan/zoom stay unchanged. Refresh and reopening retain the resulting layout without automatic shrinking.
+
 Select exactly one canvas layer in the sidebar: **Active sessions**, **Stale sessions**, or **Inactive sessions**. Archived and Unknown always belong to Inactive. Idle sessions past **Hide Idle after** move to Stale; current work, requests, unread results, and recent Idle sessions remain Active. Never leaves Stale empty. Each layer has independent project bounds, note positions, viewport, and attention/project filters. Geometry on another layer cannot block a project move. Returning sessions retain their actual Codex project and use its destination-layer region, restoring a valid remembered position or finding free space there. **Show all in this layer** clears local filters and search without changing the cutoff or combining layers.
 
 Archive reviewed Idle sessions from a note's context menu or viewer, and restore them from Inactive. Archive state remains independent of acknowledgment. Notes show compact last source activity; current history recovery can move an Unknown session to Active Finished while keeping its result unread.

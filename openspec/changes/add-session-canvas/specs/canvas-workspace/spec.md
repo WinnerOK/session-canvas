@@ -182,18 +182,24 @@ Rearrange SHALL form separate compact project and unassigned-session blocks usin
 - **AND** repeating Rearrange with unchanged input yields the same coordinates
 
 ### Requirement: New sessions receive predictable placement
-The system SHALL place newly discovered notes without covering existing notes, within their project's region or in unassigned space. It SHALL create a region for a newly discovered project, expanding that region when space is needed without overlapping another region.
+The system SHALL place newly discovered notes without covering existing notes, within their project's region or in unassigned space. It SHALL create a region for a newly discovered project. A full existing project SHALL grow downward with its origin, width, and current member positions retained, displacing only blocking same-layer geometry through the downward cascade specified by session-layers.
 
 #### Scenario: Discover an additional project session
 - **WHEN** a previously unseen session belongs to a project already represented on the canvas
-- **THEN** its note is placed in available space in that region without rearranging existing notes
+- **THEN** its note is placed in available space in that region without rearranging its existing members
+- **AND** if growth is necessary, only blocking same-layer projects and unassigned notes receive downward displacement
+
+#### Scenario: A neighboring project blocks the next row
+- **WHEN** a new note needs a row below a full project's current bounds and a neighboring project or unassigned note obstructs it
+- **THEN** the target retains its origin and width while blockers move downward, carrying project members together
+- **AND** repeated discovery of the same inventory causes no further movement or automatic shrink
 
 #### Scenario: Discover a new project
 - **WHEN** a session's project has no region yet
 - **THEN** the app creates a region in available canvas space and places the note inside it
 
 ### Requirement: Updates preserve spatial context
-Title, execution, and acknowledgment changes SHALL preserve position while a session stays on the same layer. Classification changes SHALL use session-layers destination placement within the same actual project. Authoritative project changes SHALL invalidate obsolete remembered membership and relocate the affected note without rearranging unrelated projects.
+Title, execution, and acknowledgment changes SHALL preserve position while a session stays on the same layer. Classification changes SHALL use session-layers destination placement within the same actual project. Authoritative project changes SHALL invalidate obsolete remembered membership and relocate the affected note. Full destination projects SHALL use anchored downward growth; geometry outside the blocking cascade SHALL retain its position.
 
 #### Scenario: Finish and rename within Active
 - **WHEN** an Active session receives a terminal result and title change

@@ -1,5 +1,9 @@
 # Verification
 
+## Issue #11 follow-up: anchored downward growth, 2026-10-26
+
+The [downward-growth correction](../add-session-canvas/verification.md#26-anchored-downward-growth-issue-11-2026-10-26) supersedes the crowded-destination translation described in the original evidence below. The destination now retains its origin, width, and current notes, grows downward, and pushes only blocking same-layer projects/cards. The updated crowded-return test, eight new growth-core cases, and two runtime cases passed in ordinary fixture verification, covering filtered/protruding obstacles, inactive/dormant isolation, stable refresh/reopening, and whole-layout save failure/retry. Both native fixture captures were inspected. No live source was used; unrelated integration gates remain open.
+
 ## Scope and result
 
 Implemented the three exclusive layers with independent project geometry, note positions, viewport, filters, automatic same-project transitions, versioned storage/migration, layer-scoped canvas operations, source-wide review actions, and classified creation reveal.
