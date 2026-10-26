@@ -4,6 +4,8 @@ A free-roam canvas for existing Codex sessions: movable session notes, project r
 
 Creating a session at a free clicked location keeps that position and the current canvas pan and zoom. If another note occupies the point, the new note uses the nearest free position instead of jumping to the grid near the origin.
 
+When zooming out, projects hide their member notes at exactly the same point that session notes stop showing compact text. Until that point, sessions inside projects remain individually visible and clickable.
+
 Select exactly one canvas layer in the sidebar: **Active sessions**, **Stale sessions**, or **Inactive sessions**. Archived and Unknown always belong to Inactive. Idle sessions past **Hide Idle after** move to Stale; current work, requests, unread results, and recent Idle sessions remain Active. Never leaves Stale empty. Each layer has independent project bounds, note positions, viewport, and attention/project filters. Geometry on another layer cannot block a project move. Returning sessions retain their actual Codex project and use its destination-layer region, restoring a valid remembered position or finding free space there. **Show all in this layer** clears local filters and search without changing the cutoff or combining layers.
 
 Archive reviewed Idle sessions from a note's context menu or viewer, and restore them from Inactive. Archive state remains independent of acknowledgment. Notes show compact last source activity; current history recovery can move an Unknown session to Active Finished while keeping its result unread.
