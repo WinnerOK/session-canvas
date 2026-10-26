@@ -8,6 +8,15 @@ import CanvasCore
 struct HistoryPerformanceTests {
     @Test(arguments: [0, 1, 2, 4]) func largeHistoryReplyKeepsMainActorResponsive(mebibytes: Int) async throws {
         let fixture = try HistoryPerformanceFixture(turnCount: 1, toolsPerTurn: mebibytes == 0 ? 0 : 1, outputBytes: mebibytes * 1024 * 1024)
+        try await measure(fixture, expectedEntries: 3)
+    }
+
+    @Test func originalRichHistoryReplyKeepsMainActorResponsive() async throws {
+        let fixture = try HistoryPerformanceFixture(turnCount: 12, toolsPerTurn: 128, outputBytes: 8192)
+        try await measure(fixture, expectedEntries: 36)
+    }
+
+    private func measure(_ fixture: HistoryPerformanceFixture, expectedEntries: Int) async throws {
         defer { fixture.remove() }
         let source = CodexSource(mode: .history, settings: fixture.settings, observeDesktop: false)
         defer { source.close() }
@@ -25,7 +34,7 @@ struct HistoryPerformanceTests {
         let page = try await source.history(sessionID: "fixture", cursor: nil)
         pulse.tick()
         print("HISTORY_PERF bytes=\(fixture.byteCount) entries=\(page.entries.count) elapsed=\(ProcessInfo.processInfo.systemUptime - start) cpu=\(Double(clock() - cpu) / Double(CLOCKS_PER_SEC)) main_gap=\(pulse.maximumGap)")
-        #expect(page.entries.count == 3)
+        #expect(page.entries.count == expectedEntries)
         #expect(pulse.maximumGap < 0.25)
     }
 }

@@ -40,6 +40,7 @@ final class ApplicationModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var changeTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
+    private var historyLoadToken = UUID()
     private var generation = UUID()
     private var saveTask: Task<Void, Never>?
     private var activityTask: Task<Void, Never>?
@@ -348,17 +349,20 @@ final class ApplicationModel: ObservableObject {
         guard visibleSessions.contains(where: { $0.id == id }) else { return }
         selectedSessionID = id; history = []; nextHistoryCursor = nil; historyError = nil
         loadTask?.cancel()
+        historyLoadToken = UUID(); isLoadingHistory = false
         loadTask = Task { await loadHistory(older: false) }
     }
     func loadHistory(older: Bool) async {
-        guard let source, let id = selectedSessionID else { return }
+        guard let source, let id = selectedSessionID, !isLoadingHistory else { return }
+        guard !older || nextHistoryCursor != nil else { return }
         isLoadingHistory = true; historyError = nil
-        let token = generation, cursor = older ? nextHistoryCursor : nil
+        let token = generation, cursor = older ? nextHistoryCursor : nil, request = UUID()
+        historyLoadToken = request
         let baseline = workspace.sessions.first { $0.id == id }
-        defer { if generation == token && selectedSessionID == id { isLoadingHistory = false } }
+        defer { if generation == token && selectedSessionID == id && historyLoadToken == request { isLoadingHistory = false } }
         do {
             let page = try await source.history(sessionID: id, cursor: cursor)
-            guard generation == token, selectedSessionID == id, !Task.isCancelled else { return }
+            guard generation == token, selectedSessionID == id, historyLoadToken == request, !Task.isCancelled else { return }
             if older { history = page.entries + history }
             else { history = page.entries }
             nextHistoryCursor = page.nextCursor
@@ -371,7 +375,7 @@ final class ApplicationModel: ObservableObject {
                 persist()
                 closeHiddenSelection()
             }
-        } catch { if generation == token && selectedSessionID == id { historyError = error.localizedDescription } }
+        } catch { if generation == token && selectedSessionID == id && historyLoadToken == request { historyError = error.localizedDescription } }
     }
     private func applyHistoryObservation(_ observation: Session, at index: Int) {
         // Keep local geometry/membership/archive facts; current live work outranks saved history.

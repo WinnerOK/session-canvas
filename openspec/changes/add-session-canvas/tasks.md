@@ -235,11 +235,13 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 ## 25. Long-history viewer responsiveness
 
 - [x] 25.1 Complete fixture reproduction, phase measurements, prioritized remedies, strict SDD/whitespace/link checks, and a documented explicit responsiveness gate.
-- [ ] 25.2 Move history framing/decoding off the UI actor, avoid rescanning received bytes, and bound queued work; preserve transport order, disconnect/reconnect isolation, timeout, and identity checks.
+- [x] 25.2 Move history framing/decoding off the UI actor, avoid rescanning received bytes, and bound queued work; preserve transport order, disconnect/reconnect isolation, timeout, and identity checks.
 - [ ] 25.3 Bound history payload/projection work, add cancellation and revision-aware bounded latest-page caching, and address full-transcript legacy/local paging.
   - [x] 25.3.1 Verify reverse-pagination support in the installed experimental schema and current adapter/viewer: descending turn pages, cursor continuation, and newest-first presentation already exist. Record descending item paging and lighter turn views as available schema capabilities, without claiming live-server cost or complete summary-content verification.
-  - [ ] 25.3.2 Evaluate lighter turn summaries plus bounded descending item pages and on-demand detail. Preserve supported dialogue/plans/outcome text and identities, avoid presenting partial content as complete, and verify single-item size limits independently of page counts.
+  - [x] 25.3.2 Implement the user's selected summary-only approach: request at most twelve descending turn summaries, follow source cursors only on explicit older-history requests, and preserve source summary content/result identities. Verify three pages, no eager detail/full-history request, duplicate/exhausted-load protection, and acknowledgment of the newest result after older pages load. Item-detail paging is not required by this selected approach.
 - [ ] 25.4 Pass the synthetic 250 ms heartbeat gate and separately verify huge visible messages, native interactions, and a specifically authorized representative long session. Do not infer UI/installed-source acceptance from fixture timing.
+  - [x] 25.4.1 Pass the minimized and original twelve-turn 12.1 MiB performance regressions, plus fragmented/coalesced/UTF-8/frame-limit, old-connection isolation, final-reply-before-EOF, and summary-page model checks using fixtures.
+  - [ ] 25.4.2 Complete huge visible-text/native interaction and specifically authorized representative installed-session acceptance. Synthetic transport timing does not close these gates.
 
 ## Workflow follow-up
 

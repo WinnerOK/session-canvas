@@ -93,6 +93,22 @@ Inventory/history RPC requests SHALL time out after 20 seconds and fail pending 
 - **THEN** the action fails visibly instead of remaining indefinitely pending
 - **AND** no timeout is interpreted as completion, acknowledgment, or permission approval
 
+### Requirement: JSONL transport preserves responsiveness and connection identity
+Pipe reading, linear incremental framing, and JSON decoding SHALL run on a serial worker outside the UI actor. Frames SHALL be limited to 64 MiB, with reads bounded to 64 KiB and decoded delivery paced by UI consumption. Replacing or closing a connection SHALL invalidate its reader and queued callbacks. EOF SHALL drain complete replies before failing remaining requests.
+
+#### Scenario: Fragmented and coalesced replies
+- **WHEN** UTF-8 JSON frames span reads or several frames arrive together
+- **THEN** the transport reconstructs complete frames once and delivers replies/notifications in source order
+- **AND** complete and incomplete oversized frames close the connection without decoding arbitrary unbounded data
+
+#### Scenario: An old reader completes after reconnect
+- **WHEN** a replaced connection emits a late reply, notification, or EOF
+- **THEN** it cannot affect the new connection or its pending requests
+
+#### Scenario: The server exits after its last reply
+- **WHEN** a final complete response is followed immediately by EOF
+- **THEN** that response is delivered before the connection reports closure and rejects new requests
+
 ### Requirement: Native application lifecycle preserves local state
 The app SHALL save workspace state on source switching and application termination, close its owned source connections, and cancel refresh/history/observation work. Closing the last window SHALL terminate the application. It SHALL NOT install an autostart, menu-bar background process, or daemon. --storage SHALL select an alternate Canvas database without changing the source identity rules; routine verification SHALL use the isolated launcher contract.
 

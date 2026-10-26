@@ -1,14 +1,22 @@
-# History loading performance investigation
+# History loading performance: diagnosis and repair
 
 Investigation date: 2026-10-26. The reported symptom is a long session freezing the **Session Canvas viewer**, with high CPU usage, especially after it has not been opened recently.
 
-## Confirmed cause
+## Implemented behavior
 
-`RPCConnection.receive` runs on `MainActor`. Each pipe fragment is appended to a JSONL buffer, then `buffer.firstIndex(of: 10)` searches **from the beginning again**. A history response is one large JSON line, so no delimiter is available until the last fragment. For a response of B bytes arriving in fixed-size C fragments, the scans visit approximately B²/(2C) bytes. The UI actor performs this repeated work; a turn-count page limit does not bound it.
+Modern history requests **at most twelve descending turn summaries** (`itemsView: summary`). Only **Load older history** follows the next source cursor; there is no eager full-item request. Existing newest-first display and result identities are preserved. Busy/exhausted-page guards prevent duplicate loads or accidentally reloading the latest page after history ends.
 
-The defect reproduces through the production `CodexSource.history` and `RPCConnection` without constructing a SwiftUI viewer, querying user sessions, observing the desktop, or running model work. A temporary Python server returns prebuilt synthetic JSON; fixture construction and connection initialization are outside the measurement. The test samples a 10 ms `MainActor` heartbeat and asserts a 250 ms maximum gap.
+`RPCStreamReader` now reads at most 64 KiB on a dedicated serial dispatch queue, searches only unexamined bytes, and decodes JSON outside the UI actor. Individual frames are bounded to 64 MiB. It waits for each decoded value's UI handoff before continuing; connection generations reject old-reader callbacks. EOF delivers the final complete reply before disconnecting. Blocking I/O does not occupy Swift's cooperative executor.
 
-## Measurements
+The original 12,688,490-byte / 36-entry reproduction now takes **0.0943 s**, with a **12.6 ms** maximum UI-actor heartbeat gap and **0.0909 s** of process CPU. Before repair it took 29.91–47.37 s, with 26.45–27.12 s gaps. The performance fixture deliberately still returns the large payload despite summary requests, independently checking the transport repair. All five minimized/original payload cases pass the 250 ms heartbeat budget. These are synthetic transport/adapter measurements, not a live user-session or huge visible-text benchmark.
+
+## Original cause
+
+Previously, `RPCConnection.receive` appended each pipe fragment and searched its growing JSONL buffer **from the beginning again** on `MainActor`. A history response is one large JSON line, so no delimiter is available until the last fragment. For a response of B bytes arriving in fixed-size C fragments, the scans visited approximately B²/(2C) bytes. The UI actor performed this repeated work; a turn-count page limit did not bound it.
+
+The defect was reproduced through the production `CodexSource.history` and `RPCConnection` without constructing a SwiftUI viewer, querying user sessions, observing the desktop, or running model work. A temporary Python server returns prebuilt synthetic JSON; fixture construction and connection initialization are outside the measurement. The test samples a 10 ms `MainActor` heartbeat and asserts a 250 ms maximum gap.
+
+## Baseline measurements and initial prototype
 
 Release build, Apple Silicon, macOS 26.6.2, local development machine. Wall times depend on machine load. Process CPU time measures the test process, excluding the fixture child. Response-byte counts below refer to the encoded result; the JSON-RPC envelope adds 18 bytes.
 
@@ -33,9 +41,9 @@ A temporary prototype changed only delimiter-search progress: unsuccessful scans
 | 2 MiB | 0.577 s / 380 ms | 0.0245 s / 14 ms |
 | 4 MiB | 2.143 s / 2135 ms | 0.0516 s / 30 ms |
 
-At 4 MiB, bytes visited fell from 543,162,661 to 4,194,597 and process CPU from 1.755 s to 0.0252 s. All four heartbeat cases passed with the prototype. This isolates delimiter rescanning as the cause in this fixture. The prototype and phase instrumentation were then removed; this investigation delivers the diagnosis and regression, with application repair still open. The twelve-turn original fixture and real UI were not rerun against the prototype, so its small-fixture pass does not establish complete repair acceptance.
+At 4 MiB, bytes visited fell from 543,162,661 to 4,194,597 and process CPU from 1.755 s to 0.0252 s. All four heartbeat cases passed with that initial prototype, isolating delimiter rescanning as the fixture cause. The prototype and phase instrumentation were removed at the diagnosis stage. The subsequent permanent repair above also moves framing/decoding off the UI and passes the original twelve-turn fixture; real UI/installed-session acceptance remains separate.
 
-## Repair order
+## Protocol and repair status
 
 ### Server-side reverse pagination
 
@@ -46,30 +54,30 @@ The 2026-10-26 follow-up regenerated the desktop-bundled **0.164.0-alpha.11.1** 
 
 Canvas already requests descending turn pages and uses `nextCursor` for older history. It reverses each received page into the model's chronological order; the viewer reverses the accumulated entries for newest-first display. Loading older pages prepends them to the model and therefore places them below newer entries in the viewer. This is already server-side latest-page loading, not downloading oldest-first and reversing an entire transcript.
 
-The remaining excess is **full item detail for twelve turns**, including tool outputs, plus the quadratic transport scan. The refined repair should retain descending loading while evaluating turn summaries and bounded descending item pages, fetching additional detail only when needed. Summary mode must first be checked for preserved dialogue/plans/result text and IDs; partial results must not be represented as complete history. A single item may still be very large, so item-count limits do not replace byte/work limits or the framing fix.
+The user selected **summary-only turn pages**. The adapter now uses that mode; it does not request full item detail or add an item-detail viewer. A three-page fixture/model test checks supplied dialogue, plans, result text/IDs, newest-first presentation, manual cursor continuation, duplicate/exhausted actions, and acknowledgment of the newest result after older pages load. A summary is not a claim to include all underlying tool/item detail. A single summary item may still be large, so page counts do not replace frame bounds or off-UI processing.
 
-These capabilities were checked against generated local schemas (`ThreadTurnsListParams`, `ThreadTurnsListResponse`, `ThreadItemsListParams`, `ThreadItemsListResponse`), not a live user session. The schema does not establish whether a cold server internally scans or hydrates the full saved transcript before producing its page. No application behavior changed in this follow-up.
+Protocol capabilities were checked against generated local schemas (`ThreadTurnsListParams`, `ThreadTurnsListResponse`, `ThreadItemsListParams`, `ThreadItemsListResponse`), not a live user session. The schema does not establish whether a cold server internally scans or hydrates the full saved transcript before producing its page. Summary content integration has fixture coverage; actual installed-session presentation remains an acceptance gate.
 
-### Prioritized changes
+### Completed and remaining work
 
-| Priority | Change | Expected benefit and required checks |
+| Status | Change | Evidence or remaining checks |
 | --- | --- | --- |
-| First | Retain an incremental delimiter-search offset, inspecting only bytes received since the preceding unsuccessful search; reset correctly after complete frames and reconnect | Removes the reproduced quadratic scan. Cover split delimiters, multiple lines per chunk, incomplete frames, size limits, and connection replacement. Preserve ordered delivery. |
-| Next | Move framing and decoding to a serial worker, with bounded queued bytes and a small UI handoff | Protects the UI from large frames, many small frames, JSON decoding, and allocation even after the search fix. Moving the existing quadratic loop alone would keep the wasted CPU and slow load. Validate disconnect/order/cancellation races. |
-| Next | Limit useful history work by bytes/content as well as turns; project only supported dialogue/result fields, and use a verified lighter server view if available | `itemsView: full` currently transfers hidden tool data that is later discarded. One turn can still be huge. Preserve result IDs, errors, plans, and outcome evidence; do not assume an unverified protocol option exists. |
-| Next | Add bounded revision-aware latest-page caching and in-flight deduplication/cancellation | Reopening currently requests the latest page again. Invalidate by source/session revision, file revision and live changes; explicit Reload must revalidate. Bound cache memory and prevent stale results/acknowledgment targets. |
+| Implemented | Incremental delimiter search and per-frame bounds | Functional checks cover fragmented/coalesced frames, split UTF-8, empty lines, compaction, and complete/incomplete oversized frames. Performance cases include the original twelve-turn reply. |
+| Implemented | Serial off-UI framing/decoding and paced handoff | Connection tests verify ordered replies/notifications, old-reader isolation, final response before EOF, and cancellation of a silent reader. Bounded pipe polling lets idle workers observe cancellation. |
+| Implemented | Descending summary pages, requested on demand | Model/protocol fixture checks three pages, supplied dialogue/plans/results, no eager full/detail request, duplicate/exhausted-load protection, and stable acknowledgment. |
+| Remaining | Revision-aware latest-page caching and per-request cancellation | Reopening revalidates the latest page. Shared-connection cancellation and cache invalidation by source/file/live revision need separate work. |
 | Separate compatibility work | Page legacy/local history without materializing every entry first | Legacy `thread/read(includeTurns: true)` loads all turns before a forty-entry local slice. The detached rollout fallback also builds the full transcript, up to its 128 MiB limit, before slicing. A validated byte-offset/index or incremental reader needs its own correctness checks. |
 | Separate UI work | Exercise exceptionally long visible messages; split or progressively expand oversized text where needed | `LazyVStack` limits rows, not the layout cost of one huge selectable `Text`. The transport reproduction contains tiny visible strings and establishes no text-layout performance result. |
 
-The smallest first repair is incremental framing. The longer-term boundary is a serial history pipeline that delivers a bounded presentation model to the UI actor.
+The shipped boundary now uses linear framing and serial decoding with one paced UI delivery at a time. A broader presentation-model byte limit or huge visible-text layout policy remains separate work.
 
 ## Why old, long sessions make it noticeable
 
-Opening a session clears the model history and calls the source again. Modern latest pages are not cached for viewer reuse. Legacy cached entries are also reread whenever the cursor is nil. Long histories can contain large outputs that the viewer never displays, and twelve full turns can therefore form a large JSON line. These code paths explain repeated expensive Canvas work.
+Opening a session clears the model history and calls the source again. Modern latest pages are not cached for viewer reuse. Legacy cached entries are also reread whenever the cursor is nil. At diagnosis, twelve full turns could contain large hidden tool outputs; modern summary mode now avoids requesting that full detail.
 
 There is no age-based branch in this viewer-loading path. A cold server cache or remote/lazy history hydration could add latency for sessions unused for a long time, but was not measured here. The exact contribution on the user's session remains unverified. The UI freeze already reproduces with a prebuilt local reply.
 
-`ApplicationModel` rejects stale replies after source/selection changes, but cancellation does not stop `RPCConnection` parsing. Its 20-second timeout task also needs the UI actor and cannot preempt a synchronous scan/decode running there. The 64 MiB transport-buffer cap is a size guard, not a responsiveness guarantee.
+`ApplicationModel` rejects stale source/selection replies and uses per-load tokens to preserve the current viewer's loading state. Closing/replacing a connection cancels its reader and invalidates callbacks. Per-request cancellation of a response already arriving over the shared connection is not implemented. The 20-second timeout can run while decoding proceeds off the UI actor; the 64 MiB frame cap remains a size guard rather than a text-layout guarantee.
 
 ## Reproduction and acceptance
 
@@ -77,10 +85,10 @@ There is no age-based branch in this viewer-loading path. A cold server cache or
 python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py test --configuration release --history-performance --jobs 1
 ```
 
-This explicit command selects `HistoryPerformanceTests`; its performance assertions currently fail against the unchanged production transport. Normal tests skip the suite, even if its environment switch was inherited. The fixture-only mode cannot be combined with installed-source checks. Output contains synthetic byte/count/time measurements, never user history.
+This explicit command selects `HistoryPerformanceTests`; all minimized and original-payload assertions now pass. Normal tests skip this timing suite, even if its environment switch was inherited, while functional transport/pagination checks remain enabled. The fixture-only mode cannot be combined with installed-source checks. Output contains synthetic byte/count/time measurements, never user history.
 
-The final replay after removing the prototype/instrumentation failed again on 2 and 4 MiB: wall times were 0.463 s and 1.897 s, with maximum heartbeat gaps of 463 ms and 1897 ms. Those cases used 0.426 s and 1.722 s of process CPU, respectively. The four-case run took 3.78 s excluding compilation. This is the delivered regression baseline, not a successful responsiveness check.
+Before the permanent repair, the uninstrumented baseline failed again on 2 and 4 MiB: wall times were 0.463 s and 1.897 s, with maximum heartbeat gaps of 463 ms and 1897 ms. In the final performance-only run, the same sizes took 0.0128 s and 0.0217 s, with gaps of 12.6 ms each; process CPU was 0.0121 s and 0.0208 s. The original rich 12.1 MiB case took 0.0943 s / 12.6 ms gap. The full ordinary run reported 94 runtime and 56 core tests passing with timing/installed-source opt-ins skipped; a separate performance-only run passed two tests covering all five payload cases.
 
-Application behavior has not been changed by this investigation. The [OpenSpec tasks](../openspec/changes/add-session-canvas/tasks.md#25-long-history-viewer-responsiveness) keep the repair, cancellation/cache work, huge visible text, and a specifically authorized representative installed-session check open. The responsiveness requirement is [session-actions](../openspec/changes/add-session-canvas/specs/session-actions/spec.md#requirement-history-loading-preserves-ui-responsiveness); the diagnostic contract is [local-verification](../openspec/changes/add-session-canvas/specs/local-verification/spec.md#requirement-synthetic-history-responsiveness-regression).
+The [OpenSpec tasks](../openspec/changes/add-session-canvas/tasks.md#25-long-history-viewer-responsiveness) record completed summary pagination, transport repair, and synthetic regressions, while retaining cache/legacy work, huge visible text, and a specifically authorized representative installed-session check. The responsiveness requirement is [session-actions](../openspec/changes/add-session-canvas/specs/session-actions/spec.md#requirement-history-loading-preserves-ui-responsiveness); the diagnostic contract is [local-verification](../openspec/changes/add-session-canvas/specs/local-verification/spec.md#requirement-synthetic-history-responsiveness-regression).
 
-For immediate use, choose **Open in Codex** from the note's context menu. That bypasses Canvas's viewer history path; this investigation makes no performance claim about Codex's own viewer. Changing layer/age filters or increasing timeouts does not remove the repeated scan.
+**Open in Codex** remains available from the note's context menu. This report makes no performance claim about Codex's own viewer.

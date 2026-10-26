@@ -31,7 +31,7 @@ Local and release app bundles use the selected [blue session-cards icon](assets/
 
 Codex uses a [stable verification launcher](docs/native-application.md#codex-verification-launcher) for builds, tests, and native captures. One saved permission covers the launcher with different filters, session IDs, and capture paths.
 
-Long history replies can currently stall the Canvas viewer before rendering. The [performance investigation](docs/history-loading-performance.md) provides a synthetic reproduction and prioritized remedies; its explicit `test --configuration release --history-performance` gate remains open. **Open in Codex** in a note's context menu bypasses this Canvas loading path.
+History loads newest first in pages of at most twelve turn summaries; **Load older history** requests another page only when needed. Linear JSONL framing and decoding run outside the UI actor with paced delivery. The [performance investigation and repair](docs/history-loading-performance.md) records the reproduced stall, passing synthetic regressions, and remaining installed-session acceptance.
 
 GitHub Actions runs application/tooling tests and release builds for Apple Silicon and Intel on every pull request. To prepare a release, open **Actions → Release → Run workflow** and enter a tag such as `v0.2.0`; after verification, review and publish the generated draft with app ZIPs and SHA-256 files. Version-tag pushes also trigger releases. See the [CI/CD guide](docs/ci-cd.md) for setup, retries, and signing limitations.
 

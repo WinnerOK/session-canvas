@@ -90,12 +90,25 @@ The viewer SHALL show selectable dialogue, plans, and terminal outcomes with rol
 - **THEN** the old reply cannot populate or acknowledge the newly selected viewer
 
 ### Requirement: Latest history is requested first
-When server-side history pagination is available, the viewer SHALL request descending pages from the newest history without first requesting the complete transcript. Older history SHALL use source cursors and appear below loaded newer entries. A limited or summary response SHALL NOT be presented as complete history when additional supported content remains available.
+When server-side history pagination is available, the viewer SHALL request descending pages from the newest history without first requesting the complete transcript. Older history SHALL use source cursors and appear below loaded newer entries. The viewer SHALL retain older-page continuation and SHALL NOT claim that a display summary includes all underlying item detail.
 
 #### Scenario: Open a long session and load older entries
 - **WHEN** the user opens a session on a source supporting paged history
 - **THEN** the adapter requests the latest descending page, and the viewer shows its newest entry first
 - **AND** requesting older history uses the continuation cursor and retains newer entries above it
+
+### Requirement: Viewer requests summary pages on demand
+Paged history SHALL use `itemsView: summary` with at most twelve turns per page. The viewer SHALL display source-provided dialogue, plans, and terminal outcomes from that summary without eagerly fetching full item detail. Only an explicit older-history action SHALL request another page. Loading older pages SHALL retain the newest displayed result and its acknowledgment identity.
+
+#### Scenario: Review a long history incrementally
+- **WHEN** a source has more summary turns than fit in one page
+- **THEN** opening requests only the latest page, and Load older history requests the next cursor without replacing newer entries
+- **AND** hidden tool detail is not requested through `itemsView: full` or an eager item-detail request
+
+#### Scenario: Repeat an older-page action
+- **WHEN** an older page is already loading or its continuation cursor is absent
+- **THEN** another older-history action sends no duplicate or latest-page request
+- **AND** loaded entries and the acknowledgment target remain unchanged
 
 ### Requirement: History loading preserves UI responsiveness
 Receiving, framing, decoding, and projecting history SHALL keep the canvas and viewer controls responsive. A turn-count limit SHALL NOT be treated as a byte or work limit. Cancelled or superseded loads SHALL stop unnecessary local processing and SHALL NOT populate the current viewer. Oversized content SHALL provide a recoverable explanation and native opening rather than monopolizing the UI actor.

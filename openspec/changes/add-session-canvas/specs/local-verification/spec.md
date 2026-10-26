@@ -16,9 +16,10 @@ The launcher SHALL offer an explicit fixture-only history check using the produc
 - **THEN** a temporary synthetic server supplies history through the production adapter with desktop observation disabled
 - **AND** the default filter selects only the performance suite; a UI-actor heartbeat gap of 250 ms or greater in the fixed synthetic cases fails the command
 
-#### Scenario: Ordinary checks run while the defect remains open
+#### Scenario: Ordinary checks omit machine-dependent timing
 - **WHEN** normal tests run without the explicit performance option
-- **THEN** the known-failing performance suite is skipped and this does not establish history responsiveness acceptance
+- **THEN** the timing suite is skipped while functional framing and summary-pagination regressions remain enabled
+- **AND** ordinary results alone do not establish installed-session performance acceptance
 
 ### Requirement: Stable authorized local verification command
 Development tooling SHALL provide one direct Python launcher for building, testing, and previewing the current checkout. A user-authorized Codex command-prefix rule SHALL cover its absolute path with varying supported arguments, while retaining the workspace sandbox and other command rules. The launcher SHALL accept a bounded set of operations without arbitrary shell-command passthrough.

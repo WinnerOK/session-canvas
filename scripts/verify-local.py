@@ -34,7 +34,7 @@ def parser():
     commands.add_parser("build", parents=[common], help="Build and sign the local app bundle")
     tests = commands.add_parser("test", parents=[common], help="Run Swift Testing, with optional installed-source checks")
     tests.add_argument("--real-source", action="store_true")
-    tests.add_argument("--history-performance", action="store_true", help="Run the synthetic history responsiveness regression (known failing baseline; no desktop connection)")
+    tests.add_argument("--history-performance", action="store_true", help="Run the synthetic history responsiveness regression without a desktop connection")
     tests.add_argument("--live-desktop", action="store_true", help="Connect one live desktop observer; requires separate user authorization and the exact live test filter")
     tests.add_argument("--observe-session", help="Exact session ID for the single authorized live desktop test")
     tests.add_argument("--filter", help="Swift Testing name filter")

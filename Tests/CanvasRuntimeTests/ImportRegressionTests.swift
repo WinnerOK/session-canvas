@@ -6,6 +6,72 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct ImportRegressionTests {
+    @Test func viewerRequestsSummaryPagesNewestFirstAndLoadsOlderOnlyOnDemand() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("paged-history"))
+        var turns: [[String: Any]] = []
+        for index in (0..<28).reversed() {
+            let items: [[String: Any]] = [
+                ["id": "u-\(index)", "type": "userMessage", "content": [["text": "Request \(index)"]]],
+                ["id": "tool-\(index)", "type": "commandExecution", "aggregatedOutput": "Hidden output"],
+                ["id": "plan-\(index)", "type": "plan", "text": "Plan \(index)"],
+                ["id": "a-\(index)", "type": "agentMessage", "text": "Result \(index)"]
+            ]
+            turns.append(["id": "t-\(index)", "status": "completed", "items": items])
+        }
+        try JSONSerialization.data(withJSONObject: turns).write(to: fixture.folder.appendingPathComponent("history-turns.json"))
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        await model.connect()
+        defer { model.shutdown() }
+        model.selectedSessionID = "normal"
+        await model.loadHistory(older: false)
+        let latest = try #require(model.history.last?.result)
+        #expect(latest.id == "normal/t-27/completed")
+        #expect(model.history.count == 48)
+        #expect(model.history.first?.id == "u-16")
+        #expect(model.history.reversed().first?.text == "Result 27")
+        #expect(model.nextHistoryCursor == "12")
+        #expect(model.canAcknowledge(latest, sessionID: "normal"))
+        let log = fixture.folder.appendingPathComponent("read-log")
+        #expect(try String(contentsOf: log, encoding: .utf8).split(separator: "\n").count == 1)
+        try Data().write(to: fixture.folder.appendingPathComponent("block-history"))
+        let older = Task { await model.loadHistory(older: true) }
+        for _ in 0..<100 {
+            if FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.isLoadingHistory)
+        let release = Task {
+            try await Task.sleep(for: .milliseconds(30))
+            try Data().write(to: fixture.folder.appendingPathComponent("release-history"))
+        }
+        await model.loadHistory(older: true) // A second click must share the pending load.
+        try await release.value
+        await older.value
+        #expect(model.history.count == 96)
+        #expect(model.history.first?.id == "u-4")
+        #expect(model.history.last?.result == latest)
+        #expect(model.nextHistoryCursor == "24")
+        await model.loadHistory(older: true)
+        #expect(model.history.count == 112)
+        #expect(model.history.first?.id == "u-0")
+        #expect(model.history.last?.result == latest)
+        #expect(model.nextHistoryCursor == nil)
+        await model.loadHistory(older: true) // Exhaustion must not reload the latest page.
+        #expect(model.history.count == 112)
+        #expect(Set(model.history.map(\.id)).count == model.history.count)
+        #expect(!model.history.contains { $0.text.contains("Hidden output") })
+        let requests = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        #expect(requests.count == 3)
+        #expect(requests.allSatisfy { $0["method"].string == "thread/turns/list" && $0["itemsView"].string == "summary" && $0["sortDirection"].string == "desc" && $0["limit"].number == 12 })
+        #expect(requests.map { $0["cursor"].string } == [nil, "12", "24"])
+        #expect(model.canAcknowledge(latest, sessionID: "normal"))
+        model.acknowledge(latest, sessionID: "normal")
+        #expect(model.acknowledgments["normal"]?.contains(latest.id) == true)
+    }
+
     @Test(arguments: [false, true])
     func cachedResultsResolveInBackgroundWithoutOpeningSessions(legacy: Bool) async throws {
         let fixture = try SourceFixture()
@@ -493,7 +559,7 @@ private struct SourceFixture {
                     result = {"data": [s for s in [session("normal", "cli"), session("guardian", {"subAgent": {"other": "guardian"}}), session("review", {"subAgent": "review"}), session("named-review", "appServer")] if s["id"] not in archived_ids], "nextCursor": "page2"}
             elif method == "thread/turns/list":
                 with (home / "read-log").open("a") as log:
-                    log.write(json.dumps({"id": request["params"]["threadId"], "limit": request["params"]["limit"], "time": time.monotonic(), "method": method}) + "\n")
+                    log.write(json.dumps({"id": request["params"]["threadId"], "limit": request["params"]["limit"], "time": time.monotonic(), "method": method, "itemsView": request["params"].get("itemsView"), "sortDirection": request["params"].get("sortDirection"), "cursor": request["params"].get("cursor")}) + "\n")
                 if (home / "reject-history").exists():
                     print(json.dumps({"id": request["id"], "error": {"code": -32000}}), flush=True)
                     continue
@@ -512,7 +578,15 @@ private struct SourceFixture {
                     with (home / "sessions" / (ident + ".jsonl")).open("a") as f:
                         f.write(json.dumps({"type":"event_msg", "payload":{"type":"task_started", "turn_id":"newer"}}) + "\n")
                 turns = json.loads((home / "history-turns.json").read_text()) if (home / "history-turns.json").exists() else [{"id":"last", "status":"inProgress" if ident == "unassigned" or ident == "normal" and (home / "active").exists() else "completed", "items":[]}]
-                result = {"data": turns, "nextCursor": None}
+                if (home / "paged-history").exists():
+                    start = int(request["params"].get("cursor") or 0)
+                    end = min(start + request["params"]["limit"], len(turns))
+                    turns_page = turns[start:end]
+                    if request["params"].get("itemsView") == "summary":
+                        turns_page = [dict(turn, items=[item for item in turn["items"] if item["type"] in ("userMessage", "agentMessage", "plan")], itemsView="summary") for turn in turns_page]
+                    result = {"data": turns_page, "nextCursor": str(end) if end < len(turns) else None}
+                else:
+                    result = {"data": turns, "nextCursor": None}
             elif method == "thread/read":
                 with (home / "read-log").open("a") as log:
                     log.write(json.dumps({"id": request["params"]["threadId"], "time": time.monotonic(), "method": method}) + "\n")
