@@ -262,13 +262,15 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 28.1 Replace full-project relocation with a deterministic downward growth plan: keep the target origin, width, and current members fixed; push blocking projects with all current members and unassigned notes downward, including protruding card footprints.
 - [x] 28.2 Verify discovery, batch arrivals, layer returns, filtered obstacles, other-layer/dormant isolation, stable repeated reconciliation, persistence, and save failure using fixtures. Retain viewport, source facts, and acknowledgment.
 - [x] 28.3 Align baseline/layer requirements, designs, guides, and verification evidence; pass ordinary tests, native build/signature, strict OpenSpec, whitespace, and affected local-link checks.
-- [ ] 28.4 Complete hosted arm64 and OpenSpec under section 27 architecture policy checks for the rebased PR head. The user explicitly requested merging PR #15 without CI on 2026-11-01; hosted acceptance remains unverified for that head and is not a merge prerequisite for this authorized delivery.
+- [ ] 28.4 Complete hosted arm64 and OpenSpec under section 27 architecture policy for the rebased PR head. The user explicitly requested merging PR #15 without CI on 2026-11-01; hosted acceptance remains unverified for that head and is not a merge prerequisite for this authorized delivery.
+
 ## 29. Restart status and explicit full refresh
 
 - [x] 29.1 Reproduce metadata-only startup erasing a cached approval; retain exact last-known execution/request/active-turn evidence across repeated restart, source loss, and refresh, and present it separately from Unknown without inferring Idle.
 - [x] 29.2 Add source-wide explicit status checks for uncached and filtered sessions, progress/failure/unresolved counts, Stop, no overlap, retry, fresh desktop snapshot requests, and live/request/turn-identity priority.
 - [x] 29.3 Complete offline tests, isolated native progress/Unknown presentation checks, release/signature, strict OpenSpec/whitespace/local-link checks, and record actual installed saved-source diagnostics with desktop observation disabled.
 - [ ] 29.4 Verify the user's actual pending approvals against fresh desktop evidence in a separately authorized bounded live check. The old Canvas cache and migration backup have no request records; fixture success cannot establish recovery of those particular requests.
+- [ ] 29.5 Complete hosted arm64 and OpenSpec checks under section 27 architecture policy. Historical PR #16 run 40499730933 refused all jobs before any step because GitHub account payments or spending limits required attention; local checks do not close this gate.
 
 ## Workflow follow-up
 
