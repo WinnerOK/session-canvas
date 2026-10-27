@@ -44,10 +44,15 @@ final class DesktopRuntime {
         for id in added { follow(id, true) }
     }
 
+    func requestSnapshots() {
+        for id in wanted { follow(id, true) }
+    }
+
     func applying(to session: Session) -> Session {
         guard let state = states[session.id] else { return session }
         var result = session
         result.execution = state.execution; result.requests = state.requests
+        result.activeTurnID = state.activeTurnID
         result.savedState = false
         if let latest = state.result { result.latestResult = latest }
         if state.result != nil { result.unknownReason = nil }
@@ -238,6 +243,7 @@ struct DesktopObservation: Equatable {
     var execution: Execution
     var requests: [String: RequestKind]
     var result: SessionResult?
+    var activeTurnID: String?
 
     init(_ state: JSONValue) {
         let id = state["id"].string ?? ""
@@ -257,6 +263,7 @@ struct DesktopObservation: Equatable {
                 return history["entitiesByKey"][key]
             }
         }
+        activeTurnID = turns.last.flatMap { $0["status"].string == "inProgress" ? $0["turnId"].string : nil }
         result = turns.reversed().compactMap { turn in
             var fields = turn.object; fields["id"] = turn["turnId"]
             return CodexWire.result(.object(fields), sessionID: id)

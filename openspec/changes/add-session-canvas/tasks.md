@@ -34,7 +34,7 @@ Updated against the implemented corrections through 2026-10-25. [verification.md
 - [x] 2.1 Implement source-qualified identities and complete inventory discovery; verify duplicate observations, same-name sessions, external membership placement, and saved project renames with core/import tests and actual inventory checks.
 - [ ] 2.2 Normalize execution, pending requests, turn results, and source revisions; verify the session-attention priority rules, multiple requests, late events, and a later turn starting before an earlier event arrives.
   - [x] 2.2.1 Verify attention priority, current requests, stable terminal identities, canonical desktop turn history, and resistance to invalid/stale observations in core/runtime fixtures.
-  - [ ] 2.2.2 Complete live-host coverage of all ordering/request cases and separate last-known execution presentation while Unknown.
+  - [ ] 2.2.2 Complete live-host coverage of all ordering/request cases. Section 29 implements separate last-known execution presentation while Unknown with fixture/native evidence.
 - [ ] 2.3 Implement reconnect/freshness reconciliation and archive/removal handling; verify disconnects and missing pages retain notes as Unknown rather than creating Finished results or deleting notes.
   - [x] 2.3.1 Reconnect the desktop observer automatically, clear lost live evidence, retain inventory on failures, and reject obsolete-generation completions.
   - [ ] 2.3.2 Complete archive/restore and incomplete-inventory acceptance across restart against the real host.
@@ -257,12 +257,18 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 27.3 Verify tooling tests, arm64 application tests and release build/signature/packaging, workflow syntax, strict OpenSpec, whitespace, and affected local document links; record actual outcomes.
 - [ ] 27.4 Verify hosted arm64 and OpenSpec checks after pushing the change. The user authorized merging PR #17 without waiting for CI; this verification gate remains open and local checks do not prove hosted execution.
 
-## 27. Anchored downward growth (issue #11)
+## 28. Anchored downward growth (issue #11)
 
-- [x] 27.1 Replace full-project relocation with a deterministic downward growth plan: keep the target origin, width, and current members fixed; push blocking projects with all current members and unassigned notes downward, including protruding card footprints.
-- [x] 27.2 Verify discovery, batch arrivals, layer returns, filtered obstacles, other-layer/dormant isolation, stable repeated reconciliation, persistence, and save failure using fixtures. Retain viewport, source facts, and acknowledgment.
-- [x] 27.3 Align baseline/layer requirements, designs, guides, and verification evidence; pass ordinary tests, native build/signature, strict OpenSpec, whitespace, and affected local-link checks.
-- [ ] 27.4 Complete hosted arm64/x86_64 and OpenSpec checks for the rebased PR head. The user explicitly requested merging PR #15 without CI on 2026-11-01; hosted acceptance remains unverified for that head and is not a merge prerequisite for this authorized delivery.
+- [x] 28.1 Replace full-project relocation with a deterministic downward growth plan: keep the target origin, width, and current members fixed; push blocking projects with all current members and unassigned notes downward, including protruding card footprints.
+- [x] 28.2 Verify discovery, batch arrivals, layer returns, filtered obstacles, other-layer/dormant isolation, stable repeated reconciliation, persistence, and save failure using fixtures. Retain viewport, source facts, and acknowledgment.
+- [x] 28.3 Align baseline/layer requirements, designs, guides, and verification evidence; pass ordinary tests, native build/signature, strict OpenSpec, whitespace, and affected local-link checks.
+- [ ] 28.4 Complete hosted arm64 and OpenSpec under section 27 architecture policy checks for the rebased PR head. The user explicitly requested merging PR #15 without CI on 2026-11-01; hosted acceptance remains unverified for that head and is not a merge prerequisite for this authorized delivery.
+## 29. Restart status and explicit full refresh
+
+- [x] 29.1 Reproduce metadata-only startup erasing a cached approval; retain exact last-known execution/request/active-turn evidence across repeated restart, source loss, and refresh, and present it separately from Unknown without inferring Idle.
+- [x] 29.2 Add source-wide explicit status checks for uncached and filtered sessions, progress/failure/unresolved counts, Stop, no overlap, retry, fresh desktop snapshot requests, and live/request/turn-identity priority.
+- [x] 29.3 Complete offline tests, isolated native progress/Unknown presentation checks, release/signature, strict OpenSpec/whitespace/local-link checks, and record actual installed saved-source diagnostics with desktop observation disabled.
+- [ ] 29.4 Verify the user's actual pending approvals against fresh desktop evidence in a separately authorized bounded live check. The old Canvas cache and migration backup have no request records; fixture success cannot establish recovery of those particular requests.
 
 ## Workflow follow-up
 

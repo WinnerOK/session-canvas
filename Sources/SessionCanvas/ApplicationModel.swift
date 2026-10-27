@@ -11,6 +11,8 @@ final class ApplicationModel: ObservableObject {
     @Published var connected = false
     @Published var hasLiveState = false
     @Published var isRefreshing = false
+    @Published var statusRefreshProgress: StatusRefreshProgress?
+    private var manualRefreshTask: Task<Void, Never>?
     @Published var selectedSessionID: String?
     @Published var search = "" { didSet { revealedCreationID = nil; closeHiddenSelection() } }
     @Published private(set) var visibility: CanvasVisibility = { var value = CanvasVisibility(); value.hiddenStates = []; return value }()
@@ -86,6 +88,9 @@ final class ApplicationModel: ObservableObject {
     var canAssignProject: Bool { source?.canAssignProject == true && connected }
     var selectedSession: Session? { workspace.sessions.first { $0.id == selectedSessionID } }
     func state(_ session: Session) -> NoteState { session.state(acknowledged: acknowledgments[session.id] ?? []) }
+    func lastKnownLabel(_ session: Session) -> String? {
+        session.lastKnownState(acknowledged: acknowledgments[session.id] ?? []).map { "Last known: " + $0.label }
+    }
     var selectedLayer: CanvasLayer { workspace.selectedLayer }
     func layer(_ session: Session) -> CanvasLayer {
         CanvasLayer.classify(session, acknowledged: acknowledgments[session.id] ?? [], timeout: visibility.idleTimeout, now: activityNow)
@@ -225,6 +230,7 @@ final class ApplicationModel: ObservableObject {
 
     func connect(mode newMode: SourceMode? = nil) async {
         persist()
+        manualRefreshTask?.cancel(); manualRefreshTask = nil; statusRefreshProgress = nil
         refreshTask?.cancel(); changeTask?.cancel(); changeTask = nil; loadTask?.cancel(); saveTask?.cancel()
         source?.close()
         generation = UUID()
@@ -247,7 +253,7 @@ final class ApplicationModel: ObservableObject {
             acknowledgments = try database?.acknowledgments(source: next.sourceID) ?? [:]
             visibility = workspace.selectedVisibility; storageReady = database != nil
             if mode != .demo {
-                for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
+                for i in workspace.sessions.indices { workspace.sessions[i].invalidateExecution() }
             }
             next.onChange = { [weak self] in
                 guard let self, self.generation == token else { return }
@@ -262,7 +268,7 @@ final class ApplicationModel: ObservableObject {
             next.onDisconnect = { [weak self] in
                 guard let self, self.generation == token else { return }
                 self.connected = false; self.hasLiveState = false; self.connectionStatus = "Disconnected"
-                for i in self.workspace.sessions.indices { self.workspace.sessions[i].execution = .unknown }
+                for i in self.workspace.sessions.indices { self.workspace.sessions[i].invalidateExecution() }
                 self.persist()
                 self.closeHiddenSelection()
             }
@@ -283,7 +289,7 @@ final class ApplicationModel: ObservableObject {
                 workspace = try database?.loadLayered(source: next.sourceID, now: activityNow) ?? Workspace()
                 acknowledgments = try database?.acknowledgments(source: next.sourceID) ?? [:]
                 visibility = workspace.selectedVisibility; storageReady = database != nil
-                for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
+                for i in workspace.sessions.indices { workspace.sessions[i].invalidateExecution() }
             }
             next.restoreCachedResults(workspace.sessions)
             connected = true
@@ -303,11 +309,26 @@ final class ApplicationModel: ObservableObject {
             errorMessage = mode == .shared ? "No reachable shared Codex server. Select Codex desktop for local sessions, or configure the shared server's control socket. \(error.localizedDescription)" : error.localizedDescription
         }
     }
-    func refresh() async {
+    func startStatusRefresh() {
+        guard connected, !isRefreshing, manualRefreshTask == nil else { return }
+        let token = generation
+        manualRefreshTask = Task { [weak self] in
+            await self?.refresh(allStatuses: true)
+            if self?.generation == token { self?.manualRefreshTask = nil }
+        }
+    }
+    func stopStatusRefresh() { manualRefreshTask?.cancel() }
+    func refresh(allStatuses: Bool = false) async {
         guard let source, connected, !isRefreshing else { return }
         isRefreshing = true
+        if allStatuses { statusRefreshProgress = StatusRefreshProgress() }
         let token = generation
-        defer { if token == generation { isRefreshing = false } }
+        defer {
+            if token == generation {
+                isRefreshing = false
+                if allStatuses { statusRefreshProgress?.isComplete = true }
+            }
+        }
         do {
             let snapshot = try await source.snapshot()
             guard generation == token else { return }
@@ -320,6 +341,9 @@ final class ApplicationModel: ObservableObject {
                 var updated = session
                 if updated.latestResult == nil { updated.latestResult = merged[session.id]?.latestResult }
                 if updated.archived == nil { updated.archived = merged[session.id]?.archived }
+                if updated.execution == .unknown && updated.lastKnownObservation == nil {
+                    updated.lastKnownObservation = merged[session.id]?.rememberedObservation
+                }
                 merged[session.id] = updated
             }
             for id in source.removedSessionIDs { merged.removeValue(forKey: id) }
@@ -337,12 +361,34 @@ final class ApplicationModel: ObservableObject {
             closeHiddenSelection()
             persist()
             if !hadContent && mode == .demo { fitRequest += 1 }
+            if allStatuses {
+                let sessions = try await source.refreshStatuses { [weak self] progress in
+                    guard let self, self.generation == token else { return }
+                    // Keep the sheet's identity stable throughout discovery and checking.
+                    self.statusRefreshProgress?.total = progress.total
+                    self.statusRefreshProgress?.completed = progress.completed
+                    self.statusRefreshProgress?.unresolved = progress.unresolved
+                    self.statusRefreshProgress?.failed = progress.failed
+                }
+                guard generation == token, !Task.isCancelled else { throw CancellationError() }
+                var latest = Dictionary(uniqueKeysWithValues: workspace.sessions.map { ($0.id, $0) })
+                for session in sessions { latest[session.id] = session }
+                for id in source.removedSessionIDs.union(source.hiddenSessionIDs) { latest.removeValue(forKey: id) }
+                workspace.reconcile(sessions: latest.values.sorted { $0.updatedAt > $1.updatedAt }, projects: snapshot.projects)
+                connectionStatus = source.connectionStatus; hasLiveState = source.hasLiveState
+                closeHiddenSelection(); persist()
+                statusRefreshProgress?.unresolved = sessions.filter { !$0.isArchived && $0.execution == .unknown }.count
+            }
+        } catch is CancellationError {
+            if generation == token { statusRefreshProgress?.wasCancelled = true }
         } catch {
             guard generation == token else { return }
-            for i in workspace.sessions.indices { workspace.sessions[i].execution = .unknown }
+            for i in workspace.sessions.indices { workspace.sessions[i].invalidateExecution() }
             persist()
             closeHiddenSelection()
-            errorMessage = "Refresh failed; existing notes have been retained. \(error.localizedDescription)"
+            let message = "Refresh failed; existing notes have been retained. \(error.localizedDescription)"
+            if allStatuses { statusRefreshProgress?.error = message }
+            else { errorMessage = message }
         }
     }
     func openSession(_ id: String) {
@@ -384,6 +430,8 @@ final class ApplicationModel: ObservableObject {
             workspace.sessions[index].requests = observation.requests
             workspace.sessions[index].savedState = observation.savedState
             workspace.sessions[index].unknownReason = observation.unknownReason
+            workspace.sessions[index].activeTurnID = observation.activeTurnID
+            workspace.sessions[index].lastKnownObservation = observation.lastKnownObservation ?? workspace.sessions[index].lastKnownObservation
         }
         workspace.sessions[index].latestResult = observation.latestResult
         workspace.sessions[index].revision = observation.revision
@@ -595,6 +643,7 @@ final class ApplicationModel: ObservableObject {
         if let data = try? JSONEncoder().encode(settings) { UserDefaults.standard.set(data, forKey: "connectionSettings") }
     }
     func shutdown() {
+        manualRefreshTask?.cancel(); manualRefreshTask = nil
         persist(); generation = UUID(); connected = false; hasLiveState = false
         changeTask?.cancel(); changeTask = nil; refreshTask?.cancel(); loadTask?.cancel(); saveTask?.cancel(); activityTask?.cancel()
         source?.close()

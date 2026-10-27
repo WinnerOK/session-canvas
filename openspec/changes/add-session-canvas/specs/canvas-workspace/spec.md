@@ -314,7 +314,7 @@ The app SHALL expose pan/zoom gestures and native shortcuts for creation, refres
 - **THEN** the uncommitted preview is discarded without changing stored geometry or source membership
 
 ### Requirement: Note detail adapts to available scale
-Notes SHALL adapt from title/state/activity/footer to compact whole-line text or shapes without changing geometry or source facts. Project overviews and note-content omission SHALL share one compact-text fit decision. Detailed footers SHALL prioritize pending moves, result outcome/review status, then working folder/source label. Selection and keyboard focus SHALL have a visible outline.
+Notes SHALL adapt from title/state/activity/footer to compact whole-line text or shapes without changing geometry or source facts. Project overviews and note-content omission SHALL share one compact-text fit decision. Detailed footers SHALL prioritize pending moves, last-known state when Unknown, result outcome/review status, then working folder/source label. Compact Unknown notes SHALL include their last-known state when available. Selection and keyboard focus SHALL have a visible outline.
 
 #### Scenario: Zoom through note detail levels
 - **WHEN** the user zooms out from detailed notes

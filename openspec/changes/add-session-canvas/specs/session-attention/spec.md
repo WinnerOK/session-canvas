@@ -179,6 +179,14 @@ Starting a later turn SHALL give current execution or requests display priority 
 ### Requirement: Missing execution evidence is Unknown
 When neither current execution nor verified latest-history evidence establishes a non-archived session's state, the note SHALL show Unknown and indicate its last-known state separately. A confirmed archived session SHALL remain Archived. Disconnects, silence, and source unloading SHALL NOT create terminal results or acknowledgments. Reconnection SHALL reconcile against authoritative current state.
 
+#### Scenario: Reopen while a permission request was pending
+- **WHEN** Canvas restarts or loses observation after recording work or input/permission requests
+- **THEN** the same-source cache retains last-known execution, each request identity/kind, and the active turn identity separately from current evidence
+- **AND** metadata-only inventory, failed refresh, and repeated restarts do not erase that observation
+- **AND** an unverified session remains Unknown in Inactive, with its last-known state on the note, in accessibility text, and in the viewer with guidance to check Codex
+- **AND** a fresh current observation supersedes that hint; history can resolve its pending requests only when the terminal result belongs to the recorded active turn
+- **AND** missing turn identity or an older terminal result does not silently convert the cached waiting session to Idle or Finished
+
 #### Scenario: Recover saved terminal state during discovery
 - **WHEN** an unloaded session has identity-verified saved evidence whose latest work is terminal
 - **THEN** discovery loads its stable result identity before opening the viewer and displays Finished until explicit acknowledgment, then Idle

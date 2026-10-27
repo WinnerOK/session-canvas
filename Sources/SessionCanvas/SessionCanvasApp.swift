@@ -24,7 +24,7 @@ struct SessionCanvasApp: App {
             CommandGroup(replacing: .appSettings) { Button("Connection Settings…") { model.showsSettings = true }.keyboardShortcut(",") }
             CommandGroup(after: .newItem) {
                 Button("New Session…") { model.beginCreation(at: model.workspace.viewport.world(.init(300, 160))) }.keyboardShortcut("n")
-                Button("Refresh Sessions") { Task { await model.refresh() } }.keyboardShortcut("r")
+                Button("Refresh Sessions") { model.startStatusRefresh() }.keyboardShortcut("r").disabled(!model.connected || model.isRefreshing)
             }
             CommandGroup(after: .sidebar) {
                 Button("Toggle Sidebar") { model.toggleSidebar() }.keyboardShortcut("s", modifiers: [.command, .shift])

@@ -167,6 +167,12 @@ public struct ProjectMembershipConfirmation: Codable, Equatable, Sendable {
     }
 }
 
+public struct LastKnownObservation: Codable, Equatable, Sendable {
+    public var execution: Execution
+    public var requests: [String: RequestKind]
+    public var activeTurnID: String?
+}
+
 public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var title: String
@@ -181,9 +187,35 @@ public struct Session: Codable, Equatable, Identifiable, Sendable {
     public var archived: Bool?
     public var savedState: Bool?
     public var unknownReason: UnknownReason?
+    public var activeTurnID: String?
+    public var lastKnownObservation: LastKnownObservation?
     public var projectMembershipConfirmation: ProjectMembershipConfirmation?
     public var isArchived: Bool { archived == true }
     public var stateIsFromHistory: Bool { savedState == true }
+    public var rememberedObservation: LastKnownObservation? {
+        if execution != .unknown || !requests.isEmpty {
+            return LastKnownObservation(execution: execution, requests: requests, activeTurnID: activeTurnID)
+        }
+        return lastKnownObservation
+    }
+    public mutating func invalidateExecution() {
+        lastKnownObservation = rememberedObservation
+        execution = .unknown; requests = [:]; activeTurnID = nil; savedState = false
+    }
+    public func lastKnownState(acknowledged: Set<String>) -> NoteState? {
+        guard execution == .unknown, let observation = lastKnownObservation else { return nil }
+        if observation.requests.values.contains(.permission) { return .permission }
+        if observation.requests.values.contains(.input) { return .waiting }
+        guard observation.execution != .unknown else { return nil }
+        var known = self
+        known.execution = observation.execution; known.requests = observation.requests
+        return known.state(acknowledged: acknowledged)
+    }
+    public func historyCanResolveRequests(with result: SessionResult?) -> Bool {
+        guard let known = lastKnownObservation, !known.requests.isEmpty else { return true }
+        guard let turn = known.activeTurnID, let result else { return false }
+        return result.id == id + "/" + turn + "/" + result.outcome.rawValue
+    }
     public init(id: String, title: String, projectID: String? = nil, cwd: String = "", execution: Execution = .unknown,
                 requests: [String: RequestKind] = [:], latestResult: SessionResult? = nil, updatedAt: Date = Date(), revision: String = "0", isArchived: Bool = false) {
         self.id = id; self.title = title.isEmpty ? "Untitled session" : title

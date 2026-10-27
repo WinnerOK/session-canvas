@@ -5,6 +5,35 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct LiveStateTests {
+    @Test func reopeningCanvasRecoversApprovalAndRetainsItWhenDesktopDisconnects() async throws {
+        let fixture = try LiveFixture()
+        defer { fixture.remove() }
+        try fixture.update("approval")
+        try await fixture.waitUntilReady()
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let first = ApplicationModel(demo: false, storagePath: path)
+        first.settings = fixture.settings
+        await first.connect()
+        #expect(await eventually { first.workspace.sessions.first?.state(acknowledged: []) == .permission })
+        #expect(first.workspace.sessions.first?.activeTurnID == "turn")
+        first.shutdown()
+        try fixture.restart()
+        try await fixture.waitUntilReady()
+        let reopened = ApplicationModel(demo: false, storagePath: path)
+        reopened.settings = fixture.settings
+        defer { reopened.shutdown() }
+        await reopened.connect()
+        #expect(await eventually { reopened.workspace.sessions.first?.state(acknowledged: []) == .permission })
+        await reopened.refresh(allStatuses: true)
+        #expect(reopened.workspace.sessions.first?.state(acknowledged: []) == .permission)
+        fixture.server.terminate()
+        #expect(await eventually { reopened.workspace.sessions.first?.execution == .unknown })
+        let unknown = try #require(reopened.workspace.sessions.first)
+        #expect(unknown.lastKnownObservation?.requests.values.contains(.permission) == true)
+        #expect(reopened.lastKnownLabel(unknown) == "Last known: Permission required")
+        #expect(reopened.acknowledgments.isEmpty)
+    }
+
     @Test func singleSessionScopePreventsUnrelatedDesktopSubscriptions() async throws {
         let fixture = try LiveFixture()
         defer { fixture.remove() }
