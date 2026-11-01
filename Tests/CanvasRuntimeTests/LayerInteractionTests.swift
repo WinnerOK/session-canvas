@@ -59,7 +59,7 @@ struct LayerInteractionTests {
         #expect(model.workspace.placements == before.placements && model.workspace.regions == before.regions)
         #expect(model.workspace.sessions == before.sessions)
     }
-    @Test(arguments: [1.0, 0.42, 0.03])
+    @Test(arguments: [1.0, 0.42, 0.25, 0.03])
     func projectMovesIgnoreInactiveGeometryAndCancelStaleGestures(zoom: Double) throws {
         _ = NSApplication.shared
         let model = fixture(); defer { model.shutdown() }
@@ -68,7 +68,7 @@ struct LayerInteractionTests {
         let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = canvas; canvas.update()
         let inactiveBefore = model.workspace.layerState?.layouts[.inactive]
-        let start = model.workspace.viewport.screen(zoom < 0.55 ? Point(380, 290) : Point(380, 20))
+        let start = model.workspace.viewport.screen(zoom <= 0.25 ? Point(380, 290) : Point(380, 20))
         let end = start + Point(1000 * zoom, 0)
         canvas.mouseDown(with: try event(.leftMouseDown, start, canvas))
         canvas.mouseDragged(with: try event(.leftMouseDragged, end, canvas))
@@ -135,7 +135,7 @@ struct LayerInteractionTests {
         let model = fixture(); defer { model.shutdown() }
         let canvas = CanvasNSView(model: model); canvas.frame = NSRect(x: 0, y: 0, width: 1000, height: 700)
         for layer in [CanvasLayer.active, .inactive] {
-            model.selectLayer(layer); model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.42)
+            model.selectLayer(layer); model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.25)
             canvas.update()
             let labels = (canvas.accessibilityChildren() as? [NSAccessibilityElement])?.compactMap { $0.accessibilityLabel() } ?? []
             #expect(labels.count == 1)

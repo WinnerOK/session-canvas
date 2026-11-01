@@ -52,6 +52,13 @@ The canvas SHALL support panning in every direction, zooming around a focal poin
 - **AND** project regions and hit areas follow the viewport transform without enlargement, reflow, displacement, or clamping to viewport edges
 - **AND** text boxes fit whole lines without clipping letters vertically
 
+#### Scenario: Project and session content share a zoom boundary
+- **WHEN** the user zooms through the point where a session note can no longer fit its compact whole-line text
+- **THEN** project member notes switch to their project overview at that same point, while unassigned notes become shapes
+- **AND** both decisions account for the minimum scale, title font line height, padding, and reserved state line
+- **AND** project members remain drawn, individually clickable, and accessible at every scale where an unassigned note still shows text
+- **AND** zooming back in restores member notes at the same boundary without changing saved geometry, membership, or the viewport beyond the requested zoom
+
 #### Scenario: Open a project from the overview
 - **WHEN** the user clicks a project area, including one without text, or activates it with the keyboard or assistive technology
 - **THEN** the canvas zooms into that project's sessions at a readable scale, even when its region is too tall to fit entirely
@@ -301,7 +308,7 @@ The app SHALL expose pan/zoom gestures and native shortcuts for creation, refres
 - **THEN** the uncommitted preview is discarded without changing stored geometry or source membership
 
 ### Requirement: Note detail adapts to available scale
-Notes SHALL adapt from detailed title/state/activity/footer to compact whole-line text or distant shapes without changing geometry or source facts. Detailed footers SHALL prioritize pending moves, result outcome/review status, then working folder/source label. Selection and keyboard focus SHALL have a visible outline.
+Notes SHALL adapt from title/state/activity/footer to compact whole-line text or shapes without changing geometry or source facts. Project overviews and note-content omission SHALL share one compact-text fit decision. Detailed footers SHALL prioritize pending moves, result outcome/review status, then working folder/source label. Selection and keyboard focus SHALL have a visible outline.
 
 #### Scenario: Zoom through note detail levels
 - **WHEN** the user zooms out from detailed notes

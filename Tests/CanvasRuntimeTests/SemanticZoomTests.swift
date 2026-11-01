@@ -6,7 +6,47 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct SemanticZoomTests {
-    @Test(arguments: [0.42, 0.10, 0.03, 0.01])
+    @Test(arguments: [0.24, 0.25, 0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.42, 0.54, 0.55, 0.60, 0.85, 1.0])
+    func projectMembersDisappearExactlyWhenSessionContentDoes(zoom: Double) throws {
+        _ = NSApplication.shared
+        let model = ApplicationModel(demo: true, storagePath: ":memory:")
+        model.workspace.projects = [Project(id: "p", name: "Project")]
+        model.workspace.regions = ["p": Rect(0, 0, 360, 290)]
+        model.workspace.sessions = [Session(id: "member", title: "Member session", projectID: "p", execution: .idle),
+                                    Session(id: "unassigned", title: "Unassigned session", execution: .idle)]
+        model.workspace.placements = ["member": Placement(Point(20, 64)), "unassigned": Placement(Point(400, 64))]
+        let viewport = Viewport(origin: Point(40, 40), zoom: zoom)
+        model.workspace.viewport = viewport
+        let canvas = CanvasNSView(model: model)
+        canvas.frame = NSRect(x: 0, y: 0, width: 800, height: 450)
+        let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = canvas
+        canvas.update()
+        let elements = try #require(canvas.accessibilityChildren() as? [NSAccessibilityElement])
+        let memberIsAccessible = elements.contains { $0.accessibilityLabel()?.hasPrefix("Member session,") == true }
+        let projectIsAccessible = elements.contains { $0.accessibilityLabel()?.contains("zoom into project") == true }
+        let original = try pixels(canvas)
+        model.workspace.sessions[1].title = "Changed unassigned title"
+        canvas.update()
+        let unassignedChanged = try pixels(canvas)
+        let sessionContentIsVisible = unassignedChanged != original
+        model.workspace.sessions[0].title = "Changed member title"
+        canvas.update()
+        let memberContentIsVisible = try pixels(canvas) != unassignedChanged
+        #expect(memberContentIsVisible == sessionContentIsVisible,
+                "Project members and unassigned notes must retain text at the same zoom: \(zoom)")
+        #expect(memberIsAccessible == sessionContentIsVisible)
+        #expect(projectIsAccessible != sessionContentIsVisible)
+        #expect(model.workspace.viewport == viewport)
+        #expect(model.workspace.placements["member"] == Placement(Point(20, 64)))
+        let center = viewport.screen(Point(20 + Placement.width / 2, 64 + Placement.height / 2))
+        canvas.mouseDown(with: try mouse(.leftMouseDown, at: center, in: canvas))
+        canvas.mouseUp(with: try mouse(.leftMouseUp, at: center, in: canvas))
+        #expect(model.selectedSessionID == (sessionContentIsVisible ? "member" : nil))
+        #expect(model.focusRequest == (sessionContentIsVisible ? 0 : 1))
+    }
+
+    @Test(arguments: [0.25, 0.10, 0.03, 0.01])
     func draggingAnOverviewMovesTheProjectAndAllMembersWithoutPanning(zoom: Double) throws {
         _ = NSApplication.shared
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
@@ -67,7 +107,7 @@ struct SemanticZoomTests {
         model.workspace.regions = ["p": Rect(0, 0, 760, 580), "q": Rect(1000, 0, 760, 580)]
         model.workspace.sessions = [Session(id: "p", title: "First", projectID: "p", execution: .idle), Session(id: "q", title: "Second", projectID: "q", execution: .idle)]
         model.workspace.placements = ["p": Placement(Point(20, 64)), "q": Placement(Point(1020, 64))]
-        model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.4)
+        model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.25)
         let original = model.workspace
         let canvas = CanvasNSView(model: model)
         canvas.frame = NSRect(x: 0, y: 0, width: 1000, height: 700)
@@ -75,7 +115,7 @@ struct SemanticZoomTests {
         window.contentView = canvas
         canvas.update()
         let start = original.viewport.screen(Point(380, 290))
-        let end = start + (gesture == "collision" ? Point(400, 0) : Point(40, 20))
+        let end = start + (gesture == "collision" ? Point(250, 0) : Point(40, 20))
         if gesture == "space" { canvas.keyDown(with: try key(49, characters: " ")) }
         canvas.mouseDown(with: try mouse(.leftMouseDown, at: start, in: canvas))
         if gesture != "click" { canvas.mouseDragged(with: try mouse(.leftMouseDragged, at: end, in: canvas)) }
@@ -88,7 +128,7 @@ struct SemanticZoomTests {
             #expect(model.focusRequest == 1)
             #expect(model.workspace.viewport.zoom >= 0.75)
         } else if gesture == "space" {
-            #expect(model.workspace.viewport == Viewport(origin: Point(80, 80), zoom: 0.4))
+            #expect(model.workspace.viewport == Viewport(origin: Point(80, 80), zoom: 0.25))
         } else {
             #expect(model.workspace.viewport == original.viewport)
             #expect(model.focusRequest == 0)
@@ -115,7 +155,7 @@ struct SemanticZoomTests {
         canvas.frame = NSRect(x: 0, y: 0, width: 1400, height: 700)
         let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
         window.contentView = canvas
-        for zoom in [0.54, 0.42, 0.25, 0.1, 0.03, 0.01] {
+        for zoom in [0.30, 0.25, 0.1, 0.03, 0.01] {
             for origin in [Point(40, 60), Point(-50, 15)] {
                 model.workspace.viewport = Viewport(origin: origin, zoom: zoom)
                 canvas.update()
@@ -143,7 +183,7 @@ struct SemanticZoomTests {
         model.workspace.projects = [Project(id: "p", name: "Project without enough label space")]
         model.workspace.regions["p"] = region
         model.workspace.sessions = [Session(id: "s", title: "Session", projectID: "p", execution: .idle)]
-        model.workspace.viewport = Viewport(origin: Point(40, 40), zoom: 0.4)
+        model.workspace.viewport = Viewport(origin: Point(40, 40), zoom: 0.25)
         let canvas = CanvasNSView(model: model)
         canvas.frame = NSRect(x: 0, y: 0, width: 800, height: 400)
         canvas.update()
@@ -178,7 +218,7 @@ struct SemanticZoomTests {
         #expect(model.selectedSessionID == "s")
     }
 
-    @Test(arguments: [0.42, 0.25, 0.10, 0.03, 0.01])
+    @Test(arguments: [0.30, 0.25, 0.10, 0.03, 0.01])
     func projectLabelsUseAvailableSpaceAtEachZoom(zoom: Double) throws {
         _ = NSApplication.shared
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
