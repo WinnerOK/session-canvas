@@ -44,7 +44,7 @@ Geometry, viewport, session/result cache, visibility, and acknowledgment SHALL b
 - **AND** a late operation from the previous source cannot alter the current workspace
 
 ### Requirement: Refresh is automatic and explicitly available
-A connected workspace SHALL refresh on connection, every 12 seconds, and through Refresh Sessions in the toolbar/menu or Command + R. Source-change notifications SHALL coalesce over 250 milliseconds before requesting a refresh. Only one inventory refresh SHALL run at a time. Refresh SHALL reconcile source facts without acknowledging results or automatically rearranging the canvas.
+A connected workspace SHALL refresh on connection, every 12 seconds, and through Refresh Sessions in the toolbar/menu or Command + R. Source-change notifications SHALL coalesce over 250 milliseconds before requesting a refresh. Only one inventory refresh SHALL run at a time. Refresh SHALL reconcile source facts without acknowledging results or invoking Rearrange. Arrivals SHALL use the anchored downward placement contract when destination space is needed.
 
 #### Scenario: Repeated notifications arrive
 - **WHEN** several relevant source changes arrive within the coalescing interval

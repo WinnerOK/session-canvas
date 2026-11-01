@@ -124,11 +124,11 @@ Assigning or removing project membership SHALL preserve the session identity, cu
 - **THEN** its active turn continues in the same execution context with only project membership changed
 
 ### Requirement: External membership changes reconcile placement
-An authoritative membership change made outside the canvas SHALL relocate the affected note into the destination region or unassigned space without moving unrelated notes. If membership changes externally during a drag, the stale drop SHALL be rejected and current source membership displayed.
+An authoritative membership change made outside the canvas SHALL relocate the affected note into the destination region or unassigned space. A full existing destination SHALL grow downward through the session-layers cascade, preserving geometry outside its blockers. If membership changes externally during a drag, the stale drop SHALL be rejected and current source membership displayed.
 
 #### Scenario: Codex moves a session to another project
 - **WHEN** the source confirms that a session moved from A to B outside the canvas
-- **THEN** its note is relocated to available space in B's region and other notes retain their positions
+- **THEN** its note is relocated to available space in B's region, with anchored downward growth and blocking displacement only if space is needed
 
 #### Scenario: External change races with a drop
 - **WHEN** a session changes project externally after its drag began but before its drop is applied

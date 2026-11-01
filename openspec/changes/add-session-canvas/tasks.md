@@ -250,6 +250,13 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 26.3 Verify the full offline suite, native demo rendering, release build/signature, strict OpenSpec/whitespace, and affected local document links; record actual evidence.
 - [ ] 26.4 Complete hosted OpenSpec and both macOS architecture checks. Run 40367450550 refused all jobs before any step because GitHub account payments or spending limits require attention; PR #14 remains draft pending hosted verification.
 
+## 27. Anchored downward growth (issue #11)
+
+- [x] 27.1 Replace full-project relocation with a deterministic downward growth plan: keep the target origin, width, and current members fixed; push blocking projects with all current members and unassigned notes downward, including protruding card footprints.
+- [x] 27.2 Verify discovery, batch arrivals, layer returns, filtered obstacles, other-layer/dormant isolation, stable repeated reconciliation, persistence, and save failure using fixtures. Retain viewport, source facts, and acknowledgment.
+- [x] 27.3 Align baseline/layer requirements, designs, guides, and verification evidence; pass ordinary tests, native build/signature, strict OpenSpec, whitespace, and affected local-link checks.
+- [ ] 27.4 Complete hosted arm64/x86_64 and OpenSpec checks for the rebased PR head. The user explicitly requested merging PR #15 without CI on 2026-11-01; hosted acceptance remains unverified for that head and is not a merge prerequisite for this authorized delivery.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

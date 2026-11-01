@@ -151,7 +151,7 @@ import CanvasCore
         let backup = try JSONDecoder().decode(Workspace.self, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0))))
         #expect(backup == original)
     }
-    @Test func crowdedArrivalTranslatesOnlyDestinationProjectAndRestoresRelativeMemory() throws {
+    @Test func crowdedArrivalGrowsDestinationDownwardAndRestoresRelativeMemory() throws {
         var value = fixture()
         value.sessions[1].execution = .idle
         value.sessions.append(Session(id: "b", title: "Neighbor", projectID: "q", execution: .idle))
@@ -163,8 +163,10 @@ import CanvasCore
         let neighbor = value.placements["b"], oldProject = value.regions["p"]
         value.sessions[1].archived = false
         value.reconcileLayers(acknowledgments: [:], now: now)
-        #expect(value.regions["p"] != oldProject)
-        #expect(value.placements["b"] == neighbor)
+        #expect(value.regions["p"]!.x == oldProject!.x && value.regions["p"]!.y == oldProject!.y)
+        #expect(value.regions["p"]!.width == oldProject!.width && value.regions["p"]!.height > oldProject!.height)
+        #expect(value.placements["a"]?.position == Point(20, 64))
+        #expect(value.placements["b"]!.position.x == neighbor!.position.x && value.placements["b"]!.position.y > neighbor!.position.y)
         for id in ["a", "u"] { #expect(value.project(at: try #require(value.placements[id]).center) == "p") }
         #expect(!value.regions["p"]!.intersects(value.regions["q"]!))
         #expect(!value.placements["a"]!.rect.intersects(value.placements["u"]!.rect))

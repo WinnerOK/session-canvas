@@ -97,7 +97,7 @@ Layer changes SHALL preserve session identity, actual project or unassigned memb
 - **AND** a remembered A placement cannot restore obsolete membership
 
 ### Requirement: Destination placement restores valid spatial context
-A transitioning session SHALL restore its remembered destination-layer placement only when valid for current membership and occupants. Otherwise it SHALL receive a non-overlapping placement within its destination project or unassigned space. The project SHALL be created, expanded, or translated as needed without overlapping same-layer projects or enclosing nonmembers; any translation SHALL carry its current members together.
+A transitioning session SHALL restore its remembered destination-layer placement only when valid for current membership and occupants. Otherwise it SHALL receive a non-overlapping placement within its destination project or unassigned space. A missing project SHALL be created in free space. An existing full project SHALL expand downward, retaining its origin, width, and current member positions. Blockers SHALL follow the downward cascade below without changing source membership.
 
 #### Scenario: Return to an independently moved project
 - **WHEN** a session returns to a destination project whose region moved while the session was away
@@ -106,13 +106,32 @@ A transitioning session SHALL restore its remembered destination-layer placement
 
 #### Scenario: A saved position was reused or the project is full
 - **WHEN** the remembered slot is occupied, outside resized bounds, or associated with an obsolete project, or no destination slot is free
-- **THEN** a valid destination slot is allocated, growing or translating only that project when required
-- **AND** no unrelated project is rearranged, no note overlaps a current note, and all current member centers remain within their project
+- **THEN** a valid destination slot is allocated, growing the existing project downward when required
+- **AND** only blocking same-layer geometry is displaced downward; no note overlaps a current note and all current member centers remain within their project
 
 #### Scenario: First arrival to a layer
 - **WHEN** a project session enters a layer with no remembered region for its project
 - **THEN** a nonconflicting region is created there and the session is placed inside it
 - **AND** existing geometry on other layers is unchanged
+
+### Requirement: Anchored growth displaces a downward cascade
+Automatic placement SHALL keep the destination project's origin, width, and existing members fixed. Blocking projects SHALL move as rigid groups; blocking unassigned notes SHALL move individually. Only downward displacement SHALL occur. Planning SHALL include current filtered occupants and full card footprints, exclude other layers and dormant records, preserve viewport and source facts, and publish one complete layout through existing save/retry semantics.
+
+#### Scenario: Propagate collisions through projects and notes
+- **WHEN** downward growth or a pushed blocker intersects another current same-layer project or card
+- **THEN** affected blocks are resolved in original top-edge order with stable identity ties, each shifted only far enough to clear earlier blocks with a 24-unit gap on a collision
+- **AND** each project carries all its current members with unchanged offsets and dimensions, including cards protruding beyond its region
+- **AND** blocks outside the cascade retain exact coordinates
+
+#### Scenario: Preserve independent layouts and filters
+- **WHEN** a cascade encounters filtered same-layer occupants while another layer or a dormant record uses the same coordinates
+- **THEN** filtered occupants participate and the other layer and dormant records remain unchanged
+- **AND** search, filters, selection, pan/zoom, execution, requests, memberships, and acknowledgments retain their existing meaning
+
+#### Scenario: Repeat discovery or remove arrivals
+- **WHEN** the same inventory is reconciled again, reopened, or arrivals later depart
+- **THEN** valid placements and expanded bounds are retained without another cascade or automatic shrink
+- **AND** the saved complete layout remains restorable through the existing SQLite snapshot
 
 ### Requirement: Automatic transitions preserve layer navigation
 Source observations, acknowledgment changes, idle-timeout changes, and clock updates SHALL reclassify affected sessions without switching the selected layer or invoking Rearrange. A viewer SHALL close when its session leaves the selected visible population; stale asynchronous history replies SHALL not reopen it. A drag or resize based on an obsolete layer, population, or geometry SHALL be cancelled or rejected.
