@@ -32,7 +32,7 @@ def package(args, root=builder.ROOT):
     options.binary = args.binary
     bundle = builder.build_app(options, root=root)
     binary = bundle / "Contents/MacOS/SessionCanvas"
-    subprocess.run(["lipo", "-verify_arch", args.arch, str(binary)], check=True)
+    subprocess.run(["lipo", str(binary), "-verify_arch", args.arch], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     archive = root / "dist" / f"SessionCanvas-{args.tag}-macos-{args.arch}.zip"
     subprocess.run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(bundle), str(archive)], check=True)

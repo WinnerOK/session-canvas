@@ -6,10 +6,13 @@ import importlib.util
 import io
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 spec = importlib.util.spec_from_file_location("package_release", Path(__file__).resolve().parents[1] / "package-release.py")
 release = importlib.util.module_from_spec(spec)
@@ -18,6 +21,35 @@ builder = release.builder
 
 
 class ReleasePackagingTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "darwin", "Native release tools require macOS")
+    def test_native_tools_package_and_extract_an_arm64_app(self):
+        with tempfile.TemporaryDirectory(prefix="session-canvas release ") as folder:
+            root = Path(folder)
+            binary = root / "fixture"
+            subprocess.run(["clang", "-arch", "arm64", "-x", "c", "-", "-o", str(binary)],
+                           input="int main(void) { return 0; }\n", text=True, check=True)
+            icon = root / "assets/branding/SessionCanvas.icns"
+            icon.parent.mkdir(parents=True)
+            shutil.copy2(builder.ROOT / "assets/branding/SessionCanvas.icns", icon)
+            args = release.parser().parse_args(["--tag", "v0.0.1", "--build-number", "37",
+                                               "--arch", "arm64", "--binary", str(binary)])
+
+            archive = release.package(args, root=root)
+
+            subprocess.run(["shasum", "-a", "256", "-c", archive.name + ".sha256"],
+                           cwd=archive.parent, check=True)
+            with zipfile.ZipFile(archive) as contents:
+                info = plistlib.loads(contents.read("Session Canvas.app/Contents/Info.plist"))
+                self.assertEqual((info["CFBundleShortVersionString"], info["CFBundleVersion"]),
+                                 ("0.0.1", "37"))
+            extracted = root / "extracted"
+            subprocess.run(["ditto", "-x", "-k", str(archive), str(extracted)], check=True)
+            bundle = extracted / "Session Canvas.app"
+            executable = bundle / "Contents/MacOS/SessionCanvas"
+            self.assertTrue(executable.stat().st_mode & 0o111)
+            subprocess.run(["lipo", str(executable), "-verify_arch", "arm64"], check=True)
+            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
+
     def test_malformed_metadata_is_rejected_before_building(self):
         with patch.object(builder, "build_app") as build:
             for tag in ("1.2.3", "v1.2", "v01.2.3", "v1.2.3-rc.1", "v1.2.3\n", "v1.2.3; touch /tmp/unwanted"):
@@ -70,6 +102,9 @@ class ReleasePackagingTests(unittest.TestCase):
             self.assertEqual(filename, archive.name)
             self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
             self.assertEqual([call.args[0][0] for call in run.call_args_list], ["lipo", "codesign", "ditto"])
+            # Xcode 16.4 treats every argument after -verify_arch as an architecture.
+            self.assertEqual(run.call_args_list[0].args[0],
+                             ["lipo", str(bundle / "Contents/MacOS/SessionCanvas"), "-verify_arch", "arm64"])
 
     def test_wrong_architecture_or_bad_signature_prevents_archive(self):
         for failing_command in ("lipo", "codesign"):

@@ -4,6 +4,8 @@
 
 [CI](../.github/workflows/ci.yml) runs for every pull request and push to `main`. It runs the normal Swift Testing suites, the Python tooling tests, and a release app build with signature verification on Apple Silicon (`arm64`, `macos-15`). Xcode 16.4 is selected explicitly, with Python 3.12 for tooling. A separate job validates all OpenSpec artifacts with OpenSpec 1.15.0. Build, test, and release automation supports arm64 only.
 
+The Python tooling suite also compiles a minimal arm64 fixture and packages it with the real `lipo`, `codesign`, and `ditto` tools, without launching an application. It checks version metadata and the archive checksum, extracts the ZIP, and verifies executable permissions, architecture, and bundle signature. This exercises release packaging on the selected hosted toolchain during ordinary PR checks, including paths containing spaces.
+
 Hosted checks use fixtures and native AppKit rendering/events. They do not require an installed Codex desktop, account credentials, saved sessions, or Developer ID secrets. The three installed-source tests remain opt-in local checks; CI does not claim to verify the remaining real-desktop integration gates. See [local verification](native-application.md#codex-verification-launcher) and the [evidence ledger](../openspec/changes/add-session-canvas/verification.md).
 
 The first hosted run exposed a Swift 6.1 overload ambiguity in project-focus geometry that local Swift 6.4 accepted. The canvas now converts AppKit dimensions to the domain's `Double` before that arithmetic, retaining the same positioning formula. The arm64 job continues using Xcode 16.4 so CI verifies this compatibility boundary.
@@ -32,6 +34,8 @@ git push origin v0.2.0
 
 [Release](../.github/workflows/release.yml) reuses the CI workflow for the resolved commit. Only its final draft job receives `contents: write`; the built-in `GITHUB_TOKEN` is sufficient, with no personal token or additional secrets. It rechecks an existing tag against the tested SHA before uploading and fails if the tag moved. Repeating a run updates assets only while the release is a draft. Published assets are never replaced. For a published version, choose a new version rather than rerunning an asset update. Automation never clicks Publish release. GitHub also recommends attaching assets to drafts before publication when [immutable releases are enabled](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
 
+After fixing a release failure, use **Run workflow** from the branch containing the fix. **Re-run jobs** retains the original workflow revision and can repeat the same failure. If no tag was created, the same version can be entered again. If the tag already exists at the broken revision, choose a new version; selecting a newer branch does not change an existing tag's commit.
+
 Each draft contains:
 
 - `SessionCanvas-v0.2.0-macos-arm64.zip` for Apple Silicon.
@@ -59,5 +63,7 @@ python3 scripts/package-release.py --tag v0.2.0 --build-number 1 --arch arm64
 ```
 
 Use `--binary PATH` to package an already built executable, including one built through the local toolchain workaround. Package on Apple Silicon; `--arch` accepts only `arm64`, and the script rejects an executable without arm64 support. Outputs are under ignored `dist/`. Local packaging does not create a GitHub release.
+
+Architecture verification uses `lipo INPUT -verify_arch arm64`. Xcode 16.4 rejects a file path after `-verify_arch` as an unknown architecture, while newer local tools may accept that ordering. Keep the input first for compatibility with the hosted release toolchain.
 
 Historical [hosted PR verification](https://github.com/WinnerOK/session-canvas/actions/runs/40198030452) passed on Apple Silicon and Intel before the arm64-only policy: 12 Python tests, the normal 71-test Swift run, release compilation, bundle signature verification, and OpenSpec with Xcode 16.4 / Swift 6.1.2. Current verification is recorded in the [evidence ledger](../openspec/changes/add-session-canvas/verification.md). Installed-source checks remain disabled. Actual draft-release creation/upload is a separate acceptance check.
