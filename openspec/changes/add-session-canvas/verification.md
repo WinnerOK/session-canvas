@@ -309,7 +309,7 @@ Local evidence from the primary checkout:
 - Both workflow files parsed with Ruby YAML. Structural checks confirmed a single arm64 job, no matrix, and a matching `release-arm64` download. Actionlint is unavailable in this environment; no new actionlint pass is claimed.
 - Strict OpenSpec validation passed both changes after shortening the amended requirement. `git diff --check` passed, as did **448 local links and 179 heading anchors** across the nine affected Markdown files.
 
-Current hosted arm64/OpenSpec acceptance remains task 26.4 until the new PR checks run. Actual draft-release upload remains task 21.5.3.
+Hosted acceptance remains open: [PR #17](https://github.com/WinnerOK/session-canvas/pull/17), initial implementation commit `ce5f93057e1d549b513616353171cbb5a69cae0b`, was pushed successfully, but `gh pr checks` reported no checks and `gh run list --branch codex/arm64-only` returned no workflow runs. The check-diagnostics integration could not complete its request. These observations do not establish a cause or a hosted pass; PR #17 remains draft and task 26.4 stays open. Actual draft-release upload remains task 21.5.3.
 
 ## Remaining acceptance gates
 
