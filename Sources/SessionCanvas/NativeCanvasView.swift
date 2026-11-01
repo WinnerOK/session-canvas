@@ -75,7 +75,7 @@ final class CanvasNSView: NSView {
         next.origin = next.origin + Point((newSize.width - oldSize.width) / 2, (newSize.height - oldSize.height) / 2)
         model.setViewport(next)
     }
-    private var showsProjectOverview: Bool { viewport.zoom < CanvasOverview.zoomThreshold }
+    private var showsProjectOverview: Bool { CanvasOverview.sessionContentLayout(at: viewport.zoom) == nil }
     private var renderedSessions: [Session] {
         model.visibleSessions.filter { !showsProjectOverview || $0.projectID == nil }
     }
@@ -224,12 +224,9 @@ final class CanvasNSView: NSView {
         let selected = model.selectedSessionID == session.id || focusedItem == .session(session.id)
         (selected ? NSColor.controlAccentColor : state.color.withAlphaComponent(0.22)).setStroke()
         path.lineWidth = selected ? 2 : 1; path.stroke()
-        if scale < 0.25 { return }
+        guard let content = CanvasOverview.sessionContentLayout(at: scale) else { return }
         if scale < 0.85 {
-            let inset = max(7, 12 * scale)
-            let titleFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
-            let titleHeight = min(lineHeight(titleFont) * 2, rect.height - inset * 2 - 18)
-            guard titleHeight >= lineHeight(titleFont) else { return }
+            let (inset, titleFont, titleHeight) = content
             text(session.title, in: NSRect(x: rect.minX + inset, y: rect.minY + inset, width: rect.width - inset * 2, height: titleHeight), font: titleFont, color: .labelColor, lines: .byWordWrapping)
             let stateFont = NSFont.systemFont(ofSize: 10)
             text(state.label + " · " + model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
