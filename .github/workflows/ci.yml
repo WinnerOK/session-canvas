@@ -24,16 +24,8 @@ concurrency:
 
 jobs:
   macos:
-    name: Test and build (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x86_64
-    runs-on: ${{ matrix.runner }}
+    name: Test and build (arm64)
+    runs-on: macos-15
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
@@ -62,7 +54,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: failed-tests-${{ matrix.arch }}
+          name: failed-tests-arm64
           path: |
             .build/application-tests.log
             /private/tmp/session-canvas-*.png
@@ -77,13 +69,12 @@ jobs:
         if: ${{ inputs.release_tag != '' }}
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
-          RELEASE_ARCH: ${{ matrix.arch }}
-        run: python3 scripts/package-release.py --tag "$RELEASE_TAG" --build-number "$GITHUB_RUN_NUMBER" --arch "$RELEASE_ARCH"
+        run: python3 scripts/package-release.py --tag "$RELEASE_TAG" --build-number "$GITHUB_RUN_NUMBER" --arch arm64
       - name: Save release assets
         if: ${{ inputs.release_tag != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.arch }}
+          name: release-arm64
           path: |
             dist/*.zip
             dist/*.sha256

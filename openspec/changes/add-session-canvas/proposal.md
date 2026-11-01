@@ -23,7 +23,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 - Reveal the latest created session despite existing filters, show its viewer and continuation notice, and preserve saved visibility choices. Keep valid clicked placement, choose the nearest valid location for collisions including hidden notes, and preserve viewport pan/zoom for creation in the context's project. Keep clicked context within the same layer; focus for a changed project, changed classified layer, or explicit request. Show submission errors inside the active creation dialog.
 - Deliver a native Mac-only companion using SwiftUI/AppKit, with the in-app alternatives retained as historical research. Verify source capabilities and expose unsupported desktop operations explicitly.
 - Provide a stable local build/test/preview launcher with one user-authorized Codex prefix rule, local caches, and isolated captures so changing verification parameters does not repeat approval prompts.
-- Run pull-request checks on Apple Silicon and Intel macOS in GitHub Actions. Prepare tested, versioned app ZIPs and checksums as draft GitHub Releases from a manual run or version-tag push.
+- Run pull-request checks on Apple Silicon (`arm64`) macOS in GitHub Actions. Prepare a tested, versioned arm64 app ZIP and checksum as a draft GitHub Release from a manual run or version-tag push. Build, test, and release automation supports only arm64.
 - Use the selected blue session-cards application icon in local and release macOS bundles, with native icon sizes and resource metadata included before signing. Retain unselected concepts for comparison.
 
 ## Capabilities

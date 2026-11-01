@@ -202,11 +202,11 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 
 ## 21. GitHub checks and app releases
 
-- [x] 21.1 Add reusable pull-request/main CI with Apple Silicon and Intel macOS tests, Python tooling checks, release builds/signature checks, and strict OpenSpec validation; keep installed-source tests opt-in and repository permissions read-only.
+- [x] 21.1 Add reusable pull-request/main CI with Apple Silicon macOS tests, Python tooling checks, release builds/signature checks, and strict OpenSpec validation; keep installed-source tests opt-in and repository permissions read-only. Section 27 narrows automation to arm64.
 - [x] 21.2 Resolve release versions to exact commits, reuse all required checks, and create/update only draft GitHub Releases from Actions dispatch or version-tag pushes. Create new tags only after checks pass; refuse moved tags and published asset replacement.
 - [x] 21.3 Add validated bundle versions/build numbers and architecture-specific ZIP/checksum packaging; verify metadata, executable permissions, failure propagation, and a local Apple Silicon archive.
 - [x] 21.4 Document GitHub setup, manual/tag release flows, draft review, checksum verification, and ad-hoc signing limitations; synchronize SDD and verify local structure/links.
-- [ ] 21.5 Run the first hosted pull-request checks on both architectures and exercise draft release upload in GitHub after the workflows are pushed. Local checks do not prove runner availability or repository token policy.
+- [ ] 21.5 Run hosted pull-request checks and exercise draft release upload in GitHub after the workflows are pushed. Historical two-architecture checks passed below; current automation targets arm64 only. Local checks do not prove runner availability or repository token policy.
   - [x] 21.5.1 Create and push the CI/CD branch, open PR #2, and diagnose the first hosted run: both Xcode 16.4 jobs reject mixed CGFloat/Double project-focus division. Make the conversion explicit without changing focus behavior.
   - [x] 21.5.2 Verify both macOS jobs and OpenSpec pass on the updated PR head: hosted run 40198030452, commit 1a52884, Xcode 16.4 / Swift 6.1.2; 12 Python checks, the normal 71-test Swift run, release builds, and bundle signatures passed on both architectures.
     - [x] Diagnose the hosted UI-test hang with process samples and early exit with LLDB. Use the real hosted form's native Return/default-button route, retain one-create/navigation assertions and canvas mouse regressions, remove temporary diagnostics, and bound/verify test completion.
@@ -248,7 +248,14 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 26.1 Reproduce early member hiding with actual note-title bitmap changes and accessibility targets across fourteen scales; confirm failure at 32–54% where unassigned notes still render text.
 - [x] 26.2 Share the compact-text layout decision between project overview activation and note rendering; retain individual member interaction until that layout no longer fits. Update overview gesture/layer fixtures to use the actual overview range.
 - [x] 26.3 Verify the full offline suite, native demo rendering, release build/signature, strict OpenSpec/whitespace, and affected local document links; record actual evidence.
-- [ ] 26.4 Complete hosted OpenSpec and both macOS architecture checks. Run 40367450550 refused all jobs before any step because GitHub account payments or spending limits require attention; PR #14 remains draft pending hosted verification.
+- [ ] 26.4 Complete hosted OpenSpec and arm64 checks under section 27's architecture policy. Historical run 40367450550 refused all jobs before any step because GitHub account payments or spending limits require attention; merging PR #14 did not establish hosted verification.
+
+## 27. Arm64-only build, test, and release automation
+
+- [x] 27.1 Replace the macOS architecture matrix with one arm64 job and restrict release downloads and packaging arguments to arm64; preserve existing verification and draft-publication protections.
+- [x] 27.2 Align release requirements/scenarios, proposal, design, function inventory, README, and guides with the arm64-only policy while retaining historical verification evidence.
+- [x] 27.3 Verify tooling tests, arm64 application tests and release build/signature/packaging, workflow syntax, strict OpenSpec, whitespace, and affected local document links; record actual outcomes.
+- [ ] 27.4 Verify hosted arm64 and OpenSpec checks after pushing the change. The user authorized merging PR #17 without waiting for CI; this verification gate remains open and local checks do not prove hosted execution.
 
 ## 27. Anchored downward growth (issue #11)
 

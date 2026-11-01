@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a versioned macOS ZIP and SHA-256 file for one release architecture."""
+"""Build a versioned Apple Silicon macOS ZIP and SHA-256 file."""
 import argparse
 import hashlib
 import importlib.util
@@ -22,7 +22,7 @@ def parser():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--tag", required=True, type=release_tag)
     cli.add_argument("--build-number", required=True, type=builder.build_number)
-    cli.add_argument("--arch", required=True, choices=("arm64", "x86_64"))
+    cli.add_argument("--arch", required=True, choices=("arm64",))
     cli.add_argument("--binary", type=Path, help="Package an existing executable (for local verification)")
     return cli
 

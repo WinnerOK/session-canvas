@@ -18,7 +18,7 @@ The bundle is written to `dist/Session Canvas.app`. The default signature is ad 
 
 The selected application icon is the [blue session-cards image](../assets/branding/README.md). The builder includes its multi-resolution `SessionCanvas.icns` in `Contents/Resources` and sets `CFBundleIconFile` before signing. This applies to local and release bundles; running the bare SwiftPM executable does not package app resources. A missing icon resource fails the build before signing.
 
-The bundle built on this machine targets Apple Silicon. [GitHub Actions](ci-cd.md) checks Apple Silicon and Intel separately and prepares architecture-specific ZIPs and checksums as draft GitHub Releases. The workflow can be run entirely in GitHub with a version tag, creating a new tag at the verified commit if needed. Hosted PR tests and release bundle builds passed on both architectures; actual draft upload remains a separate acceptance check. These ad-hoc releases are not notarized or universal binaries.
+The bundle built on this machine targets Apple Silicon (`arm64`). [GitHub Actions](ci-cd.md) builds and tests only arm64 and prepares its ZIP and checksum as a draft GitHub Release. The workflow can be run entirely in GitHub with a version tag, creating a new tag at the verified commit if needed. Actual draft upload remains a separate acceptance check. These ad-hoc releases are not notarized.
 
 The development machine has mismatched public/private `PackageDescription` interfaces. The opt-in workaround compiles its installed public interface into a local module and uses it only for the manifest compiler:
 

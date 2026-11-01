@@ -281,7 +281,7 @@ See [integration-compatibility.md](../../../docs/integration-compatibility.md) f
 
 ### E12 — GitHub CI and release packaging, 2026-10-25
 
-[CI](../../../.github/workflows/ci.yml) runs the normal Swift suite, Python tooling tests, release compilation, and signature verification on Apple Silicon and Intel, plus strict OpenSpec validation. [Release](../../../.github/workflows/release.yml) resolves the existing tag or selected dispatch commit, reuses all checks for that exact SHA, and prepares only a draft containing architecture-specific ZIP/checksum files. The final job alone has repository write permission and refuses to overwrite a published release. [package-release.py](../../../scripts/package-release.py) uses the extended [app builder](../../../scripts/build-app.py); local build defaults and the verification launcher remain unchanged. See the [CI/CD guide](../../../docs/ci-cd.md).
+At introduction, [CI](../../../.github/workflows/ci.yml) ran the normal Swift suite, Python tooling tests, release compilation, and signature verification on Apple Silicon and Intel, plus strict OpenSpec validation. The arm64-only correction below supersedes that architecture policy. [Release](../../../.github/workflows/release.yml) resolves the existing tag or selected dispatch commit and reuses checks for that exact SHA before preparing a draft. The final job alone has repository write permission and refuses to overwrite a published release. [package-release.py](../../../scripts/package-release.py) uses the extended [app builder](../../../scripts/build-app.py); local build defaults and the verification launcher remain unchanged. See the [CI/CD guide](../../../docs/ci-cd.md).
 
 Local evidence:
 
@@ -315,6 +315,22 @@ Regression evidence:
 - The absolute launcher `build --configuration release --jobs 1` completed and signed the local app; `codesign --verify --deep --strict` passed. Strict OpenSpec and whitespace checks passed, as did 165 local document links and 76 anchors across nine affected Markdown files.
 
 The automatic API-only desktop move feature is **not restored**. Task 23.4 and the real assignment/reassignment/removal acceptance gate remain open. This change fixes false success and stale Canvas grouping rather than claiming a working desktop mutation integration.
+
+### Arm64-only automation, 2026-11-01
+
+The user removed x86_64 build/test support. The current [release-automation contract](specs/release-automation/spec.md) targets only Apple Silicon. [CI](../../../.github/workflows/ci.yml) now has one `Test and build (arm64)` job on `macos-15`, without an architecture matrix. Manual/tag releases reuse that job, upload `release-arm64`, and download only that artifact. The packaging CLI accepts only `--arch arm64`. Existing exact-revision, signature/checksum, read-only-check, and draft-publication protections remain. Historical Intel results below describe the earlier policy.
+
+Local evidence from the primary checkout:
+
+- `python3 -B -m unittest discover -s scripts/tests -v` passed all **19 tests**. A separate parser check accepted arm64 and rejected x86_64 with exit 2 before any builder call. The existing architecture/signature failure-propagation test now requests arm64.
+- The absolute launcher `test --jobs 1` completed successfully on ARM, including native UI/fixture regressions and the **56-test core run**; installed-source/live and performance opt-ins remained disabled. No Swift application behavior changed.
+- The absolute launcher `build --configuration release --jobs 1` completed and signed the bundle. `lipo -archs` reported only `arm64`. Local `package-release.py --tag v0.2.0 --build-number 1 --arch arm64 --binary .build/release/SessionCanvas` passed architecture and strict signature verification and wrote the ZIP/checksum under ignored `dist/`; `shasum -a 256 -c` passed. This did not create a tag or GitHub Release.
+- Both workflow files parsed with Ruby YAML. Structural checks confirmed a single arm64 job, no matrix, and a matching `release-arm64` download. Actionlint is unavailable in this environment; no new actionlint pass is claimed.
+- Strict OpenSpec validation passed both changes after shortening the amended requirement. `git diff --check` passed, as did **448 local links and 179 heading anchors** across the nine affected Markdown files.
+
+Hosted acceptance remains open: [PR #17](https://github.com/WinnerOK/session-canvas/pull/17), initial implementation commit `ce5f93057e1d549b513616353171cbb5a69cae0b`, was pushed successfully, but `gh pr checks` reported no checks and `gh run list --branch codex/arm64-only` returned no workflow runs. The check-diagnostics integration could not complete its request. These observations do not establish a cause or a hosted pass. The user subsequently authorized merging PR #17 without waiting for CI; task 27.4 stays open. Actual draft-release upload remains task 21.5.3.
+
+Conflict reconciliation with `main` at `c92a684`: both branches had added task section 26. Preserve the merged semantic-zoom work as section 26, move arm64 automation to section 27, and update its references. The Swift source/tests match `main` exactly; the arm64-only workflow/packaging contract is unchanged. The absolute launcher `test --filter 'SemanticZoomTests|LayerInteractionTests' --jobs 1` passed **17 tests in two suites** on ARM with installed-source checks disabled. Strict OpenSpec and whitespace checks passed, as did **455 local links and 182 heading anchors** across eleven affected Markdown files. This targeted follow-up does not claim another full-suite/release build or a hosted pass.
 
 ## Remaining acceptance gates
 
@@ -397,4 +413,4 @@ python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py bui
 
 Fresh launcher PNGs `.build/verification/issue12-demo.png` and `.build/verification/issue12-42.png` were inspected. The second uses an isolated copy of the demo database with only its presentation viewport set to 42%; both project members and the unassigned session retain compact text. Strict OpenSpec validation, whitespace, and all 445 local links/anchors in the nine affected Markdown files passed. An initial strict validation warning about requirement length was resolved by moving fit details into the scenario. Installed-source and timing opt-ins were skipped; no live desktop observation or real-source mutation was performed. Unrelated acceptance gates remain open.
 
-Hosted follow-up: [run 40367450550](https://github.com/WinnerOK/session-canvas/actions/runs/40367450550) refused OpenSpec and both macOS architecture jobs before any step. GitHub annotations identify failed recent account payments or a spending limit requiring an increase. This is unavailable hosted verification, not a passing CI run or a compiler/test failure. Task 26.4 remains open and [PR #14](https://github.com/WinnerOK/session-canvas/pull/14) is draft until Actions can run.
+Hosted follow-up: [run 40367450550](https://github.com/WinnerOK/session-canvas/actions/runs/40367450550) refused OpenSpec and both macOS architecture jobs before any step. GitHub annotations identify failed recent account payments or a spending limit requiring an increase. This is unavailable hosted verification, not a passing CI run or a compiler/test failure. [PR #14](https://github.com/WinnerOK/session-canvas/pull/14) was later merged without establishing a hosted pass. Task 26.4 remains open; subsequent hosted coverage follows the arm64-only policy in task section 27.

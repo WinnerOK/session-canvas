@@ -71,9 +71,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: release-*
+          name: release-arm64
           path: assets
-          merge-multiple: true
       - name: Create or update draft with verified assets
         shell: bash
         run: |

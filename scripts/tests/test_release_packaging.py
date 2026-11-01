@@ -81,7 +81,7 @@ class ReleasePackagingTests(unittest.TestCase):
                 root = Path(folder)
                 bundle = root / "dist/Session Canvas.app"
                 bundle.mkdir(parents=True)
-                args = release.parser().parse_args(["--tag", "v1.0.0", "--build-number", "1", "--arch", "x86_64"])
+                args = release.parser().parse_args(["--tag", "v1.0.0", "--build-number", "1", "--arch", "arm64"])
                 def execute(command, **kwargs):
                     if command[0] == failing_command:
                         raise subprocess.CalledProcessError(1, command)
