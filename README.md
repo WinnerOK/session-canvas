@@ -33,7 +33,7 @@ Codex uses a [stable verification launcher](docs/native-application.md#codex-ver
 
 History loads newest first in pages of at most twelve turn summaries; **Load older history** requests another page only when needed. Linear JSONL framing and decoding run outside the UI actor with paced delivery. The [performance investigation and repair](docs/history-loading-performance.md) records the reproduced stall, passing synthetic regressions, and remaining installed-session acceptance.
 
-GitHub Actions runs application/tooling tests and release builds for Apple Silicon and Intel on every pull request. To prepare a release, open **Actions → Release → Run workflow** and enter a tag such as `v0.2.0`; after verification, review and publish the generated draft with app ZIPs and SHA-256 files. Version-tag pushes also trigger releases. See the [CI/CD guide](docs/ci-cd.md) for setup, retries, and signing limitations.
+GitHub Actions runs application/tooling tests and release builds for Apple Silicon (`arm64`) on every pull request. To prepare a release, open **Actions → Release → Run workflow** and enter a tag such as `v0.2.0`; after verification, review and publish the generated draft with the arm64 app ZIP and SHA-256 file. Version-tag pushes also trigger releases. See the [CI/CD guide](docs/ci-cd.md) for setup, retries, and signing limitations.
 
 - [Domain glossary](GLOSSARY.md)
 - [Native application and build instructions](docs/native-application.md)

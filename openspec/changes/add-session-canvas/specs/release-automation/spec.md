@@ -1,11 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Pull requests verify the native application
-Every pull request and push to `main` SHALL run the normal Swift Testing suites, Python tooling tests, release bundle compilation, and signature verification on GitHub-hosted Apple Silicon and Intel macOS runners with a selected Swift 6 toolchain. CI SHALL also validate all OpenSpec artifacts strictly. Pull-request jobs SHALL use read-only repository permissions and SHALL NOT require Codex installation, user session data, or signing secrets.
+Pull requests and pushes to `main` SHALL run normal Swift Testing suites, Python tooling tests, release bundle compilation, and signature verification only on a GitHub-hosted arm64 macOS runner with a selected Swift 6 toolchain. CI SHALL validate all OpenSpec artifacts strictly. Pull-request jobs SHALL use read-only repository permissions and SHALL NOT require Codex, user session data, or signing secrets.
 
 #### Scenario: A pull request changes application or tooling code
 - **WHEN** a pull request is opened, reopened, or updated
-- **THEN** both architecture checks and the specification check run and failures are visible as failing GitHub checks
+- **THEN** the arm64 application check and the specification check run and failures are visible as failing GitHub checks
+- **AND** no x86_64 build or test job is scheduled
 
 #### Scenario: Tests require an installed desktop source
 - **WHEN** the normal suite runs on a clean hosted runner
@@ -23,11 +24,11 @@ CI SHALL retain the failed application-test log and generated fixture PNGs as ar
 - **THEN** the job uploads those available files for diagnosis
 
 ### Requirement: Release creation uses the verified source revision
-The repository SHALL provide a manually dispatched GitHub Actions release workflow and a `v*` tag-push trigger. Releases SHALL accept only `vMAJOR.MINOR.PATCH` numeric versions. An existing tag SHALL resolve to its commit; a new manually requested tag SHALL target the selected workflow revision. Both architecture checks and strict specification validation MUST pass for that exact revision before creating or updating a draft release.
+The repository SHALL provide a manually dispatched GitHub Actions release workflow and a `v*` tag-push trigger. Releases SHALL accept only `vMAJOR.MINOR.PATCH` numeric versions. An existing tag SHALL resolve to its commit; a new manually requested tag SHALL target the selected workflow revision. The arm64 application check and strict specification validation MUST pass for that exact revision before creating or updating a draft release.
 
 #### Scenario: Create a release entirely in GitHub
 - **WHEN** a maintainer runs Release from Actions with a new valid version tag
-- **THEN** the workflow verifies the selected revision, creates that tag at the verified commit, and prepares a draft GitHub Release containing both architecture archives and their SHA-256 files
+- **THEN** the workflow verifies the selected revision, creates that tag at the verified commit, and prepares a draft GitHub Release containing the arm64 archive and its SHA-256 file
 
 #### Scenario: Retry an existing tagged release
 - **WHEN** a version tag is pushed or manually selected for another run
@@ -42,11 +43,15 @@ The repository SHALL provide a manually dispatched GitHub Actions release workfl
 - **THEN** the workflow fails without replacing the tag or uploading release assets
 
 ### Requirement: Release assets identify their version and architecture
-Each release SHALL contain separate macOS 14-or-later `.app` ZIP archives for `arm64` and `x86_64` with architecture and tag in their filenames, plus SHA-256 checksum files. Bundle metadata SHALL match the tag's numeric version and record the workflow run number. Documentation SHALL disclose the absence of Developer ID signing and notarization.
+Release automation SHALL produce one macOS 14-or-later `.app` ZIP archive for `arm64` with architecture and tag in its filename, plus a SHA-256 checksum file. The packaging CLI SHALL accept only arm64, and the upload job SHALL download only its arm64 artifact. Bundle metadata SHALL match the tag's numeric version and record the workflow run number. Documentation SHALL disclose the absence of Developer ID signing and notarization.
 
 #### Scenario: Download a release asset
-- **WHEN** a user selects the ZIP matching their Mac
+- **WHEN** a user downloads the arm64 ZIP for an Apple Silicon Mac
 - **THEN** it contains Session Canvas.app with the advertised version, minimum OS, executable, and a verifiable checksum
+
+#### Scenario: Request an unsupported release architecture
+- **WHEN** packaging is invoked with an architecture other than arm64
+- **THEN** argument validation rejects the request before building or archiving
 
 ### Requirement: Native app bundles use the selected application icon
 Local and release macOS app bundles SHALL use the selected blue session-cards artwork with its mint activity indicator. Each bundle SHALL contain its multi-resolution ICNS resource in `Contents/Resources`, referenced by `CFBundleIconFile` before signing. The resource SHALL provide the standard 16, 32, 128, 256, and 512-point representations at 1× and 2×.

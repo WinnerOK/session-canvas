@@ -262,7 +262,7 @@ See [integration-compatibility.md](../../../docs/integration-compatibility.md) f
 
 ### E12 — GitHub CI and release packaging, 2026-10-25
 
-[CI](../../../.github/workflows/ci.yml) runs the normal Swift suite, Python tooling tests, release compilation, and signature verification on Apple Silicon and Intel, plus strict OpenSpec validation. [Release](../../../.github/workflows/release.yml) resolves the existing tag or selected dispatch commit, reuses all checks for that exact SHA, and prepares only a draft containing architecture-specific ZIP/checksum files. The final job alone has repository write permission and refuses to overwrite a published release. [package-release.py](../../../scripts/package-release.py) uses the extended [app builder](../../../scripts/build-app.py); local build defaults and the verification launcher remain unchanged. See the [CI/CD guide](../../../docs/ci-cd.md).
+At introduction, [CI](../../../.github/workflows/ci.yml) ran the normal Swift suite, Python tooling tests, release compilation, and signature verification on Apple Silicon and Intel, plus strict OpenSpec validation. The arm64-only correction below supersedes that architecture policy. [Release](../../../.github/workflows/release.yml) resolves the existing tag or selected dispatch commit and reuses checks for that exact SHA before preparing a draft. The final job alone has repository write permission and refuses to overwrite a published release. [package-release.py](../../../scripts/package-release.py) uses the extended [app builder](../../../scripts/build-app.py); local build defaults and the verification launcher remain unchanged. See the [CI/CD guide](../../../docs/ci-cd.md).
 
 Local evidence:
 
@@ -296,6 +296,20 @@ Regression evidence:
 - The absolute launcher `build --configuration release --jobs 1` completed and signed the local app; `codesign --verify --deep --strict` passed. Strict OpenSpec and whitespace checks passed, as did 165 local document links and 76 anchors across nine affected Markdown files.
 
 The automatic API-only desktop move feature is **not restored**. Task 23.4 and the real assignment/reassignment/removal acceptance gate remain open. This change fixes false success and stale Canvas grouping rather than claiming a working desktop mutation integration.
+
+### Arm64-only automation, 2026-11-01
+
+The user removed x86_64 build/test support. The current [release-automation contract](specs/release-automation/spec.md) targets only Apple Silicon. [CI](../../../.github/workflows/ci.yml) now has one `Test and build (arm64)` job on `macos-15`, without an architecture matrix. Manual/tag releases reuse that job, upload `release-arm64`, and download only that artifact. The packaging CLI accepts only `--arch arm64`. Existing exact-revision, signature/checksum, read-only-check, and draft-publication protections remain. Historical Intel results below describe the earlier policy.
+
+Local evidence from the primary checkout:
+
+- `python3 -B -m unittest discover -s scripts/tests -v` passed all **19 tests**. A separate parser check accepted arm64 and rejected x86_64 with exit 2 before any builder call. The existing architecture/signature failure-propagation test now requests arm64.
+- The absolute launcher `test --jobs 1` completed successfully on ARM, including native UI/fixture regressions and the **56-test core run**; installed-source/live and performance opt-ins remained disabled. No Swift application behavior changed.
+- The absolute launcher `build --configuration release --jobs 1` completed and signed the bundle. `lipo -archs` reported only `arm64`. Local `package-release.py --tag v0.2.0 --build-number 1 --arch arm64 --binary .build/release/SessionCanvas` passed architecture and strict signature verification and wrote the ZIP/checksum under ignored `dist/`; `shasum -a 256 -c` passed. This did not create a tag or GitHub Release.
+- Both workflow files parsed with Ruby YAML. Structural checks confirmed a single arm64 job, no matrix, and a matching `release-arm64` download. Actionlint is unavailable in this environment; no new actionlint pass is claimed.
+- Strict OpenSpec validation passed both changes after shortening the amended requirement. `git diff --check` passed, as did **448 local links and 179 heading anchors** across the nine affected Markdown files.
+
+Current hosted arm64/OpenSpec acceptance remains task 26.4 until the new PR checks run. Actual draft-release upload remains task 21.5.3.
 
 ## Remaining acceptance gates
 
