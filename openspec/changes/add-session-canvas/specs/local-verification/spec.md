@@ -1,5 +1,23 @@
 ## ADDED Requirements
 
+### Requirement: Test pruning preserves measured production coverage
+The twenty-percent test-pruning change SHALL remove approximately twenty percent of baseline test functions with at most two percentage points of production line-coverage loss. It SHALL compare identical source denominators, toolchain, and fixture options, record retained regression evidence, and preserve failure/race/native-interaction checks.
+
+#### Scenario: Compare a reduced suite with its baseline
+- **WHEN** redundant tests are removed
+- **THEN** the existing verification notes record the baseline/reduced function counts, removal rationale, and before/after production coverage with identical denominators
+- **AND** Swift test functions and Python unittest methods each count once, including parameterized functions; redundant assertions, superseded behavior, and framework-default checks are prioritized for removal
+- **AND** available region/function coverage and skipped opt-in checks are reported separately from executed acceptance
+- **AND** all remaining ordinary checks pass; existing installed-source and live acceptance gates remain open unless separately verified
+
+### Requirement: Coverage export includes every production target
+The launcher SHALL support test --enable-code-coverage and export production-file coverage to .build/verification/coverage.json after a successful test run. It SHALL read the merged profile against every test bundle and the standalone native probe, retain unexecuted production files, and exclude test/generated files from reported denominators. Coverage collection/export failures SHALL fail verification; the option SHALL preserve existing source opt-ins and live authorization rules.
+
+#### Scenario: SwiftPM exports only the final test bundle
+- **WHEN** instrumented tests run in separate core and runtime bundles
+- **THEN** the launcher explicitly exports their merged profile against both bundles and the probe
+- **AND** the report includes core, native application, and probe source summaries, including zero-coverage files
+
 ### Requirement: Diagnostic probes report structural evidence
 The repository SHALL provide read-only probes for saved inventory/history, one explicitly selected desktop session, and native rollout parsing. Probe output SHALL contain capability/state/structure or entry/result counts rather than conversation text or arbitrary child-process diagnostics. The native rollout probe SHALL validate path and session identity through the same reader as the app and return failure when validation fails. Live observation SHALL retain the per-run authorization rule.
 

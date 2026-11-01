@@ -84,37 +84,6 @@ struct LayerInteractionTests {
         #expect(model.workspace.layerState?.layouts[.active]?.placements == activeBefore)
         #expect(model.workspace.layerState?.layouts[.inactive] == inactiveBefore)
     }
-    @Test func hiddenCurrentMembersTravelButOtherLayersDoNotAndOverlapIsRejected() {
-        let model = fixture(); defer { model.shutdown() }
-        model.workspace.sessions.append(Session(id: "hidden", title: "Hidden", projectID: "a", execution: .idle))
-        model.synchronizeLayers(); model.setStateVisible(.idle, false)
-        let hidden = model.workspace.placements["hidden"], inactive = model.workspace.layerState?.layouts[.inactive]
-        model.editRegion(id: "a", rect: Rect(1000, 0, 760, 580))
-        #expect(model.workspace.placements["hidden"]?.position == hidden.map { $0.position + Point(1000, 0) })
-        #expect(model.workspace.layerState?.layouts[.inactive] == inactive)
-        model.workspace.projects.append(Project(id: "b", name: "Neighbor"))
-        model.workspace.sessions.append(Session(id: "b", title: "Neighbor", projectID: "b", execution: .running))
-        model.synchronizeLayers()
-        let before = model.workspace.regions["a"]
-        model.editRegion(id: "a", rect: model.workspace.regions["b"]!)
-        #expect(model.workspace.regions["a"] == before && model.errorMessage != nil)
-    }
-    @Test func creationFromInactiveUsesActiveCounterpartAndPreservesInactiveLayout() async throws {
-        let model = ApplicationModel(demo: true, storagePath: ":memory:")
-        await model.connect(); defer { model.shutdown() }
-        model.workspace.sessions.append(Session(id: "archive", title: "Archived", projectID: "canvas", execution: .idle, isArchived: true))
-        model.persist(); model.selectLayer(.inactive)
-        let inactive = model.workspace.layerState?.layouts[.inactive]
-        let region = try #require(model.workspace.regions["canvas"])
-        model.beginCreation(at: Point(region.x + 30, region.y + 30))
-        #expect(model.creation?.projectID == "canvas")
-        await model.create(title: "New current work", prompt: "Demo only", projectID: "canvas", cwd: "")
-        let created = try #require(model.workspace.sessions.first { $0.title == "New current work" })
-        #expect(model.selectedLayer == .active && model.selectedSessionID == created.id)
-        #expect(model.workspace.project(at: try #require(model.workspace.placements[created.id]).center) == "canvas")
-        #expect(model.workspace.layerState?.layouts[.inactive] == inactive)
-        #expect(!model.visibleSessions.contains { $0.id == "archive" })
-    }
     @Test func sourceWideBulkReviewFromInactiveAndLayerCountsIgnoreFilters() async throws {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
         await model.connect(); defer { model.shutdown() }

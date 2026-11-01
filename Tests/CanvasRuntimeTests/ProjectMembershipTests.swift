@@ -6,29 +6,6 @@ import CanvasCore
 @Suite(.serialized)
 @MainActor
 struct ProjectMembershipTests {
-    @Test func backendConfirmationCannotStandInForDesktopMembership() async throws {
-        let fixture = try MembershipFixture()
-        defer { fixture.remove() }
-        // Captured from the real failure: backend says A, desktop says projectless.
-        try fixture.patch(["projectId": "server-a"])
-        let model = ApplicationModel(demo: false, storagePath: fixture.folder.appendingPathComponent("canvas.sqlite").path)
-        model.settings = fixture.settings
-        await model.connect()
-        defer { model.shutdown() }
-        model.showAllSessions()
-        #expect(!model.canAssignProject)
-        let session = try #require(model.workspace.sessions.first { $0.id == "existing" })
-        let placement = model.workspace.placements[session.id]
-        model.moveToProject(id: session.id, projectID: "a")
-        #expect(model.errorMessage != nil)
-        #expect(model.workspace.sessions.first { $0.id == session.id }?.projectID == nil)
-        #expect(model.workspace.placements[session.id] == placement)
-        #expect(model.pendingSessions.isEmpty)
-        let stored = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: fixture.folder.appendingPathComponent("thread.json")))
-        #expect(stored["projectId"].string == "server-a")
-        #expect(try fixture.requests().allSatisfy { $0["method"].string != "thread/metadata/update" })
-    }
-
     @Test(arguments: [false, true])
     func oldBackendConfirmationsCannotOverrideDesktopAfterRestart(desktopAssigned: Bool) async throws {
         let fixture = try MembershipFixture()

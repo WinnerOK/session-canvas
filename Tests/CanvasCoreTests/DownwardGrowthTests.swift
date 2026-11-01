@@ -30,20 +30,6 @@ import CanvasCore
         try expectValid(value)
     }
 
-    @Test func aFreeNoteInTheNextRowIsPushedInsteadOfSkippingTheRow() throws {
-        var value = fixture()
-        value.projects = [Project(id: "p", name: "Target")]
-        value.regions = ["p": Rect(0, 0, 300, 240)]
-        value.sessions = value.sessions.filter { $0.id == "a" || $0.id == "free" }
-        value.placements = ["a": Placement(Point(20, 64)), "free": Placement(Point(20, 250))]
-        value.reconcile(sessions: value.sessions + [Session(id: "new", title: "New", projectID: "p")], projects: value.projects)
-
-        #expect(value.regions["p"] == Rect(0, 0, 300, 410))
-        #expect(value.placements["new"]?.position == Point(20, 236))
-        #expect(value.placements["free"]?.position == Point(20, 434))
-        try expectValid(value)
-    }
-
     @Test func protrudingProjectMembersTravelWithTheirRegion() throws {
         var value = fixture()
         value.projects = value.projects.filter { $0.id == "p" || $0.id == "q" }
@@ -142,19 +128,6 @@ import CanvasCore
         #expect(value.layerState?.layouts[.active]?.regions["q"] == dormantRegion)
         #expect(value.layerState?.layouts[.inactive] == inactive)
         try expectValid(value.geometryProjection)
-    }
-
-    @Test func growthDoesNotDependOnWorldOrigin() throws {
-        var origin = fixture(), translated = fixture()
-        let offset = Point(-700, -1200)
-        translated.regions = translated.regions.mapValues { $0.translated(offset) }
-        translated.placements = translated.placements.mapValues { Placement($0.position + offset) }
-        let arrival = Session(id: "new", title: "New", projectID: "p")
-        origin.reconcile(sessions: origin.sessions + [arrival], projects: origin.projects)
-        translated.reconcile(sessions: translated.sessions + [arrival], projects: translated.projects)
-        #expect(translated.regions == origin.regions.mapValues { $0.translated(offset) })
-        #expect(translated.placements == origin.placements.mapValues { Placement($0.position + offset) })
-        try expectValid(translated)
     }
 
     private func fixture() -> Workspace {

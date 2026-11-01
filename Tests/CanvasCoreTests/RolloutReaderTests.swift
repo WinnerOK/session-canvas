@@ -40,10 +40,6 @@ import Testing
         #expect(parser.entries.last?.result?.id == "s/t/completed")
         #expect(!parser.entries.contains { $0.text.contains("hidden") })
     }
-    @Test func wrongSessionIdentityIsRejected() {
-        var parser = RolloutReader.Parser(sessionID: "s")
-        #expect(throws: (any Error).self) { try consume(#"{"type":"session_meta","payload":{"id":"different"}}"#, into: &parser) }
-    }
     @Test func repeatingTerminalEventsDoesNotCreateAnotherResult() throws {
         var parser = RolloutReader.Parser(sessionID: "s")
         try consume(#"{"type":"session_meta","payload":{"id":"s"}}"#, into: &parser)

@@ -3,16 +3,6 @@ import Testing
 @testable import CanvasCore
 
 @Suite struct RectanglePackerTests {
-    @Test func sixSquaresPreferACompactBlockOverARibbon() throws {
-        let input = Array(repeating: Rect(0, 0, 100, 100), count: 6)
-        let packed = try RectanglePacker.pack(input, gap: 0)
-        let width = packed.map { $0.x + $0.width }.max()!, height = packed.map { $0.y + $0.height }.max()!
-        #expect(width == 300)
-        #expect(height == 200)
-        #expect(try RectanglePacker.pack(input, gap: 0) == packed)
-        verify(packed, gap: 0)
-    }
-
     @Test func unequalRectanglesUseFreeSpacesWithoutRotationAndKeepEqualSizeOrder() throws {
         let input = [Rect(0, 0, 120, 200), Rect(0, 0, 320, 90), Rect(0, 0, 120, 200),
                      Rect(0, 0, 80, 70), Rect(0, 0, 180, 130), Rect(0, 0, 90, 300)]

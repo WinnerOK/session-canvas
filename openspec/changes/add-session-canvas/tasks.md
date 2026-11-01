@@ -272,6 +272,15 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [ ] 29.4 Verify the user's actual pending approvals against fresh desktop evidence in a separately authorized bounded live check. The old Canvas cache and migration backup have no request records; fixture success cannot establish recovery of those particular requests.
 - [ ] 29.5 Complete hosted arm64 and OpenSpec checks under section 27 architecture policy. Historical PR #16 run 40499730933 refused all jobs before any step because GitHub account payments or spending limits required attention; local checks do not close this gate.
 
+## 30. Remove redundant tests with measured coverage protection
+
+- [x] 30.1 Count the baseline Swift/Python test functions and record unfiltered fixture coverage with fixed production-source denominators, including both native test bundles and the standalone probe.
+- [x] 30.2 Remove 38 of 190 test functions, prioritize redundant/superseded/default-only checks, retain failure/race/native regressions, and record selection rationale and measured evidence in verification.md.
+- [x] 30.3 Verify 137 Swift test functions and 15 Python methods, compare production line/region/function coverage, and preserve existing opt-in acceptance gates.
+- [x] 30.4 Complete strict OpenSpec, whitespace, affected local-link checks, and final diff review; record actual outcomes.
+- [ ] 30.5 Complete hosted checks for the delivered head; local coverage and fixture checks do not close hosted or installed-source acceptance gates.
+- [x] 30.6 Remove the two standalone pruning reports requested in PR review, clean up references and PR metadata, and verify strict OpenSpec, whitespace, and affected local links.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.

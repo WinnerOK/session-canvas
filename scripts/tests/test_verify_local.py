@@ -15,22 +15,12 @@ spec.loader.exec_module(verify)
 
 
 class VerificationTests(unittest.TestCase):
-    def test_layer_preview_accepts_one_layer_and_rejects_combined_mode(self):
-        for layer in ("active", "stale", "inactive"):
-            self.assertEqual(verify.parser().parse_args(["preview", "--layer", layer]).layer, layer)
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            verify.parser().parse_args(["preview", "--layer", "all"])
     def test_swift_build_concurrency_is_bounded(self):
         args = verify.parser().parse_args(["test"])
         command = verify.swift_command(args, "test")
         self.assertEqual(command[command.index("--jobs") + 1], "2")
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             verify.parser().parse_args(["test", "--jobs", "0"])
-    def test_outputs_reject_user_database_and_wrong_extension(self):
-        for path, suffix in ((Path.home() / "Library/Application Support/Session Canvas/canvas.sqlite", ".sqlite"),
-                             (verify.OUTPUT / "capture.sh", ".png")):
-            with self.subTest(path=path), self.assertRaises(ValueError):
-                verify.output_path(path, suffix)
 
     def test_outputs_resolve_symlinks_before_checking_boundary(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -39,10 +29,6 @@ class VerificationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify.output_path(link / "capture.png", ".png")
             self.assertEqual(verify.output_path(Path(folder) / "capture.png", ".png"), Path(folder).resolve() / "capture.png")
-
-    def test_arbitrary_command_options_are_rejected(self):
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            verify.parser().parse_args(["preview", "--executable", "/bin/sh"])
 
     def test_real_source_is_explicit_even_if_inherited(self):
         with patch.dict(os.environ, {"SESSION_CANVAS_TEST_REAL_SOURCE": "1", "SESSION_CANVAS_TEST_LIVE_DESKTOP": "1", "SESSION_CANVAS_TEST_OBSERVED_SESSION": "inherited", "SESSION_CANVAS_TEST_CAPTURE_CREATION": "/outside.png"}):

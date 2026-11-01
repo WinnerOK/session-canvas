@@ -36,6 +36,7 @@ For agent-driven checks, invoke the launcher directly by its absolute path:
 
 ```sh
 python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py test
+python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py test --enable-code-coverage
 python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py test --real-source
 python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py build --configuration release
 python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py preview
@@ -48,6 +49,8 @@ The general user command rule in `~/.codex/rules/default.rules` allows exactly t
 The launcher accepts only build, test, and preview operations, with no shell command passthrough. It uses the local manifest workaround by default; `--standard-toolchain` selects normal SwiftPM. SwiftPM's shared cache and compiler module cache are directed under `.build/`; native GUI and actual-source tests still run outside the Codex sandbox through the saved rule.
 
 `test --filter REGEX` selects tests. `--real-source` enables saved-inventory checks with desktop observation disabled and actual-server checks in isolated homes. It does not enable the live desktop observer. The launcher clears inherited real-source, live-desktop, and old capture-test switches. Opt-in server-creation checks use their own isolated Codex home and SQLite files and start no model turn. Swift compilation defaults to two parallel jobs; `--jobs 1` reduces it further.
+
+`test --enable-code-coverage` writes production-file LLVM coverage to `.build/verification/coverage.json`. It explicitly combines every test bundle and the native probe against SwiftPM's merged profile because some toolchains export only the final bundle by default. Test/generated files are excluded; unexecuted application/probe sources remain in the denominator. A filter produces partial-suite coverage, so use identical unfiltered fixture options for pruning comparisons. The [verification notes](../openspec/changes/add-session-canvas/verification.md#30-twenty-percent-test-pruning-2026-11-01) record the 190-to-152 function reduction and before/after evidence; parameterized functions count once.
 
 `test --configuration release --history-performance --jobs 1` selects the synthetic history responsiveness suite. It uses the production adapter against a temporary fixture server, reports bytes/entry counts, elapsed/process CPU time and maximum 10 ms UI-actor heartbeat gap, and asserts a 250 ms gap budget, including the original twelve-turn 12.1 MiB reply. These fixture checks pass after the transport repair. Ordinary tests retain functional framing and pagination checks and skip machine-dependent timing. The launcher clears inherited timing opt-ins and rejects combining this mode with installed-source/live checks. See the [history performance investigation and repair](history-loading-performance.md) for measurements and remaining acceptance.
 

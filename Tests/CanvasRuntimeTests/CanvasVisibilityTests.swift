@@ -43,21 +43,6 @@ struct CanvasVisibilityTests {
         #expect(restored.visibility.hiddenStates.isEmpty && restored.visibility.hiddenProjectIDs.isEmpty)
         #expect(try CanvasDatabase(path: path).loadLayered(source: "another-source").selectedVisibility.hiddenStates.isEmpty)
     }
-    @Test func emptyAndHiddenProjectsLeaveOverviewAccessibilityAndFitBounds() {
-        _ = NSApplication.shared
-        let model = fixture(); defer { model.shutdown() }
-        model.workspace.viewport = Viewport(origin: Point(40, 40), zoom: 0.08)
-        let canvas = CanvasNSView(model: model); canvas.frame = NSRect(x: 0, y: 0, width: 1000, height: 700)
-        model.setProjectVisible("b", false); canvas.update()
-        let labels = (canvas.accessibilityChildren() as? [NSAccessibilityElement])?.compactMap { $0.accessibilityLabel() } ?? []
-        #expect(labels.contains { $0.hasPrefix("Project Alpha,") })
-        #expect(!labels.contains { $0.contains("Project Beta") || $0.contains("Empty project") })
-        model.setStateVisible(.idle, false); canvas.fitContent()
-        #expect(model.workspace.viewport.zoom > 0.75)
-        model.setProjectVisible("a", false); canvas.update()
-        #expect(canvas.accessibilityChildren()?.isEmpty == true)
-        #expect(model.workspace.regions.count == 2)
-    }
     @Test func acknowledgmentReevaluatesVisibilityAndClosesAHiddenViewer() async throws {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")
         await model.connect(); defer { model.shutdown() }
@@ -118,19 +103,6 @@ struct CanvasVisibilityTests {
         model.selectLayer(.active); #expect(model.workspace.placements[session.id] == original)
         #expect(model.acknowledgments[session.id]?.contains(result.id) == true)
         #expect(model.workspace.sessions.first { $0.id == session.id }?.updatedAt == session.updatedAt)
-    }
-    @Test func archivedUnknownSessionsStayInactiveIndependentlyOfAgeAndUnreadEvidence() {
-        let model = fixture(); defer { model.shutdown() }
-        model.workspace.sessions.append(Session(id: "archived", title: "Old work", execution: .unknown,
-            latestResult: SessionResult(id: "unread", outcome: .stopped, text: "Stopped"), updatedAt: Date(timeIntervalSince1970: 1), isArchived: true))
-        model.updateActivityTime(); model.setIdleTimeout(.oneHour)
-        #expect(model.stateCounts[.unknown] == nil && model.stateCounts[.archived] == nil)
-        model.selectLayer(.inactive)
-        #expect(model.stateCounts[.archived] == 1 && model.stateCounts[.unknown] == 1)
-        model.setStateVisible(.unknown, false); #expect(model.visibleSessions.map(\.id) == ["archived"])
-        model.showAllSessions(); #expect(model.visibleSessions.count == 2 && model.selectedLayer == .inactive)
-        #expect(model.visibility.idleTimeout == .oneHour)
-        #expect(model.acknowledgments["archived"]?.contains("unread") != true)
     }
     private func fixture() -> ApplicationModel {
         let model = ApplicationModel(demo: true, storagePath: ":memory:")

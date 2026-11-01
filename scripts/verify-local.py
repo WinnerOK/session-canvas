@@ -38,6 +38,7 @@ def parser():
     tests.add_argument("--live-desktop", action="store_true", help="Connect one live desktop observer; requires separate user authorization and the exact live test filter")
     tests.add_argument("--observe-session", help="Exact session ID for the single authorized live desktop test")
     tests.add_argument("--filter", help="Swift Testing name filter")
+    tests.add_argument("--enable-code-coverage", action="store_true", help="Write SwiftPM coverage reports under .build for the selected fixture tests")
     preview = commands.add_parser("preview", parents=[common], help="Build, capture a native window, then exit")
     preview.add_argument("--source", choices=("demo", "desktop"), default="demo")
     preview.add_argument("--storage", help="Separate verification .sqlite file; a fresh one is used by default")
@@ -86,6 +87,27 @@ def build_bundle(args, task_env):
     binary_dir = subprocess.check_output(command + ["--show-bin-path"], cwd=ROOT, env=task_env, text=True).strip()
     subprocess.run([sys.executable, str(ROOT / "scripts/build-app.py"), "--binary", str(Path(binary_dir) / "SessionCanvas")],
                    cwd=ROOT, env=task_env, check=True)
+
+
+def export_coverage(args, task_env):
+    # Some SwiftPM versions export only the last of our two test bundles.
+    # Read the merged profile against both bundles and the standalone probe.
+    binary_dir = Path(subprocess.check_output(swift_command(args, "build") + ["--show-bin-path"],
+                                             cwd=ROOT, env=task_env, text=True).strip())
+    binaries = sorted(binary_dir.glob("*.xctest/Contents/MacOS/*"))
+    if not binaries:
+        raise ValueError("No instrumented test bundles found")
+    command = ["xcrun", "llvm-cov", "export", "--instr-profile=" + str(binary_dir / "codecov/default.profdata"),
+               str(binaries[0])] + ["--object=" + str(path) for path in binaries[1:] + [binary_dir / "SessionCanvasProbe"]]
+    report = json.loads(subprocess.check_output(command, cwd=ROOT, env=task_env, text=True))
+    for data in report["data"]:
+        data["files"] = [entry for entry in data["files"] if Path(entry["filename"]).is_relative_to(ROOT / "Sources")]
+        # The file summaries are the coverage denominator; omit test functions/totals.
+        data.pop("functions", None)
+        data.pop("totals", None)
+    path = OUTPUT / "coverage.json"
+    path.write_text(json.dumps(report) + "\n")
+    print(f"Production coverage: {path}", flush=True)
 
 
 def host_sample(pid):
@@ -209,12 +231,16 @@ def main(argv=None):
     task_env = environment(getattr(args, "real_source", False), getattr(args, "live_desktop", False), getattr(args, "observe_session", None), getattr(args, "history_performance", False))
     if args.command == "test":
         command = swift_command(args, "test") + ["--disable-xctest"]
+        if args.enable_code_coverage:
+            command.append("--enable-code-coverage")
         if args.filter:
             command += ["--filter", args.filter]
         if args.live_desktop:
             run_live_test(command, task_env)
         else:
             subprocess.run(command, cwd=ROOT, env=task_env, check=True)
+        if args.enable_code_coverage:
+            export_coverage(args, task_env)
     else:
         if not getattr(args, "skip_build", False):
             build_bundle(args, task_env)
