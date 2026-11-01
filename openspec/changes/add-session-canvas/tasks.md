@@ -286,7 +286,7 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 31.1 Diagnose release run 41334636785: application tests and compilation passed, but Xcode 16.4 lipo interpreted the trailing executable path as an architecture. Reproduce the incompatible argument order with a regression before fixing it.
 - [x] 31.2 Pass the executable before -verify_arch and add an ordinary macOS tooling smoke test using a compiled arm64 fixture, real packaging/signing tools, checksum verification, and extracted-bundle validation.
 - [x] 31.3 Complete local tooling/native packaging, strict OpenSpec, whitespace, affected local-link checks, and final diff review; record actual outcomes.
-- [ ] 31.4 Verify hosted arm64/OpenSpec checks for the fix. Actual version-tag/draft creation and asset upload remain task 21.5.3 until a new Release run succeeds; rerunning the old revision does not verify this repair.
+- [x] 31.4 Verify hosted arm64/OpenSpec checks for the fix: PR #19 run 41335383438 passed on Xcode 16.4, including the native packaging smoke. Actual version-tag/draft creation and asset upload remain task 21.5.3 until a new Release run succeeds; rerunning the old revision does not verify this repair.
 
 ## Workflow follow-up
 
