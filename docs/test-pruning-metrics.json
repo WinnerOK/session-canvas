@@ -1,0 +1,162 @@
+{
+  "date": "2026-11-01",
+  "baseline_commit": "95bdac67d34884455f34e48f084a31e1eeee16c6",
+  "production_source_sha256": "b737d245a5ecf3a0f5ca7b11ec0b6776ef48f231fa886f752b30eecb7d34a5c3",
+  "test_functions": {
+    "before": {
+      "swift": 171,
+      "python": 19,
+      "total": 190
+    },
+    "after": {
+      "swift": 137,
+      "python": 15,
+      "total": 152
+    },
+    "removed": 38,
+    "removed_percent": 20
+  },
+  "swift": {
+    "all": {
+      "lines": {
+        "count": 5560,
+        "before": 4168,
+        "after": 4156,
+        "before_percent": 74.96402877697842,
+        "after_percent": 74.74820143884892,
+        "drop_pp": 0.2158273381294964
+      },
+      "regions": {
+        "count": 3097,
+        "before": 2307,
+        "after": 2287,
+        "before_percent": 74.49144333225702,
+        "after_percent": 73.84565708750404,
+        "drop_pp": 0.6457862447529867
+      },
+      "functions": {
+        "count": 1183,
+        "before": 893,
+        "after": 889,
+        "before_percent": 75.48605240912933,
+        "after_percent": 75.14792899408285,
+        "drop_pp": 0.33812341504649196
+      }
+    },
+    "CanvasCore": {
+      "lines": {
+        "count": 1383,
+        "before": 1328,
+        "after": 1316,
+        "before_percent": 96.02313810556761,
+        "after_percent": 95.15545914678236,
+        "drop_pp": 0.8676789587852495
+      },
+      "regions": {
+        "count": 1031,
+        "before": 925,
+        "after": 906,
+        "before_percent": 89.71871968962172,
+        "after_percent": 87.87584869059165,
+        "drop_pp": 1.8428709990300678
+      },
+      "functions": {
+        "count": 398,
+        "before": 370,
+        "after": 366,
+        "before_percent": 92.96482412060301,
+        "after_percent": 91.95979899497488,
+        "drop_pp": 1.0050251256281406
+      }
+    },
+    "SessionCanvas": {
+      "lines": {
+        "count": 4162,
+        "before": 2840,
+        "after": 2840,
+        "before_percent": 68.23642479577127,
+        "after_percent": 68.23642479577127,
+        "drop_pp": 0.0
+      },
+      "regions": {
+        "count": 2057,
+        "before": 1382,
+        "after": 1381,
+        "before_percent": 67.18522119591638,
+        "after_percent": 67.13660670879922,
+        "drop_pp": 0.04861448711716091
+      },
+      "functions": {
+        "count": 783,
+        "before": 523,
+        "after": 523,
+        "before_percent": 66.79438058748404,
+        "after_percent": 66.79438058748404,
+        "drop_pp": 0.0
+      }
+    },
+    "SessionCanvasProbe": {
+      "lines": {
+        "count": 15,
+        "before": 0,
+        "after": 0,
+        "before_percent": 0.0,
+        "after_percent": 0.0,
+        "drop_pp": 0.0
+      },
+      "regions": {
+        "count": 9,
+        "before": 0,
+        "after": 0,
+        "before_percent": 0.0,
+        "after_percent": 0.0,
+        "drop_pp": 0.0
+      },
+      "functions": {
+        "count": 2,
+        "before": 0,
+        "after": 0,
+        "before_percent": 0.0,
+        "after_percent": 0.0,
+        "drop_pp": 0.0
+      }
+    }
+  },
+  "python": {
+    "build-app.py": {
+      "count": 57,
+      "before": 51,
+      "after": 51
+    },
+    "package-release.py": {
+      "count": 36,
+      "before": 34,
+      "after": 34
+    },
+    "probe-codex.py": {
+      "count": 139,
+      "before": 0,
+      "after": 0
+    },
+    "probe-desktop.py": {
+      "count": 74,
+      "before": 0,
+      "after": 0
+    },
+    "swift-local.py": {
+      "count": 22,
+      "before": 0,
+      "after": 0
+    },
+    "verify-local.py": {
+      "count": 227,
+      "before": 154,
+      "after": 154
+    },
+    "all": {
+      "count": 555,
+      "before": 239,
+      "after": 239
+    }
+  }
+}

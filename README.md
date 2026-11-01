@@ -56,6 +56,7 @@ GitHub Actions runs application/tooling tests and release builds for Apple Silic
 - [Implementation tasks](openspec/changes/add-session-canvas/tasks.md)
 - [Correction coverage and verification evidence](openspec/changes/add-session-canvas/verification.md)
 - [Complete SDD function inventory](openspec/changes/add-session-canvas/functional-coverage.md)
+- [Test pruning and measured production coverage](docs/test-pruning.md)
 
 The selected delivery is a native Mac-only companion with a session/result viewer, Acknowledge, and Open in Codex. The remaining desktop integration gate is tracked explicitly; demo interactions are not presented as verified desktop mutations.
 

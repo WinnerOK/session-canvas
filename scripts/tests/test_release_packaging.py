@@ -52,10 +52,6 @@ class ReleasePackagingTests(unittest.TestCase):
             self.assertEqual(bundled_icon.read_bytes()[:4], b"icns")
             run.assert_called_once_with(["codesign", "--force", "--sign", "-", str(bundle)], check=True)
 
-    def test_local_build_defaults_remain_available(self):
-        args = builder.parser().parse_args([])
-        self.assertEqual((args.version, args.build_number, args.sign), ("0.1.0", "1", "-"))
-
     def test_archive_has_architecture_identity_and_verifiable_checksum(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

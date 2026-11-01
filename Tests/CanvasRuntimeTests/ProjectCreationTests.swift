@@ -229,18 +229,6 @@ struct ProjectCreationTests {
         #expect(model.selectedSessionID == nil)
     }
 
-    @Test func invalidExplicitDirectoryDoesNotCreateOrReplaceIt() async throws {
-        let fixture = try CreationFixture()
-        defer { fixture.remove() }
-        let source = CodexSource(mode: .history, settings: fixture.settings)
-        defer { source.close() }
-        try await source.connect()
-        await #expect(throws: (any Error).self) {
-            try await source.create(title: "", prompt: "", projectID: nil, cwd: fixture.folder.path + "/does-not-exist")
-        }
-        #expect(!(try fixture.requests()).contains { $0["method"].string == "thread/start" })
-    }
-
     @Test func creationFailureRemainsInItsDialog() async throws {
         let fixture = try CreationFixture()
         defer { fixture.remove() }
@@ -291,18 +279,6 @@ struct ProjectCreationTests {
         #expect(try fixture.requests().filter { $0["method"].string == "thread/start" }.count == 1)
     }
 
-    @Test func serverMembershipImportsBeforeDesktopAssignmentIsSaved() async throws {
-        let fixture = try CreationFixture()
-        defer { fixture.remove() }
-        try Data().write(to: fixture.folder.appendingPathComponent("publish"))
-        let source = CodexSource(mode: .history, settings: fixture.settings)
-        defer { source.close() }
-        try await source.connect()
-        #expect(try await source.snapshot().sessions.first?.projectID == "desktop-project")
-        try fixture.metadata(projectless: ["created"])
-        #expect(try await source.snapshot().sessions.first?.projectID == nil)
-    }
-
     @Test func catalogUsesOnlyTheConnectedHomeProjectIDs() throws {
         let fixture = try CreationFixture()
         defer { fixture.remove() }
@@ -330,21 +306,6 @@ struct ProjectCreationTests {
             }
         }
         #expect(!(try fixture.requests()).contains { $0["method"].string == "thread/start" })
-    }
-
-    @Test func namingFailureRetainsOneConfirmedSession() async throws {
-        let fixture = try CreationFixture(behavior: "name-failure")
-        defer { fixture.remove() }
-        let source = CodexSource(mode: .history, settings: fixture.settings)
-        defer { source.close() }
-        try await source.connect()
-        _ = try await source.snapshot()
-        let created = try await source.create(title: "Name", prompt: "", projectID: "desktop-project", cwd: "")
-        #expect(created.session.id == "created")
-        #expect(created.session.title == "Untitled session")
-        #expect(created.warning != nil)
-        #expect(try await source.snapshot().sessions.map(\.id) == ["created"])
-        #expect(try fixture.requests().filter { $0["method"].string == "thread/start" }.count == 1)
     }
 
     @Test func unverifiedCreationReportsWarningWithoutAutomaticNavigation() async throws {

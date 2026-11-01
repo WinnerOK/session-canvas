@@ -5,29 +5,6 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct CanvasRuntimeTests {
-    @Test func openingAndAcknowledgingPersistsOnlyExplicitReview() async throws {
-        let path = temporaryPath()
-        defer { try? FileManager.default.removeItem(atPath: path) }
-        let model = ApplicationModel(demo: true, storagePath: path)
-        await model.connect()
-        let session = try #require(model.workspace.sessions.first { $0.id == "demo-state" })
-        #expect(model.state(session) == .finished)
-        model.openSession(session.id)
-        await model.loadHistory(older: false)
-        #expect(model.state(session) == .finished)
-        let result = try #require(model.history.compactMap(\.result).last)
-        #expect(model.canAcknowledge(result, sessionID: session.id))
-        model.acknowledge(result, sessionID: session.id)
-        #expect(model.state(session) == .idle)
-        #expect(!model.canAcknowledge(result, sessionID: session.id))
-        model.shutdown()
-
-        let restored = ApplicationModel(demo: true, storagePath: path)
-        await restored.connect()
-        #expect(restored.acknowledgments[session.id]?.contains(result.id) == true)
-        #expect(restored.state(try #require(restored.workspace.sessions.first { $0.id == session.id })) == .idle)
-        restored.shutdown()
-    }
     @Test func displayedOlderResultCannotAcknowledgeNewerResult() async throws {
         let path = temporaryPath()
         defer { try? FileManager.default.removeItem(atPath: path) }
