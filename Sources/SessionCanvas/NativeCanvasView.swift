@@ -229,7 +229,7 @@ final class CanvasNSView: NSView {
             let (inset, titleFont, titleHeight) = content
             text(session.title, in: NSRect(x: rect.minX + inset, y: rect.minY + inset, width: rect.width - inset * 2, height: titleHeight), font: titleFont, color: .labelColor, lines: .byWordWrapping)
             let stateFont = NSFont.systemFont(ofSize: 10)
-            text(state.label + " · " + model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
+            text(state.label + " · " + (model.lastKnownLabel(session) ?? model.activityLabel(session)), in: NSRect(x: rect.minX + inset, y: rect.maxY - inset - lineHeight(stateFont), width: rect.width - inset * 2, height: lineHeight(stateFont)), font: stateFont, color: state.color)
             return
         }
         let inset = 16 * scale
@@ -241,6 +241,7 @@ final class CanvasNSView: NSView {
         text(state.label, in: NSRect(x: rect.minX + 36 * scale, y: rect.minY + 75 * scale, width: rect.width - 48 * scale, height: 22 * scale), font: .systemFont(ofSize: max(8, 11 * scale), weight: .medium), color: state.color)
         let footer: String
         if model.pendingSessions.contains(session.id) { footer = "Moving to project…" }
+        else if let label = model.lastKnownLabel(session) { footer = label }
         else if let result = session.latestResult {
             let seen = (model.acknowledgments[session.id] ?? []).contains(result.id)
             footer = state == .archived ? result.outcome.label : seen ? "Result acknowledged" : "\(result.outcome.label) · review result"
@@ -431,7 +432,7 @@ final class CanvasNSView: NSView {
             let element = CanvasAccessibilityElement()
             element.setAccessibilityRole(.button)
             element.setAccessibilityParent(self)
-            element.setAccessibilityLabel(session.title + ", " + model.state(session).label + ", last activity " + model.activityLabel(session))
+            element.setAccessibilityLabel(session.title + ", " + model.state(session).label + (model.lastKnownLabel(session).map { ", " + $0 } ?? "") + ", last activity " + model.activityLabel(session))
             if let window {
                 let local = screen(placement.rect)
                 element.setAccessibilityFrame(window.convertToScreen(convert(local, to: nil)))

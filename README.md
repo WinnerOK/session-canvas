@@ -14,6 +14,10 @@ Archive reviewed Idle sessions from a note's context menu or viewer, and restore
 
 Unknown notes with a cached result and unavailable local history are rechecked automatically after discovery. Verified terminal latest turns become Finished without opening each note or marking the result reviewed. Checks run one at a time, at most once per second, and unchanged evidence is not repeatedly queried.
 
+After restart or observation loss, **Unknown** means current execution is unverified; it does not mean Idle or approval granted. Notes and the viewer retain **Last known** execution/input/permission state separately, including request and active-turn identities in the local cache. Already-erased hints cannot be recovered from that cache alone. Use **Open in Codex** to verify an outstanding request.
+
+Toolbar **Refresh Sessions** or **⌘R** checks the whole source, including filtered sessions, sessions without cached results, and cached identities omitted by the current inventory. A progress window shows completed/total checks, failures, and sessions still Unknown, with Stop and Done. Current live work/requests take priority; saved completion becomes Finished until explicitly acknowledged, then Idle. Regular automatic discovery keeps its lighter behavior.
+
 Use **Acknowledge all** in the top toolbar to mark the latest results of every Finished session in the current source as reviewed, including hidden notes. Other states and later results stay unchanged. In a session viewer, the same acknowledgment button becomes **Mark as unread** so a reviewed result can be restored to unread in any state, even when its history is unavailable.
 
 Use **Rearrange** to compact the selected layer into roughly square project and unassigned-session blocks, ordered by Attention and recent activity. Current filtered members travel with their project while retaining offsets; other filtered current geometry stays fixed. Other layers and remembered departed slots impose no obstacles. The command saves the complete layout and preserves pan/zoom and actual membership; state changes never invoke it automatically.

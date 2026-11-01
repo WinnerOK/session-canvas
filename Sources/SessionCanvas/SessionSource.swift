@@ -25,6 +25,17 @@ struct CreatedSession {
     var warning: String? = nil
 }
 
+struct StatusRefreshProgress: Identifiable {
+    let id = UUID()
+    var total = 0
+    var completed = 0
+    var unresolved = 0
+    var failed = 0
+    var isComplete = false
+    var wasCancelled = false
+    var error: String?
+}
+
 @MainActor
 protocol SessionSource: AnyObject {
     var mode: SourceMode { get }
@@ -43,6 +54,7 @@ protocol SessionSource: AnyObject {
     func restoreCachedResults(_ sessions: [Session])
     func connect() async throws
     func snapshot() async throws -> (sessions: [Session], projects: [Project])
+    func refreshStatuses(progress: (StatusRefreshProgress) -> Void) async throws -> [Session]
     func history(sessionID: String, cursor: String?) async throws -> HistoryPage
     func assign(sessionID: String, projectID: String?, revision: String) async throws -> Session
     func setArchived(sessionID: String, archived: Bool) async throws
@@ -52,6 +64,13 @@ protocol SessionSource: AnyObject {
 }
 
 extension SessionSource {
+    func refreshStatuses(progress: (StatusRefreshProgress) -> Void) async throws -> [Session] {
+        let sessions = try await snapshot().sessions
+        var value = StatusRefreshProgress()
+        value.total = sessions.count; value.completed = sessions.count
+        progress(value)
+        return sessions
+    }
     var onSessionObservation: ((Session, Session) -> Void)? { get { nil } set {} }
     func restoreCachedResults(_ sessions: [Session]) {}
     var canArchive: Bool { false }
@@ -92,6 +111,7 @@ final class CodexSource: SessionSource {
     private var savedFileRevisions: [String: String] = [:]
     private var historyObservationVersions: [String: UUID] = [:]
     private var cachedResults: [String: SessionResult] = [:]
+    private var lastKnownObservations: [String: LastKnownObservation] = [:]
     private struct StateCheckKey: Equatable {
         var revision: String
         var fileRevision: String
@@ -145,6 +165,14 @@ final class CodexSource: SessionSource {
     func restoreCachedResults(_ sessions: [Session]) {
         for session in sessions {
             if let result = session.latestResult { cachedResults[session.id] = result }
+            lastKnownObservations[session.id] = session.rememberedObservation
+            // Discovery may omit saved sessions (including empty/new-format histories).
+            // Retain exact same-source identities so an explicit sweep checks them too.
+            if previous[session.id] == nil {
+                var cached = session
+                cached.invalidateExecution()
+                previous[session.id] = cached
+            }
         }
     }
     func snapshot() async throws -> (sessions: [Session], projects: [Project]) {
@@ -254,14 +282,58 @@ final class CodexSource: SessionSource {
     }
     private func applyingObservations(to session: Session) -> Session {
         var session = session
+        session.lastKnownObservation = lastKnownObservations[session.id] ?? session.lastKnownObservation
         if let saved = savedObservations[session.id], saved.revision == session.revision {
-            if session.execution == .unknown { session.execution = saved.execution; session.savedState = saved.savedState }
+            if session.execution == .unknown && session.historyCanResolveRequests(with: saved.latestResult) {
+                session.execution = saved.execution; session.savedState = saved.savedState
+            }
             session.latestResult = saved.latestResult; session.unknownReason = saved.unknownReason
         }
         if let status = runtimeStatus[session.id], let live = try? CodexWire.session(.object(["id": .string(session.id), "status": status]), live: true) {
             session.execution = live.execution; session.requests = live.requests; session.savedState = false
         }
-        return desktop.applying(to: session)
+        session = desktop.applying(to: session)
+        if session.execution != .unknown { lastKnownObservations[session.id] = session.rememberedObservation }
+        session.lastKnownObservation = lastKnownObservations[session.id]
+        return session
+    }
+
+    func refreshStatuses(progress: (StatusRefreshProgress) -> Void) async throws -> [Session] {
+        let automaticCheck = stateCheckTask
+        stopStateRecovery()
+        let token = stateCheckGeneration
+        // Drain an already-started bounded read before the explicit worker begins.
+        await automaticCheck?.value
+        try Task.checkCancellation()
+        guard stateCheckGeneration == token else { throw CancellationError() }
+        let ids = previous.keys.filter { observedSessionIDs?.contains($0) != false }.sorted()
+        desktop.requestSnapshots()
+        var value = StatusRefreshProgress()
+        value.total = ids.count
+        progress(value)
+        for id in ids {
+            try Task.checkCancellation()
+            guard stateCheckGeneration == token, let baseline = previous[id] else { throw CancellationError() }
+            let current = applyingObservations(to: baseline)
+            if !current.isArchived && (current.execution == .unknown || current.stateIsFromHistory) && current.requests.isEmpty {
+                do {
+                    let page = try await readHistory(sessionID: id, cursor: nil, limit: 1, stateOnly: true)
+                    try Task.checkCancellation()
+                    guard stateCheckGeneration == token else { throw CancellationError() }
+                    if let observation = page.sessionObservation { onSessionObservation?(observation, baseline) }
+                } catch is CancellationError { throw CancellationError() }
+                catch { value.failed += 1 }
+            }
+            try Task.checkCancellation()
+            guard stateCheckGeneration == token else { throw CancellationError() }
+            let observed = applyingObservations(to: previous[id] ?? baseline)
+            if !observed.isArchived && observed.execution == .unknown { value.unresolved += 1 }
+            if let key = stateCheckKey(observed) { attemptedStateChecks[id] = key }
+            value.completed += 1
+            progress(value)
+            await Task.yield()
+        }
+        return previous.values.map { applyingObservations(to: $0) }
     }
     private func rolloutRevision(sessionID: String) -> String {
         guard let path = rolloutPaths[sessionID], let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return "" }

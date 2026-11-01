@@ -6,6 +6,142 @@ import CanvasCore
 
 @Suite(.serialized) @MainActor
 struct ImportRegressionTests {
+    @Test func manualRefreshChecksUncachedAndFilteredSessionsAndReportsUnresolved() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        model.search = "nothing matches"
+        let visibility = model.visibility
+        #expect(model.workspace.sessions.filter { !$0.isArchived }.allSatisfy { $0.execution == .unknown && $0.latestResult == nil })
+        await model.refresh(allStatuses: true)
+        let progress = try #require(model.statusRefreshProgress)
+        #expect(progress.total == 4 && progress.completed == 4 && progress.isComplete)
+        #expect(progress.unresolved == 1 && progress.failed == 0)
+        #expect(model.workspace.sessions.first { $0.id == "normal" }?.state(acknowledged: []) == .finished)
+        #expect(model.workspace.sessions.first { $0.id == "named-review" }?.state(acknowledged: []) == .finished)
+        #expect(model.workspace.sessions.first { $0.id == "unassigned" }?.execution == .unknown)
+        #expect(model.visibility == visibility && model.search == "nothing matches")
+        #expect(model.selectedSessionID == nil && model.history.isEmpty && model.acknowledgments.isEmpty)
+        let reads = try String(contentsOf: fixture.folder.appendingPathComponent("read-log"), encoding: .utf8)
+            .split(separator: "\n").map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+        #expect(Set(reads.compactMap { $0["id"].string }) == ["normal", "named-review", "unassigned"])
+        #expect(reads.allSatisfy { $0["limit"].number == 1 && $0["itemsView"].string == "summary" })
+    }
+
+    @Test func manualRefreshReportsFailuresAndRetriesOnExplicitInvocation() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        try Data().write(to: fixture.folder.appendingPathComponent("reject-history"))
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        await model.refresh(allStatuses: true)
+        #expect(model.statusRefreshProgress?.completed == 4)
+        #expect(model.statusRefreshProgress?.failed == 3 && model.statusRefreshProgress?.unresolved == 3)
+        try FileManager.default.removeItem(at: fixture.folder.appendingPathComponent("reject-history"))
+        await model.refresh(allStatuses: true)
+        #expect(model.statusRefreshProgress?.failed == 0 && model.statusRefreshProgress?.unresolved == 1)
+    }
+
+    @Test func manualRefreshIncludesCachedSessionsOmittedByInventory() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let database = try CanvasDatabase(path: path)
+        var cached = Workspace()
+        cached.reconcile(sessions: [Session(id: "omitted", title: "Not in inventory")], projects: [])
+        try database.save(cached, source: "codex-local:" + fixture.folder.path)
+        let model = ApplicationModel(demo: false, storagePath: path)
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        await model.refresh(allStatuses: true)
+        #expect(model.statusRefreshProgress?.total == 5 && model.statusRefreshProgress?.completed == 5)
+        #expect(model.workspace.sessions.first { $0.id == "omitted" }?.state(acknowledged: []) == .finished)
+    }
+
+    @Test func manualRefreshCanStopAndCannotOverlap() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        try Data().write(to: fixture.folder.appendingPathComponent("block-history"))
+        let model = ApplicationModel(demo: false, storagePath: ":memory:")
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        model.startStatusRefresh()
+        for _ in 0..<200 {
+            if FileManager.default.fileExists(atPath: fixture.folder.appendingPathComponent("history-ready").path) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.isRefreshing && model.statusRefreshProgress?.total == 4)
+        let id = model.statusRefreshProgress?.id
+        model.startStatusRefresh()
+        #expect(model.statusRefreshProgress?.id == id)
+        model.stopStatusRefresh()
+        try Data().write(to: fixture.folder.appendingPathComponent("release-history"))
+        for _ in 0..<200 {
+            if !model.isRefreshing { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.statusRefreshProgress?.isComplete == true && model.statusRefreshProgress?.wasCancelled == true)
+        #expect((model.statusRefreshProgress?.completed ?? 4) < 4)
+        #expect(model.acknowledgments.isEmpty)
+    }
+
+    @Test(arguments: [false, true]) func historyOnlyResolvesCachedApprovalForItsOwnTerminalTurn(matchingTurn: Bool) async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let database = try CanvasDatabase(path: path)
+        var session = Session(id: "normal", title: "Approval", execution: .running, requests: ["approval": .permission])
+        session.activeTurnID = matchingTurn ? "last" : "newer"
+        var cached = Workspace()
+        cached.reconcile(sessions: [session], projects: [])
+        try database.save(cached, source: "codex-local:" + fixture.folder.path)
+        let model = ApplicationModel(demo: false, storagePath: path)
+        model.settings = fixture.settings
+        defer { model.shutdown() }
+        await model.connect()
+        await model.refresh(allStatuses: true)
+        let observed = try #require(model.workspace.sessions.first { $0.id == "normal" })
+        #expect(model.state(observed) == (matchingTurn ? .finished : .unknown))
+        #expect(model.lastKnownLabel(observed) == (matchingTurn ? nil : "Last known: Permission required"))
+        #expect(model.acknowledgments.isEmpty)
+    }
+
+    @Test func restartRetainsLastKnownApprovalWhenInventoryCannotEstablishState() async throws {
+        let fixture = try SourceFixture()
+        defer { fixture.remove() }
+        try Data().write(to: fixture.folder.appendingPathComponent("missing-all-rollouts"))
+        let path = fixture.folder.appendingPathComponent("canvas.sqlite").path
+        let sourceID = "codex-local:" + fixture.folder.path
+        let database = try CanvasDatabase(path: path)
+        var cached = Workspace()
+        cached.reconcile(sessions: [Session(id: "normal", title: "Needs permission", execution: .running,
+            requests: ["approval-42": .permission], updatedAt: Date(timeIntervalSince1970: 1))], projects: [])
+        try database.save(cached, source: sourceID)
+        for _ in 0..<2 {
+            let model = ApplicationModel(demo: false, storagePath: path)
+            model.settings = fixture.settings
+            await model.connect()
+            let session = try #require(model.workspace.sessions.first { $0.id == "normal" })
+            #expect(model.state(session) == .unknown, "An unavailable source must not claim a cached request is current")
+            let encoded = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(session))
+            #expect(encoded["lastKnownObservation"]["requests"]["approval-42"].string == "permission",
+                "Metadata-only discovery must preserve the last known approval across restart")
+            #expect(model.acknowledgments.isEmpty)
+            model.shutdown()
+        }
+    }
+
     @Test func viewerRequestsSummaryPagesNewestFirstAndLoadsOlderOnlyOnDemand() async throws {
         let fixture = try SourceFixture()
         defer { fixture.remove() }
@@ -388,9 +524,15 @@ struct ImportRegressionTests {
         let retained = model.workspace
         try Data("{".utf8).write(to: fixture.folder.appendingPathComponent(".codex-global-state.json"))
         await model.refresh()
-        var stale = retained
-        for i in stale.sessions.indices { stale.sessions[i].execution = .unknown }
-        #expect(model.workspace.sessions == stale.sessions && model.workspace.projects == stale.projects)
+        #expect(model.workspace.projects == retained.projects)
+        #expect(Set(model.workspace.sessions.map(\.id)) == Set(retained.sessions.map(\.id)))
+        for current in model.workspace.sessions {
+            let old = try #require(retained.sessions.first { $0.id == current.id })
+            #expect(current.execution == .unknown && current.requests.isEmpty && !current.stateIsFromHistory)
+            #expect(current.lastKnownObservation == old.rememberedObservation)
+            #expect(current.latestResult == old.latestResult && current.updatedAt == old.updatedAt)
+            #expect(current.projectID == old.projectID && current.archived == old.archived)
+        }
         #expect(model.workspace.layerState?.assignments.values.allSatisfy { $0 == .inactive } == true)
         #expect(model.errorMessage != nil)
         model.shutdown()
@@ -456,6 +598,29 @@ struct ImportRegressionTests {
         #expect(restored.isArchived)
         #expect(model.state(restored) == .archived)
         #expect(model.workspace.placements[restored.id] == cached.placements[restored.id])
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))
+    func installedSavedStatusesCanBeRecheckedWithoutDesktopObservation() async throws {
+        let source = CodexSource(mode: .history, settings: .defaults, observeDesktop: false)
+        defer { source.close() }
+        try await source.connect()
+        let canvas = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Session Canvas/canvas.sqlite")
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent("canvas-status-" + UUID().uuidString + ".sqlite")
+        defer { try? FileManager.default.removeItem(at: copy) }
+        if FileManager.default.fileExists(atPath: canvas.path) {
+            try FileManager.default.copyItem(at: canvas, to: copy)
+            let database = try CanvasDatabase(path: copy.path)
+            source.restoreCachedResults(try database.load(source: source.sourceID).sessions)
+        }
+        let before = try await source.snapshot().sessions
+        var progress = StatusRefreshProgress()
+        let after = try await source.refreshStatuses { progress = $0 }
+        #expect(progress.completed == progress.total)
+        #expect(Set(before.map(\.id)) == Set(after.map(\.id)))
+        #expect(!source.hasLiveState)
+        print("Saved status recheck (desktop observation disabled, source \(source.sourceID), executable \(ConnectionSettings.defaults.executable)): \(after.count) sessions; Unknown before \(before.filter { !$0.isArchived && $0.execution == .unknown }.count), after \(after.filter { !$0.isArchived && $0.execution == .unknown }.count); \(progress.failed) failed reads.")
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SESSION_CANVAS_TEST_REAL_SOURCE"] == "1"))

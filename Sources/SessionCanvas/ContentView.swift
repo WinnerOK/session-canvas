@@ -78,12 +78,13 @@ struct ContentView: View {
                     .help("Mark the latest results of all \(model.acknowledgeAllCount) Finished sessions as reviewed, including hidden sessions")
                     .accessibilityIdentifier("acknowledge-all")
                 TextField("Find a session", text: $model.search).textFieldStyle(.roundedBorder).frame(width: 190)
-                Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }.disabled(!model.connected || model.isRefreshing).help("Refresh sessions")
+                Button { model.startStatusRefresh() } label: { Image(systemName: "arrow.clockwise") }.disabled(!model.connected || model.isRefreshing).help("Refresh all session statuses")
                 Button { model.showsSettings = true } label: { Image(systemName: "slider.horizontal.3") }.help("Connection settings")
             }
         }
         .sheet(isPresented: $model.showsSettings) { ConnectionView(model: model) }
         .sheet(item: $model.creation) { context in NewSessionView(model: model, context: context) }
+        .sheet(item: $model.statusRefreshProgress) { _ in StatusRefreshView(model: model) }
         .alert("Couldn’t complete that action", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
@@ -187,6 +188,41 @@ struct ContentView: View {
     }
 }
 
+struct StatusRefreshView: View {
+    @ObservedObject var model: ApplicationModel
+    var body: some View {
+        if let progress = model.statusRefreshProgress {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(progress.isComplete ? (progress.wasCancelled ? "Refresh stopped" : "Session statuses refreshed") : "Refreshing all session statuses")
+                    .font(.headline)
+                if progress.total == 0 && !progress.isComplete {
+                    ProgressView("Finding sessions…")
+                } else {
+                    ProgressView(value: Double(progress.completed), total: Double(max(1, progress.total)))
+                    Text("\(progress.completed) of \(progress.total) sessions checked").monospacedDigit()
+                }
+                if progress.unresolved > 0 {
+                    Text("\(progress.unresolved) still Unknown. Last known requests are retained; open these sessions in Codex to check them.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                if progress.failed > 0 { Text("\(progress.failed) \(progress.failed == 1 ? "check" : "checks") failed. Refresh again to retry.").font(.callout).foregroundStyle(.orange) }
+                if let error = progress.error { Text(error).font(.callout).foregroundStyle(.red) }
+                HStack {
+                    Spacer()
+                    if progress.isComplete {
+                        Button("Done") { model.statusRefreshProgress = nil }.keyboardShortcut(.defaultAction)
+                    } else {
+                        Button("Stop") { model.stopStatusRefresh() }.keyboardShortcut(.cancelAction)
+                    }
+                }
+            }
+            .padding(24).frame(width: 420)
+            .interactiveDismissDisabled(!progress.isComplete)
+            .accessibilityIdentifier("status-refresh-progress")
+        }
+    }
+}
+
 struct SessionViewer: View {
     @ObservedObject var model: ApplicationModel
     var body: some View {
@@ -197,6 +233,11 @@ struct SessionViewer: View {
                         Text("SESSION").font(.system(size: 9, weight: .semibold)).tracking(1.8).foregroundStyle(.tertiary)
                         Text(session.title).font(.title3.weight(.semibold)).textSelection(.enabled)
                         Label(model.state(session).label, systemImage: model.state(session).symbol).font(.caption).foregroundStyle(Color(nsColor: model.state(session).color))
+                        if let label = model.lastKnownLabel(session) {
+                            Label(label, systemImage: "clock.arrow.circlepath").font(.caption).foregroundStyle(.orange)
+                            Text("Current status is unverified. Open in Codex to check whether a response is still needed.")
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
                         Text("Last activity · \(model.activityLabel(session))").font(.caption).foregroundStyle(.secondary)
                         if session.updatedAt.timeIntervalSince1970 > 0 {
                             Text(session.updatedAt.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

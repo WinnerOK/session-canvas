@@ -56,6 +56,23 @@ A connected workspace SHALL refresh on connection, every 12 seconds, and through
 - **THEN** existing notes and review records remain, execution becomes Unknown except for the higher-priority Archived display state, and errors/status explain the failure
 - **AND** reconnecting is available in Connection Settings; desktop-feed reconnection remains automatic as specified by session-attention
 
+### Requirement: Explicit refresh checks all source sessions with progress
+Toolbar Refresh Sessions and Command + R SHALL discover and recheck all same-source sessions, independently of filters, cached results, or inventory omissions. A progress sheet SHALL cover discovery/checking, completed/total counts, failures, remaining Unknown states, Stop, and Done. Current live work and requests SHALL retain priority; background discovery SHALL keep its existing bounded recovery behavior.
+
+#### Scenario: Refresh sessions never opened in Canvas
+- **WHEN** the user invokes refresh with Unknown sessions that have neither available local history nor cached results
+- **THEN** latest-turn checks can establish Finished for verified terminal results without opening viewers or acknowledging results
+- **AND** unfinished, empty, unsupported, or unavailable evidence stays Unknown with any last-known request preserved
+- **AND** progress covers the entire source population, independently of the selected layer and filters
+- **AND** fresh read-only desktop snapshots are requested through the paced observer, and sequential latest-turn summary checks cover states without live evidence
+- **AND** confirmed archives and already-current live sessions need no redundant history read
+
+#### Scenario: Stop, fail, or reconnect during a sweep
+- **WHEN** the user stops, an individual read fails, or the source reconnects during a status sweep
+- **THEN** completed observations remain, failure/unresolved counts are explicit, and repeated refresh does not overlap the sweep
+- **AND** cancellation/source-generation guards prevent old replies from entering another source; explicit later refresh retries failed reads
+- **AND** no request is answered, no turn is resumed, and source membership, activity, filters, and acknowledgment remain unchanged
+
 ### Requirement: Connection feedback and empty-workspace onboarding
 The toolbar SHALL distinguish connecting, desktop, saved-only, shared, demo, disconnected, and unavailable states. Saved discovery SHALL remain usable without a live desktop feed. Initial uncached discovery SHALL show progress. An empty source SHALL offer Connection settings and Explore demo with connected/unconnected guidance; a fully filtered workspace SHALL offer Show all sessions.
 

@@ -13,7 +13,7 @@ The GitHub plugin is installed and enabled. Plugin Management reports that it in
 1. Inspect the repository, current branch, remote, and unrelated local changes. Use the repository's current base branch and a `codex/<topic>` branch, or continue the task's existing working branch.
 2. Implement the requested change, update its affected documentation/specifications, and run the necessary checks.
 3. Review the diff and stage only files belonging to the task. Preserve unrelated work.
-4. Make a focused commit, push the working branch, and create or update its PR. Use a draft while work or required verification remains incomplete.
+4. Make a focused commit, push the working branch, and create or update its PR. Publish completed GitHub PRs for review: create them without `--draft`, or run `gh pr ready <number>` after implementation and required checks finish. Use a draft while work or required verification remains incomplete. Ready for review does not authorize merging.
 5. Attach a created PR to the Codex chat and report its URL, resulting behavior, and actual checks.
 
 Invoke `git` and `gh` directly. Write a multiline PR description to a file and pass `--body-file`. The installed `mattpocock-skills:pr` skill can guide the description when applicable; no additional skill is needed to grant command permission.
