@@ -226,7 +226,7 @@ The installed 0.164.0-alpha.11.1 experimental schema declares this summary mode 
 
 ## Risks / Trade-offs
 
-- Measure test pruning with fixed production-source denominators and identical fixture options. Count parameterized functions once, retain failure/race/native regressions, and document every removal. The launcher explicitly exports SwiftPM's merged profile against all test bundles and the probe; some toolchains otherwise report only the final bundle. Keep test/generated files out of metrics while retaining unexecuted production files. See the [measured comparison](../../../docs/test-pruning.md).
+- Measure test pruning with fixed production-source denominators and identical fixture options. Count parameterized functions once, retain failure/race/native regressions, and record selection rationale. The launcher explicitly exports SwiftPM's merged profile against all test bundles and the probe; some toolchains otherwise report only the final bundle. Keep test/generated files out of metrics while retaining unexecuted production files. See the [measured comparison](verification.md#30-twenty-percent-test-pruning-2026-11-01).
 - [Desktop execution is owned by another process or host] → Observe the actual runtime through the validated read-only desktop feed; a new stdio server's `notLoaded` state is insufficient.
 - [Desktop IPC or project metadata changes format] → Validate versions/shape, clear unsupported live evidence, retain confirmed layout, and report the capability loss.
 - [Actual membership mutations or native navigation are unavailable] → Keep the remaining integration gate open and actions unavailable or retryable; do not invent local membership or claim full native acceptance.

@@ -5,7 +5,7 @@ The twenty-percent test-pruning change SHALL remove approximately twenty percent
 
 #### Scenario: Compare a reduced suite with its baseline
 - **WHEN** redundant tests are removed
-- **THEN** the report records the baseline/reduced function counts, removal rationale, and before/after production coverage with identical denominators
+- **THEN** the existing verification notes record the baseline/reduced function counts, removal rationale, and before/after production coverage with identical denominators
 - **AND** Swift test functions and Python unittest methods each count once, including parameterized functions; redundant assertions, superseded behavior, and framework-default checks are prioritized for removal
 - **AND** available region/function coverage and skipped opt-in checks are reported separately from executed acceptance
 - **AND** all remaining ordinary checks pass; existing installed-source and live acceptance gates remain open unless separately verified

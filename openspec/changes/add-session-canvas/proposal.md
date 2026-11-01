@@ -6,7 +6,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 
 ## What Changes
 
-- Reduce redundant/superseded test functions by twenty percent with at most two percentage points of production line-coverage loss. Add complete production-target coverage export to the local launcher and retain a removal-to-regression evidence map in the [test-pruning report](../../../docs/test-pruning.md).
+- Reduce redundant/superseded test functions by twenty percent with at most two percentage points of production line-coverage loss. Add complete production-target coverage export to the local launcher and retain selection rationale and measured results in the existing [verification notes](verification.md#30-twenty-percent-test-pruning-2026-11-01).
 - Specify connection preferences, desktop/shared/demo source selection, automatic/manual refresh, source-isolated restoration, connection feedback, and application shutdown. Index all implemented functions against requirements, code, and evidence in [functional-coverage.md](functional-coverage.md).
 - Preserve last-known execution/request/active-turn evidence across restart and metadata-only discovery, visibly separate from Unknown current status. Make explicit refresh check the entire source, including uncached/filtered sessions, with progress, Stop, failure counts, and unresolved-state feedback.
 - Display one persistent canvas with three exclusive lifecycle layers and independent project geometry/viewports. Archived and Unknown are Inactive; expired eligible Idle is Stale; all others are Active. Exclude Guardian/internal agents by source/parent metadata without deleting them.
