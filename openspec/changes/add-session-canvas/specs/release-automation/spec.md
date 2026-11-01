@@ -65,7 +65,11 @@ Local and release macOS app bundles SHALL use the selected blue session-cards ar
 - **THEN** the build fails before signing or reporting a successful bundle
 
 ### Requirement: Packaging verifies distributable integrity
-Packaging SHALL verify the executable architecture and ad-hoc bundle signature before archiving, preserve executable permissions, and propagate failures. The upload job SHALL verify archive checksums before modifying a GitHub Release.
+Packaging SHALL verify the executable architecture and ad-hoc bundle signature before archiving, preserve executable permissions, and propagate failures. macOS tooling tests SHALL exercise the real packaging tools with an arm64 fixture executable, including an app path containing spaces, and verify the extracted bundle and checksum. The upload job SHALL verify archive checksums before modifying a GitHub Release.
+
+#### Scenario: Valid arm64 packaging on the selected hosted toolchain
+- **WHEN** macOS tooling tests package a valid arm64 fixture with the selected hosted toolchain
+- **THEN** native architecture verification succeeds, the ZIP and matching SHA-256 file are produced, and the extracted executable retains its permissions and valid bundle signature
 
 #### Scenario: Binary or signature verification fails
 - **WHEN** the executable has the wrong architecture or its bundle signature is invalid
