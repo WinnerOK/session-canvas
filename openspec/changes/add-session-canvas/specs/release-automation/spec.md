@@ -1,5 +1,18 @@
 ## ADDED Requirements
 
+### Requirement: Application documentation supports first use
+The root README SHALL explain the application's purpose, platform and Codex prerequisites, release installation, and first-use workflow. It SHALL include inspected native screenshots with descriptive alternative text and explicit demo-data labeling, link to a docs index, and disclose relevant distribution and integration limits. Detailed technical behavior, developer operations, research, and verification evidence SHALL remain accessible through that index.
+
+#### Scenario: A new user opens the repository
+- **WHEN** a user reads the root README
+- **THEN** they can understand the app, find the release download, install it, and identify how to review a result or continue in Codex
+- **AND** the docs index links to detailed onboarding, controls, troubleshooting, data handling, compatibility, source builds, and SDD evidence
+
+#### Scenario: Refresh application illustrations
+- **WHEN** maintainers replace the README screenshots
+- **THEN** they use the documented isolated demo capture commands, inspect newly written PNGs, and retain working relative image links and descriptive alternative text
+- **AND** demo screenshots are not presented as proof of real-source integration or as the user's conversations
+
 ### Requirement: Pull requests verify the native application
 Pull requests and pushes to `main` SHALL run normal Swift Testing suites, Python tooling tests, release bundle compilation, and signature verification only on a GitHub-hosted arm64 macOS runner with a selected Swift 6 toolchain. CI SHALL validate all OpenSpec artifacts strictly. Pull-request jobs SHALL use read-only repository permissions and SHALL NOT require Codex, user session data, or signing secrets.
 

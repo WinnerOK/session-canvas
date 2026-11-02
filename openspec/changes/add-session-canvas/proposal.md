@@ -6,6 +6,7 @@ Existing Codex sessions are easier to recognize and coordinate when their locati
 
 ## What Changes
 
+- Make the README a user-facing introduction with native demo screenshots, release installation, and a first-use workflow. Put detailed onboarding, troubleshooting, data handling, developer guides, research, and SDD navigation behind a docs index; retain current integration limits and reproducible capture instructions.
 - Reduce redundant/superseded test functions by twenty percent with at most two percentage points of production line-coverage loss. Add complete production-target coverage export to the local launcher and retain selection rationale and measured results in the existing [verification notes](verification.md#30-twenty-percent-test-pruning-2026-11-01).
 - Specify connection preferences, desktop/shared/demo source selection, automatic/manual refresh, source-isolated restoration, connection feedback, and application shutdown. Index all implemented functions against requirements, code, and evidence in [functional-coverage.md](functional-coverage.md).
 - Preserve last-known execution/request/active-turn evidence across restart and metadata-only discovery, visibly separate from Unknown current status. Make explicit refresh check the entire source, including uncached/filtered sessions, with progress, Stop, failure counts, and unresolved-state feedback.

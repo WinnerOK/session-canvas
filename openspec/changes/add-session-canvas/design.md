@@ -216,6 +216,22 @@ Keep title search transient, localized, and case-insensitive. Compute visible se
 
 Diagnostic probes emit structure/state/count evidence, and transport errors avoid arbitrary server/stderr contents. They do not prove full desktop acceptance. The [functional inventory](functional-coverage.md) distinguishes code inspection, existing automated coverage, and remaining acceptance gates. This audit changes documentation only and requires no storage migration or application behavior change.
 
+### 14. Put first-use guidance before implementation detail
+
+Use the root README for the product's purpose, native screenshots, platform and
+Codex prerequisites, release installation, and a short review/continuation
+workflow. Keep the relevant early-release and real-source limits visible there.
+Use [docs/README.md](../../../docs/README.md) as the index for detailed onboarding,
+controls, data/recovery guidance, compatibility, developer operations, research,
+and SDD evidence. Existing technical guides retain the precise behavior rules.
+
+Capture the actual app with its built-in demo source and fresh verification
+storage, visually inspect the resulting PNGs, and commit them with descriptive
+alternative text and an explicit demo-data caption. The
+[capture guide](../../../docs/screenshots.md) records the commands. Screenshots
+illustrate presentation and do not close installed-source acceptance gates.
+This documentation organization does not change application behavior.
+
 ## Long-history processing investigation
 
 The [history performance investigation](../../../docs/history-loading-performance.md) reproduced a quadratic delimiter scan on `MainActor` before SwiftUI rendering. `RPCStreamReader` now reads at most 64 KiB per iteration on a dedicated serial dispatch queue, maintains delimiter-search progress, validates a 64 MiB per-frame bound, and decodes outside the UI actor. Delivery waits for one UI callback to finish before the worker continues, bounding the handoff queue. Connection generations reject replaced-reader values/EOF; normal EOF drains final complete replies before disconnecting. Blocking pipe reads do not occupy Swift's cooperative executor.

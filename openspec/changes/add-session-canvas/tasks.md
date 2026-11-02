@@ -288,6 +288,13 @@ The 17:53 live-store correction in section 23 supersedes the earlier inference f
 - [x] 31.3 Complete local tooling/native packaging, strict OpenSpec, whitespace, affected local-link checks, and final diff review; record actual outcomes.
 - [x] 31.4 Verify hosted arm64/OpenSpec checks for the fix: PR #19 run 41335383438 passed on Xcode 16.4, including the native packaging smoke. Actual version-tag/draft creation and asset upload remain task 21.5.3 until a new Release run succeeds; rerunning the old revision does not verify this repair.
 
+## 32. User-facing README and documentation navigation
+
+- [x] 32.1 Inspect the two requested README examples and current release/install/integration facts; keep the existing English artifact language and distinguish user guidance from development evidence.
+- [x] 32.2 Build the native app and inspect two fresh isolated demo PNGs: canvas overview and loaded result viewer. Commit the images, descriptive alternative text, demo labeling, and reproducible capture instructions.
+- [x] 32.3 Rewrite the README around purpose, installation, and first use; add a docs index and detailed getting-started guide, preserving links to technical behavior, build/release guides, research, and SDD. Align proposal/design/documentation requirements and the function inventory.
+- [x] 32.4 Complete strict OpenSpec validation, whitespace, affected local file/anchor links, image integrity, and final diff review; record actual outcomes. Keep unrelated live/integration acceptance gates open.
+
 ## Workflow follow-up
 
 - Review the implementation and its integration evidence before archiving this proposed change into main specifications.
