@@ -75,6 +75,7 @@ The follow-up origin-grid correction passed **71 tests: 28 core and 43 runtime**
 | New sessions still jump to coordinates near zero when the clicked placement is occupied | [Context creation preserves the clicked location](specs/session-actions/spec.md#requirement-context-creation-preserves-the-clicked-location) | E5/E8: previously failing visible/hidden-obstacle model test, nearest placement instead of the global origin grid, unchanged viewport/unrelated notes, refresh and SQLite restart retention; eight native click/obstacle/zoom cases |
 | Repeated build/test/native-preview approval prompts should be replaced by one authorized local scenario | [Stable authorized local verification command](specs/local-verification/spec.md#requirement-stable-authorized-local-verification-command), [Isolated explicit verification outputs](specs/local-verification/spec.md#requirement-isolated-explicit-verification-outputs), [Verification success requires execution evidence](specs/local-verification/spec.md#requirement-verification-success-requires-execution-evidence) | E11: dedicated absolute launcher-prefix rule installed; differing arguments match, unrelated scripts do not; 7 launcher-boundary checks, 67 opt-in Swift tests, and two newly written native captures passed |
 | Run app tests in pull requests and create app releases in GitHub | [Pull requests verify the native application](specs/release-automation/spec.md#requirement-pull-requests-verify-the-native-application), [Release creation uses the verified source revision](specs/release-automation/spec.md#requirement-release-creation-uses-the-verified-source-revision), [Release assets identify their version and architecture](specs/release-automation/spec.md#requirement-release-assets-identify-their-version-and-architecture), [Packaging verifies distributable integrity](specs/release-automation/spec.md#requirement-packaging-verifies-distributable-integrity), [Release publication remains explicit](specs/release-automation/spec.md#requirement-release-publication-remains-explicit) | E12: reusable two-architecture CI passed on GitHub, manual/tag release workflow, version metadata, ZIP/checksum packaging, local archive checks, and workflow lint; actual draft upload remains open |
+| Make the README useful, add images, and move detail into linked docs | [Application documentation supports first use](specs/release-automation/spec.md#requirement-application-documentation-supports-first-use) | [README and documentation evidence](#32-user-facing-readme-and-documentation-navigation-2026-11-03): two inspected native demo captures, release installation, docs index, and detailed onboarding; application behavior unchanged |
 
 ## Evidence scope and entry points
 
@@ -470,3 +471,48 @@ Hosted verification passed for [PR #19](https://github.com/WinnerOK/session-canv
 Actual draft-release creation/upload remains task 21.5.3; local packaging and ordinary PR checks do not close it. No version tag, GitHub Release, installed desktop observation, model turn, or source mutation was created during this verification. After merging the repair, start a new Release dispatch with `v0.0.1`; rerunning the old run retains its broken revision. If the tag has been created elsewhere in the meantime, recheck its commit and use a new version rather than rewriting it.
 
 The [PR review follow-up](https://github.com/WinnerOK/session-canvas/pull/18#pullrequestreview-5729454822) removes the two standalone pruning reports and repairs their references, retaining coverage evidence in this existing section. This documentation-only follow-up passes strict validation of both OpenSpec changes, whitespace checks, and all 471 affected local file/anchor links. Application, tooling, and test code are unchanged. Hosted arm64 and OpenSpec checks passed the original `13b023b` head; the follow-up head retains a separate hosted gate.
+
+## 32. User-facing README and documentation navigation, 2026-11-03
+
+The user requested a useful README with images and detailed material behind a
+docs link, using [codex-quota-pet](https://github.com/danya-kim99/codex-quota-pet/tree/main)
+and [t3code](https://github.com/pingdotgg/t3code/tree/main) as references. Both
+READMEs were read on their main branches. The resulting introduction explains
+the product's value, download/install requirements, first actions, result review,
+and relevant limitations. [docs/README.md](../../../docs/README.md) indexes the
+existing technical guides, research, and SDD; the new
+[getting-started guide](../../../docs/getting-started.md) covers installation,
+connections, troubleshooting, and local data.
+
+GitHub release metadata was checked during this task: published `v0.0.1`
+contains the arm64 app ZIP and its matching SHA-256 file. This establishes the
+download link and asset names, not a newly performed installation or release
+publication.
+
+The following commands succeeded using the existing launcher:
+
+```sh
+python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py preview --jobs 1 --capture .build/verification/readme-canvas.png
+python3 /Users/d-manakovskiy/personal/session-canvas/scripts/verify-local.py preview --skip-build --show-result --hide-sidebar --capture .build/verification/readme-review.png
+```
+
+The first rebuilt and ad-hoc signed the native application. Each invocation
+wrote a fresh PNG from a separate demo database and exited successfully. Both
+images were opened and visually inspected for readable state labels, project
+regions, and result-review controls, then copied unchanged into
+[docs/images](../../../docs/images). The README labels their fictional data and
+provides descriptive alternative text. [Capture instructions](../../../docs/screenshots.md)
+retain the reproduction and isolation rules.
+
+Strict OpenSpec validation passed both changes, and `git diff --check` passed.
+A local checker resolved all **517 local links, including 217 heading anchors,
+across 11 affected Markdown files**. Both committed PNGs are **2664 × 1762**;
+chunk CRC/decompression checks passed and their SHA-256 digests match the
+inspected launcher outputs. Final diff review covers documentation and images
+only. No application, tooling, or test source changes are part of this task;
+application tests were not rerun for these documentation-only edits. The native
+build and two captures above are the executed application checks.
+
+No live desktop observation, installed session read, model turn, approval
+response, or real-source mutation was performed; existing integration and
+live/performance gates remain open.

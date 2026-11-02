@@ -69,6 +69,14 @@ The [long-history repair](../../../docs/history-loading-performance.md) covers [
 
 ## Verification and distribution
 
+Reader-facing introduction, release installation, docs navigation, and inspected
+demo illustrations map to [Application documentation supports first use](specs/release-automation/spec.md#requirement-application-documentation-supports-first-use).
+Implementation is [README.md](../../../README.md), the [documentation index](../../../docs/README.md),
+[onboarding](../../../docs/getting-started.md), and the [capture guide](../../../docs/screenshots.md).
+Actual build/capture and documentation checks are recorded in
+[section 32](verification.md#32-user-facing-readme-and-documentation-navigation-2026-11-03);
+demo pictures do not establish real-source acceptance.
+
 The existing [verification notes](verification.md#30-twenty-percent-test-pruning-2026-11-01) record the test-function counts, selection rationale, and production coverage after the 2026-11-01 reduction. Earlier pass counts and removed test names in historical evidence describe those earlier revisions.
 
 | Function | SDD contract | Implementation / evidence |

@@ -1,5 +1,9 @@
 # Native macOS application
 
+For installation and first use, start with [Getting started](getting-started.md).
+The [documentation index](README.md) lists user guides, development references,
+and SDD evidence.
+
 Session Canvas is a SwiftUI/AppKit desktop application for macOS 14 and later. It has no web renderer, hosted backend, or third-party package dependencies. The core model and SQLite store are separated from the AppKit interaction layer and Codex adapter.
 
 ## Build and run
@@ -205,6 +209,9 @@ The [SDD function inventory](../openspec/changes/add-session-canvas/functional-c
 - `Tests/CanvasRuntimeTests`: opening/acknowledgment persistence, confirmation before project moves, and reconnect/stale-command behavior using the isolated demo source.
 
 ## Visual verification
+
+The committed README scenes and their exact isolated capture commands are
+documented in [README screenshots](screenshots.md).
 
 The built app supports `--demo --storage PATH --capture IMAGE.png` to render its own native window, including the toolbar, into a PNG and exit. Add `--hide-sidebar` to verify the expanded canvas with its sidebar collapsed. It uses view-backed rendering, not a desktop screenshot of other applications. A normal run omits `--capture` and remains interactive.
 
