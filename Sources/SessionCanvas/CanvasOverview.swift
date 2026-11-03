@@ -7,6 +7,9 @@ struct ProjectOverview {
     var frame: NSRect { region }
     var count: Int
     var state: NoteState
+    /// Sessions per state that needs a look, most urgent first (empty when all are quiet).
+    var attention: [(state: NoteState, count: Int)] = []
+    static let attentionOrder: [NoteState] = [.permission, .waiting, .running, .finished]
 }
 
 enum CanvasOverview {

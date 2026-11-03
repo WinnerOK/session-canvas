@@ -12,6 +12,7 @@ For the overview and screenshots, see the [application README](../README.md).
 | Understand connection choices and refresh behavior | [Source modes](native-application.md#source-modes) |
 | Find local data and understand backup/recovery | [Data and privacy](getting-started.md#data-and-privacy), [persistence and recovery](native-application.md#persistence-and-recovery) |
 | Check supported Codex integration and current limits | [Compatibility report](integration-compatibility.md) |
+| Use Claude Code sessions and status hooks | [Claude Code source](claude-code.md) |
 | Report a bug or suggest a feature | [GitHub issues](https://github.com/WinnerOK/session-canvas/issues) |
 
 ## Building and maintaining

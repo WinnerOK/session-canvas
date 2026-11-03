@@ -1,0 +1,21 @@
+# Tasks
+
+- [x] Transcript summary and history parser with shared result identities (head + bounded tail reads)
+- [x] Hook event mapping, hook record format and installer (idempotent, preserves foreign hooks, backup)
+- [x] Fallback parsing of `~/.claude/sessions` and `~/.claude/jobs` with Unknown on unrecognized values
+- [x] Evidence precedence and silent-hook self-check
+- [x] `ClaudeCodeSource`: inventory, projects by folder, folder watching, history pages
+- [x] Terminal handoff (`--resume` / `attach`) and creation with `--session-id`
+- [x] Source menu, Connection settings section, app-name labels
+- [x] Moved folders resolved from the history location
+- [x] Home-started sessions grouped by the project they worked in; local drag-to-project assignments
+- [x] Project rules file: named projects, included folders, containers, split folders, keywords; tool file paths as evidence
+- [x] Terminal tab named after the session (user correction: cmux showed the .command path)
+- [ ] Sidebar clicks land on the pointed row (user correction: one row below); sidebar moved to a native List, awaiting the user's check
+- [x] Distant zoom shows per-project attention chips and urgent tint (user correction: statuses invisible far out); render checked from `distantProjectsShowWhatNeedsAttention`
+- [x] Unit tests (`ClaudeCodeTests`)
+- [x] Count-only probe on a real Claude Code home
+- [x] Live hook sequence verified with an isolated `claude -p --settings` run
+- [ ] Permission-prompt and elicitation events verified in a live interactive session
+- [ ] Runtime/ApplicationModel tests for the Claude source with a fixture home
+- [ ] Native capture for the README (needs Screen Recording permission on the capture machine)

@@ -218,6 +218,38 @@ struct SemanticZoomTests {
         #expect(model.selectedSessionID == "s")
     }
 
+    @Test func distantProjectsShowWhatNeedsAttention() throws {
+        _ = NSApplication.shared
+        let model = ApplicationModel(demo: true, storagePath: ":memory:")
+        model.workspace.projects = ["Radio", "Home", "Tools"].enumerated().map { Project(id: "p\($0.offset)", name: $0.element) }
+        let members: [[Session]] = [
+            [Session(id: "a", title: "A", projectID: "p0", execution: .idle, requests: ["r": .input]),
+             Session(id: "b", title: "B", projectID: "p0", execution: .idle, requests: ["r": .input]),
+             Session(id: "c", title: "C", projectID: "p0", execution: .running)],
+            [Session(id: "d", title: "D", projectID: "p1", execution: .idle, requests: ["r": .permission])],
+            [Session(id: "e", title: "E", projectID: "p2", execution: .idle)],
+        ]
+        for (index, project) in model.workspace.projects.enumerated() {
+            let x = Double(index) * 820
+            model.workspace.regions[project.id] = Rect(x, 0, 760, 580)
+            for (n, session) in members[index].enumerated() {
+                model.workspace.sessions.append(session)
+                model.workspace.placements[session.id] = Placement(Point(x + 20 + Double(n) * 240, 64))
+            }
+        }
+        model.workspace.viewport = Viewport(origin: Point(40, 60), zoom: 0.1)
+        let canvas = CanvasNSView(model: model)
+        canvas.frame = NSRect(x: 0, y: 0, width: 600, height: 200)
+        let window = NSWindow(contentRect: canvas.bounds, styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = canvas
+        canvas.update()
+        _ = try recognize(canvas, artifact: "attention-10")
+        let labels = (canvas.accessibilityChildren() as? [NSAccessibilityElement] ?? []).compactMap { $0.accessibilityLabel() }
+        #expect(labels.contains { $0.hasPrefix("Radio,") && $0.contains("2 Waiting for you") && $0.contains("1 Running") }, "\(labels)")
+        #expect(labels.contains { $0.hasPrefix("Home,") && $0.contains("1 Permission required") }, "\(labels)")
+        #expect(labels.contains { $0.hasPrefix("Tools,") && !$0.contains("Running") }, "\(labels)")
+    }
+
     @Test(arguments: [0.30, 0.25, 0.10, 0.03, 0.01])
     func projectLabelsUseAvailableSpaceAtEachZoom(zoom: Double) throws {
         _ = NSApplication.shared

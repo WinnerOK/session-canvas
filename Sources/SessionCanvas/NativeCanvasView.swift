@@ -87,7 +87,11 @@ final class CanvasNSView: NSView {
             let members = model.visibleSessions.filter { $0.projectID == project.id }
             let states = Set(members.map { model.state($0) })
             let state = [NoteState.permission, .waiting, .running, .finished, .archived, .unknown, .idle].first { states.contains($0) } ?? .idle
-            return ProjectOverview(project: project, region: rect, count: members.count, state: state)
+            let attention = ProjectOverview.attentionOrder.compactMap { state -> (state: NoteState, count: Int)? in
+                let n = members.filter { model.state($0) == state }.count
+                return n > 0 ? (state, n) : nil
+            }
+            return ProjectOverview(project: project, region: rect, count: members.count, state: state, attention: attention)
         }
     }
     func update() {
@@ -183,21 +187,41 @@ final class CanvasNSView: NSView {
     private func lineHeight(_ font: NSFont) -> CGFloat { ceil(font.ascender - font.descender + font.leading) + 2 }
     private func drawOverview(_ item: ProjectOverview) {
         let rect = item.region
+        let path = NSBezierPath(roundedRect: rect, xRadius: 18 * viewport.zoom, yRadius: 18 * viewport.zoom)
+        // The most urgent state tints the whole project, so it reads even when the region is tiny.
+        if let urgent = item.attention.first?.state {
+            urgent.color.withAlphaComponent(0.16).setFill(); path.fill()
+            urgent.color.withAlphaComponent(0.85).setStroke(); path.lineWidth = 1.5; path.stroke()
+        }
         if focusedItem == .project(item.project.id) {
-            let path = NSBezierPath(roundedRect: rect, xRadius: 18 * viewport.zoom, yRadius: 18 * viewport.zoom)
             NSColor.controlAccentColor.setStroke(); path.lineWidth = 2; path.stroke()
         }
         let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         guard let titleFrame = CanvasOverview.titleFrame(for: item.project.name, in: rect, font: font) else { return }
         text(item.project.name, in: titleFrame, font: font, color: .labelColor)
-        let countFont = NSFont.systemFont(ofSize: 11)
-        let count = "\(item.count) \(item.count == 1 ? "session" : "sessions")"
-        let countFrame = NSRect(x: titleFrame.minX + 14, y: titleFrame.maxY + 4, width: titleFrame.width - 14, height: lineHeight(countFont))
-        guard countFrame.maxY <= rect.maxY - 8,
-              countFrame.width >= ceil((count as NSString).size(withAttributes: [.font: countFont]).width) else { return }
-        item.state.color.setFill()
-        NSBezierPath(ovalIn: NSRect(x: titleFrame.minX, y: countFrame.midY - 3, width: 6, height: 6)).fill()
-        text(count, in: countFrame, font: countFont, color: .secondaryLabelColor)
+        let countFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+        let lineH = lineHeight(countFont)
+        var y = titleFrame.maxY + 4
+        guard y + lineH <= rect.maxY - 6 else { return }
+        // Quiet projects show their size with the state's symbol in grey, like the chips below.
+        let chips = item.attention.isEmpty ? [(state: item.state, count: item.count)] : item.attention
+        // One chip per state: symbol + count, wrapping onto further lines while they fit.
+        var x = titleFrame.minX
+        for (state, n) in chips {
+            let label = "\(n)"
+            let labelWidth = ceil((label as NSString).size(withAttributes: [.font: countFont]).width)
+            let width = 13 + 3 + labelWidth
+            if x + width > titleFrame.maxX, x > titleFrame.minX {
+                x = titleFrame.minX; y += lineH + 2
+                guard y + lineH <= rect.maxY - 6 else { return }
+            }
+            guard x + width <= titleFrame.maxX + 1 else { return }
+            let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [state.color]))
+            NSImage(systemSymbolName: state.symbol, accessibilityDescription: state.label)?.withSymbolConfiguration(configuration)?
+                .draw(in: NSRect(x: x, y: y + (lineH - 13) / 2, width: 13, height: 13), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            text(label, in: NSRect(x: x + 16, y: y, width: labelWidth + 1, height: lineH), font: countFont, color: item.attention.isEmpty ? .secondaryLabelColor : state.color)
+            x += width + 9
+        }
     }
     private func drawGrid() {
         let step = 28 * viewport.zoom
@@ -246,7 +270,7 @@ final class CanvasNSView: NSView {
             let seen = (model.acknowledgments[session.id] ?? []).contains(result.id)
             footer = state == .archived ? result.outcome.label : seen ? "Result acknowledged" : "\(result.outcome.label) · review result"
         } else if !session.cwd.isEmpty { footer = URL(fileURLWithPath: session.cwd).lastPathComponent }
-        else { footer = model.mode == .demo ? "Demo session" : "Codex session" }
+        else { footer = model.mode == .demo ? "Demo session" : "\(model.nativeAppName) session" }
         text(footer, in: NSRect(x: rect.minX + inset, y: rect.minY + 100 * scale, width: rect.width - inset * 2, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
         text(model.activityLabel(session), in: NSRect(x: rect.minX + inset, y: rect.maxY - 25 * scale, width: rect.width - inset * 2 - 18 * scale, height: 18 * scale), font: .systemFont(ofSize: max(8, 10 * scale)), color: .secondaryLabelColor)
         if state == .finished {
@@ -368,7 +392,7 @@ final class CanvasNSView: NSView {
             hide.target = self; menu.addItem(hide)
         } else if let id = contextSession {
             if model.mode != .demo {
-                let native = NSMenuItem(title: "Open in Codex", action: #selector(openNativeContext), keyEquivalent: ""); native.target = self; native.representedObject = id; menu.addItem(native)
+                let native = NSMenuItem(title: "Open in \(model.nativeAppName)", action: #selector(openNativeContext), keyEquivalent: ""); native.target = self; native.representedObject = id; menu.addItem(native)
             }
             if let session = model.workspace.sessions.first(where: { $0.id == id }) {
                 let archive = NSMenuItem(title: session.isArchived ? "Unarchive session" : "Archive session", action: #selector(archiveContext), keyEquivalent: "")
@@ -421,7 +445,7 @@ final class CanvasNSView: NSView {
                 let element = CanvasAccessibilityElement()
                 element.setAccessibilityRole(.button)
                 element.setAccessibilityParent(self)
-                element.setAccessibilityLabel("\(item.project.name), \(item.count) sessions, zoom into project")
+                element.setAccessibilityLabel("\(item.project.name), \(item.count) sessions" + item.attention.map { ", \($0.count) \($0.state.label)" }.joined() + ", zoom into project")
                 if let window { element.setAccessibilityFrame(window.convertToScreen(convert(item.frame, to: nil))) }
                 element.press = { [weak self] in self?.focusProject(item.project.id) }
                 return element

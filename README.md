@@ -51,6 +51,10 @@ for checksum verification and first-launch guidance.
 3. Choose **Acknowledge result** after reviewing a Finished session, or
    **Open in Codex** to continue the conversation.
 
+Using Claude Code? Choose **Claude Code** from the source menu at the bottom of the sidebar. Sessions
+come from `~/.claude`, open in your terminal with `claude --resume`, and **Install status hooks** in
+Connection settings gives reliable live states. See [Claude Code source](docs/claude-code.md).
+
 Want to explore first? Choose **Demo workspace** from the source menu at the
 bottom of the sidebar. Its simulated sessions are separate from your Codex data.
 
