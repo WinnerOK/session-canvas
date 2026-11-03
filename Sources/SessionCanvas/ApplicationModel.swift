@@ -59,7 +59,7 @@ final class ApplicationModel: ObservableObject {
     init(demo: Bool, storagePath: String? = nil, nativeOpener: ((URL) -> Void)? = nil, observedSessionIDs: Set<String>? = nil) {
         self.nativeOpener = nativeOpener
         self.observedSessionIDs = observedSessionIDs
-        mode = demo ? .demo : .history
+        mode = demo ? .demo : (UserDefaults.standard.string(forKey: "sourceMode").flatMap(SourceMode.init(rawValue:)) ?? .history)
         settings = UserDefaults.standard.data(forKey: "connectionSettings").flatMap { try? JSONDecoder().decode(ConnectionSettings.self, from: $0) } ?? .defaults
         activityTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -225,6 +225,7 @@ final class ApplicationModel: ObservableObject {
         case .demo: return "Demo data · changes stay in this workspace"
         case .history: return hasLiveState ? "Live desktop state and saved local sessions" : "Saved history · waiting for Codex desktop"
         case .shared: return "Shared runtime and saved local projects"
+        case .claudeCode: return claudeSource.map { $0.hooksInstalled ? "Live state from status hooks and saved transcripts" : "Saved transcripts · install status hooks for reliable live state" } ?? "Claude Code sessions on this Mac"
         }
     }
 
@@ -236,6 +237,7 @@ final class ApplicationModel: ObservableObject {
         generation = UUID()
         let token = generation
         if let newMode { mode = newMode }
+        if mode != .demo { UserDefaults.standard.set(mode.rawValue, forKey: "sourceMode") }
         connected = false; hasLiveState = false; selectedSessionID = nil; history = []; historyError = nil
         revealedCreationID = nil; focusedSessionID = nil
         pendingSessions = []; isRefreshing = false; isLoadingHistory = false; isCreating = false
@@ -244,6 +246,8 @@ final class ApplicationModel: ObservableObject {
         if mode == .demo {
             let saved = try? database?.load(source: "demo-v1")
             next = DemoSource(restored: saved?.sessions ?? [])
+        } else if mode == .claudeCode {
+            next = ClaudeCodeSource(settings: settings)
         } else { next = CodexSource(mode: mode, settings: settings, observedSessionIDs: observedSessionIDs) }
         source = next
         let cachedSourceID = next.sourceID
@@ -579,7 +583,8 @@ final class ApplicationModel: ObservableObject {
             workspace.placements[session.id] = workspace.vacantPlacement(projectID: confirmed.projectID, excluding: session.id, near: crossedLayer ? nil : context.location)
             creation = nil; persist()
             revealCreatedSession(session.id, focus: crossedLayer || confirmed.projectID != context.projectID)
-            if mode != .demo && result.warning == nil { openInCodex(session) }
+            // Claude Code creation already opened the terminal that owns the new session.
+            if mode != .demo && mode != .claudeCode && result.warning == nil { openInCodex(session) }
             if let warning = result.warning { errorMessage = warning }
         } catch { if generation == token { creationError = error.localizedDescription } }
     }
@@ -592,8 +597,20 @@ final class ApplicationModel: ObservableObject {
         if focus { focusRequest += 1 }
         openSession(id)
     }
+    var claudeSource: ClaudeCodeSource? { source as? ClaudeCodeSource }
+    var nativeAppName: String { mode.nativeAppName }
+    func evidenceLabel(_ session: Session) -> String? { claudeSource?.evidenceLabel(sessionID: session.id) }
+    func setClaudeHooks(_ install: Bool) async {
+        guard let claudeSource else { return }
+        do { try claudeSource.setHooksInstalled(install); objectWillChange.send(); await refresh() }
+        catch { errorMessage = "Status hooks were not changed. \(error.localizedDescription)" }
+    }
     func openInCodex(_ session: Session) {
         guard mode != .demo else { return }
+        if let claudeSource {
+            do { try claudeSource.open(session) } catch { errorMessage = error.localizedDescription }
+            return
+        }
         let escaped = session.id.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? session.id
         guard settings.nativeURLTemplate.contains("{id}"), let url = URL(string: settings.nativeURLTemplate.replacingOccurrences(of: "{id}", with: escaped)), url.scheme == "codex" else {
             errorMessage = "No application handles this Codex session URL. Check the URL template in Connection settings."; return

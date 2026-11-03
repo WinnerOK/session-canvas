@@ -2,17 +2,34 @@ import Foundation
 import CanvasCore
 
 enum SourceMode: String, CaseIterable, Identifiable {
-    case history, shared, demo
+    case history, claudeCode, shared, demo
     var id: String { rawValue }
     var title: String {
-        switch self { case .history: return "Codex desktop"; case .shared: return "Shared Codex server"; case .demo: return "Demo workspace" }
+        switch self { case .history: return "Codex desktop"; case .claudeCode: return "Claude Code"; case .shared: return "Shared Codex server"; case .demo: return "Demo workspace" }
     }
+    /// The application that continues a session from this source.
+    var nativeAppName: String { self == .claudeCode ? "Claude Code" : "Codex" }
 }
 
 struct ConnectionSettings: Codable {
     var executable: String
     var socket: String
     var nativeURLTemplate: String
+    // Claude Code source settings. Optional so settings saved by earlier versions still decode.
+    var claudeExecutable: String?
+    var claudeHome: String?
+    var terminalApp: String?
+    var resolvedClaudeExecutable: String {
+        if let value = claudeExecutable, !value.isEmpty { return NSString(string: value).expandingTildeInPath }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [home + "/.local/bin/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude", home + "/.claude/local/claude"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "claude"
+    }
+    var resolvedClaudeHome: String { claudeHome.flatMap { $0.isEmpty ? nil : $0 } ?? "~/.claude" }
+    var resolvedTerminalApp: String {
+        if let value = terminalApp, !value.isEmpty { return NSString(string: value).expandingTildeInPath }
+        return "/System/Applications/Utilities/Terminal.app"
+    }
     static var defaults: Self {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let paths = ["/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", home + "/.local/bin/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]

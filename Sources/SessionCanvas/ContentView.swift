@@ -92,8 +92,10 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 5) {
+            // A native List: its rows are hit-tested by AppKit. A ScrollView of buttons here received
+            // clicks one row below the pointer on macOS 27 (safe-area inset under the toolbar).
+            List {
+                Group {
                     Text("LAYERS").font(.system(size: 9, weight: .semibold)).tracking(1.5).foregroundStyle(.tertiary).padding(.horizontal, 10).padding(.bottom, 8)
                     ForEach(CanvasLayer.allCases, id: \.rawValue) { layer in
                         sidebarRow(layer.label, symbol: model.selectedLayer == layer ? "circle.inset.filled" : "circle", count: model.layerCounts[layer, default: 0], selected: model.selectedLayer == layer) { model.selectLayer(layer) }
@@ -140,8 +142,13 @@ struct ContentView: View {
                         Text("No projects with visible sessions.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.bottom, 8)
                     }
                     ForEach(model.visibleProjects) { project in projectRow(project) }
-                }.padding(.horizontal, 10).padding(.top, 12)
+                }
+                .listRowInsets(EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 10) {
                 if model.unreviewedCount > 0 {
@@ -235,7 +242,7 @@ struct SessionViewer: View {
                         Label(model.state(session).label, systemImage: model.state(session).symbol).font(.caption).foregroundStyle(Color(nsColor: model.state(session).color))
                         if let label = model.lastKnownLabel(session) {
                             Label(label, systemImage: "clock.arrow.circlepath").font(.caption).foregroundStyle(.orange)
-                            Text("Current status is unverified. Open in Codex to check whether a response is still needed.")
+                            Text("Current status is unverified. Open in \(model.nativeAppName) to check whether a response is still needed.")
                                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                         Text("Last activity · \(model.activityLabel(session))").font(.caption).foregroundStyle(.secondary)
@@ -249,12 +256,17 @@ struct SessionViewer: View {
                 if model.revealedCreationID == session.id {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Session created", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text("Continue in Codex to send your first instruction. Use Open in Codex to return there. Empty sessions may not appear in Codex’s list yet.")
+                        Text(model.mode == .claudeCode ? "The session opened in your terminal. Use Open in Claude Code to return to it later." : "Continue in Codex to send your first instruction. Use Open in Codex to return there. Empty sessions may not appear in Codex’s list yet.")
                         if model.creationIsOutsideFilters {
                             Text("This new session is shown despite your current filters.")
                             Button("Apply filters") { model.applyFiltersToCreation() }.buttonStyle(.link)
                         }
                     }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
+                }
+                if model.mode == .claudeCode, !session.isArchived {
+                    Label(session.execution == .unknown ? "Current state unavailable" : model.evidenceLabel(session) ?? "State from saved transcript",
+                          systemImage: session.stateIsFromHistory || session.execution == .unknown ? "clock.arrow.circlepath" : "waveform")
+                        .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 if model.mode == .history {
                     if session.isArchived {
@@ -343,7 +355,7 @@ struct SessionViewer: View {
     }
 
     private func openInCodexButton(_ session: Session) -> some View {
-        Button { model.openInCodex(session) } label: { Label("Open in Codex", systemImage: "arrow.up.forward.app") }
+        Button { model.openInCodex(session) } label: { Label("Open in \(model.nativeAppName)", systemImage: "arrow.up.forward.app") }
             .fixedSize().disabled(model.mode == .demo)
     }
 
@@ -360,14 +372,26 @@ struct ConnectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Connect your workspace").font(.title2.weight(.semibold))
-            Text("Session Canvas keeps its own layout and acknowledgments. Your Codex conversations stay where they are.").foregroundStyle(.secondary).font(.callout)
+            Text("Session Canvas keeps its own layout and acknowledgments. Your \(form.mode.nativeAppName) conversations stay where they are.").foregroundStyle(.secondary).font(.callout)
             Form {
                 Picker("Source", selection: $form.mode) { ForEach(SourceMode.allCases) { Text($0.title).tag($0) } }
-                TextField("Codex executable", text: $form.connection.executable)
-                if form.mode == .shared { TextField("Control socket (optional)", text: $form.connection.socket) }
-                TextField("Native URL template", text: $form.connection.nativeURLTemplate)
+                if form.mode == .claudeCode {
+                    TextField("Claude executable", text: Binding(get: { form.connection.claudeExecutable ?? "" }, set: { form.connection.claudeExecutable = $0 }), prompt: Text(ConnectionSettings.defaults.resolvedClaudeExecutable))
+                    TextField("Claude Code home", text: Binding(get: { form.connection.claudeHome ?? "" }, set: { form.connection.claudeHome = $0 }), prompt: Text("~/.claude"))
+                    TextField("Terminal app", text: Binding(get: { form.connection.terminalApp ?? "" }, set: { form.connection.terminalApp = $0 }), prompt: Text("/System/Applications/Utilities/Terminal.app"))
+                    if let claude = model.claudeSource {
+                        Section("Live status") {
+                            Text(claude.statusHealth).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Button(claude.hooksInstalled ? "Remove status hooks" : "Install status hooks") { Task { await model.setClaudeHooks(!claude.hooksInstalled) } }
+                        }
+                    }
+                } else {
+                    TextField("Codex executable", text: $form.connection.executable)
+                    if form.mode == .shared { TextField("Control socket (optional)", text: $form.connection.socket) }
+                    TextField("Native URL template", text: $form.connection.nativeURLTemplate)
+                }
             }.formStyle(.grouped)
-            Text(form.mode == .history ? "Reads saved sessions and local projects, and automatically follows live state from the running Codex desktop. If Codex is closed, saved history remains available. The desktop-bundled executable also creates sessions ready to open in Codex. Move existing sessions between projects in Codex." : form.mode == .shared ? "Connects through codex app-server proxy to a reachable shared control socket, and reads saved local projects. Change project membership and create sessions in Codex." : "An isolated sample workspace for exploring every canvas interaction. It never starts real Codex work.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(form.mode == .claudeCode ? "Reads Claude Code transcripts from ~/.claude/projects, groups sessions by working folder, and opens them in your terminal with claude --resume (background sessions with claude attach). Status hooks add a documented, update-safe live feed: running, waiting for you, permission required and finished. Without them, live state falls back to Claude Code’s internal runtime files." : form.mode == .history ? "Reads saved sessions and local projects, and automatically follows live state from the running Codex desktop. If Codex is closed, saved history remains available. The desktop-bundled executable also creates sessions ready to open in Codex. Move existing sessions between projects in Codex." : form.mode == .shared ? "Connects through codex app-server proxy to a reachable shared control socket, and reads saved local projects. Change project membership and create sessions in Codex." : "An isolated sample workspace for exploring every canvas interaction. It never starts real Codex work.").font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
@@ -392,10 +416,11 @@ struct NewSessionView: View {
                         Text("No project").tag("")
                         ForEach(model.workspace.projects) { Text($0.name).tag($0.id) }
                     }
-                    if model.mode == .demo {
+                    if model.mode == .demo || model.mode == .claudeCode {
                         TextEditor(text: $form.prompt).font(.body).frame(height: 150).padding(6).background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8)).overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
-                        Text("Demo mode: the session will run briefly and produce a sample result.").font(.caption).foregroundStyle(.secondary)
-                    } else {
+                        Text(model.mode == .demo ? "Demo mode: the session will run briefly and produce a sample result." : "Optional first instruction. Claude Code starts in your terminal in the project folder.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    if model.mode != .demo {
                         if form.projectID.isEmpty {
                             HStack {
                                 TextField("Working folder (optional)", text: $form.directory).textFieldStyle(.roundedBorder)
